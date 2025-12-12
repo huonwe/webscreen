@@ -1,0 +1,125 @@
+package httpserver
+
+import (
+	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"sync"
+
+	"github.com/gin-gonic/gin"
+	"github.com/pion/webrtc/v4"
+)
+
+type StreamManager struct {
+	mu         sync.RWMutex
+	VideoTrack *webrtc.TrackLocalStaticSample
+	AudioTrack *webrtc.TrackLocalStaticSample
+}
+
+// 当 Android 连接上来时更新 Track
+func (sm *StreamManager) UpdateTracks(v *webrtc.TrackLocalStaticSample, a *webrtc.TrackLocalStaticSample) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	sm.VideoTrack = v
+	sm.AudioTrack = a
+}
+
+func (sm *StreamManager) HandleSDP(c *gin.Context) {
+	// 允许跨域 (方便调试)
+	c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+	if c.Request.Method == "OPTIONS" {
+		return
+	}
+
+	// A. 读取浏览器发来的 Offer SDP
+	body, _ := io.ReadAll(c.Request.Body)
+	offer := webrtc.SessionDescription{
+		Type: webrtc.SDPTypeOffer,
+		SDP:  string(body),
+	}
+
+	// B. 创建 PeerConnection
+	// 配置 ICE 服务器 (STUN)，用于穿透 NAT
+	config := webrtc.Configuration{
+		ICEServers: []webrtc.ICEServer{
+			{URLs: []string{"stun:stun.l.google.com:19302"}},
+		},
+	}
+
+	peerConnection, err := webrtc.NewAPI().NewPeerConnection(config)
+	if err != nil {
+		log.Println("创建 PeerConnection 失败:", err)
+		c.String(500, err.Error())
+		return
+	}
+
+	// 加读锁，防止读取的时候 track 正在被替换
+	sm.mu.RLock()
+	currentVideoTrack := sm.VideoTrack
+	currentAudioTrack := sm.AudioTrack
+	sm.mu.RUnlock()
+	if currentVideoTrack == nil || currentAudioTrack == nil {
+		log.Println("视频或音频轨道尚未准备好")
+		c.String(500, "视频或音频轨道尚未准备好")
+		return
+	}
+
+	// C. 添加视频轨道 (Video Track)
+	// 只要浏览器一连上来，就把我们从 Android 收到的 H.264 流推给它
+	if _, err := peerConnection.AddTrack(currentVideoTrack); err != nil {
+		log.Println("添加 Track 失败:", err)
+		c.String(500, err.Error())
+		return
+	}
+	// 添加音频轨道 (Audio Track)
+	if _, err := peerConnection.AddTrack(currentAudioTrack); err != nil {
+		log.Println("添加 Audio Track 失败:", err)
+		c.String(500, err.Error())
+		return
+	}
+
+	// D. 设置 Remote Description (浏览器发来的 Offer)
+	if err := peerConnection.SetRemoteDescription(offer); err != nil {
+		log.Println("设置 Remote Description 失败:", err)
+		c.String(500, err.Error())
+		return
+	}
+
+	// E. 创建 Answer
+	answer, err := peerConnection.CreateAnswer(nil)
+	if err != nil {
+		log.Println("创建 Answer 失败:", err)
+		c.String(500, err.Error())
+		return
+	}
+	peerConnection.OnConnectionStateChange(func(s webrtc.PeerConnectionState) {
+		log.Printf("连接状态改变: %s", s)
+		if s == webrtc.PeerConnectionStateFailed || s == webrtc.PeerConnectionStateClosed {
+			// 做一些清理工作，比如移除引用
+			peerConnection.Close()
+		}
+	})
+
+	// F. 设置 Local Description 并等待 ICE 收集完成
+	// 这一步是为了生成一个包含所有网络路径信息的完整 SDP，
+	// 这样我们就不需要写复杂的 Trickle ICE 逻辑了。
+	gatherComplete := webrtc.GatheringCompletePromise(peerConnection)
+
+	if err := peerConnection.SetLocalDescription(answer); err != nil {
+		log.Println("设置 Local Description 失败:", err)
+		c.String(500, err.Error())
+		return
+	}
+
+	// 阻塞等待 ICE 收集完成 (通常几百毫秒)
+	<-gatherComplete
+
+	// G. 将最终的 SDP Answer 返回给浏览器
+	c.Writer.Header().Set("Content-Type", "application/sdp")
+	fmt.Fprint(c.Writer, peerConnection.LocalDescription().SDP)
+}
+
+func handle_static(c *gin.Context) {
+	http.ServeFile(c.Writer, c.Request, "./public"+c.Request.URL.Path)
+}
