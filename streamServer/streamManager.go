@@ -1,27 +1,100 @@
-package httpserver
+package streamServer
 
 import (
 	"fmt"
 	"io"
 	"log"
 	"sync"
+	"time"
+	"webcpy/scrcpy"
 
 	"github.com/gin-gonic/gin"
 	"github.com/pion/webrtc/v4"
+	"github.com/pion/webrtc/v4/pkg/media"
 )
 
 type StreamManager struct {
-	mu         sync.RWMutex
+	sync.RWMutex
 	VideoTrack *webrtc.TrackLocalStaticSample
 	AudioTrack *webrtc.TrackLocalStaticSample
+
+	DataAdapter *scrcpy.DataAdapter
+
+	lastVideoTimestamp int64
 }
 
-// 当 Android 连接上来时更新 Track
+// 创建视频轨和音频轨，并初始化 StreamManager. 需要手动添加dataAdapter
+func NewStreamManager(dataAdapter *scrcpy.DataAdapter) *StreamManager {
+	const StreamID = "android_live_stream"
+	// 创建视频轨
+	videoTrack, _ := webrtc.NewTrackLocalStaticSample(
+		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeH264},
+		"video-track-id",
+		StreamID, // <--- 关键点
+	)
+
+	// 创建音频轨
+	audioTrack, _ := webrtc.NewTrackLocalStaticSample(
+		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeOpus}, // 假设音频是 Opus
+		"audio-track-id",
+		StreamID, // <--- 必须和视频的一样！
+	)
+	return &StreamManager{
+		VideoTrack:  videoTrack,
+		AudioTrack:  audioTrack,
+		DataAdapter: dataAdapter,
+	}
+}
+
+func (sm *StreamManager) Close() {
+	close(sm.DataAdapter.VideoChan)
+	close(sm.DataAdapter.AudioChan)
+	close(sm.DataAdapter.ControlChan)
+}
+
 func (sm *StreamManager) UpdateTracks(v *webrtc.TrackLocalStaticSample, a *webrtc.TrackLocalStaticSample) {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
+	sm.Lock()
+	defer sm.Unlock()
 	sm.VideoTrack = v
 	sm.AudioTrack = a
+}
+
+func (sm *StreamManager) WriteVideoSample(webrtcFrame *scrcpy.WebRTCVideoFrame) error {
+	sm.Lock()
+	defer sm.Unlock()
+	if sm.VideoTrack == nil {
+		return fmt.Errorf("视频轨道尚未准备好")
+	}
+
+	var duration time.Duration
+	if sm.lastVideoTimestamp == 0 {
+		duration = time.Millisecond * 16
+	} else {
+		delta := webrtcFrame.Timestamp - sm.lastVideoTimestamp
+		if delta <= 0 {
+			duration = time.Microsecond
+		} else {
+			duration = time.Duration(delta) * time.Microsecond
+		}
+	}
+	sm.lastVideoTimestamp = webrtcFrame.Timestamp
+
+	// 简单的防抖动：如果计算出的间隔太离谱（比如由暂停引起），重置为标准值
+	if duration > time.Second {
+		duration = time.Millisecond * 16
+	}
+
+	sample := media.Sample{
+		Data:      webrtcFrame.Data,
+		Duration:  duration,
+		Timestamp: time.UnixMicro(webrtcFrame.Timestamp),
+	}
+	err := sm.VideoTrack.WriteSample(sample)
+	if err != nil {
+		return fmt.Errorf("写入视频样本失败: %v", err)
+	}
+	// sm.DataAdapter.VideoPayloadPool.Put(webrtcFrame.Data)
+	return nil
 }
 
 func (sm *StreamManager) HandleSDP(c *gin.Context) {
@@ -54,10 +127,10 @@ func (sm *StreamManager) HandleSDP(c *gin.Context) {
 	}
 
 	// 加读锁，防止读取的时候 track 正在被替换
-	sm.mu.RLock()
+	sm.RLock()
 	currentVideoTrack := sm.VideoTrack
 	currentAudioTrack := sm.AudioTrack
-	sm.mu.RUnlock()
+	sm.RUnlock()
 	if currentVideoTrack == nil || currentAudioTrack == nil {
 		log.Println("视频或音频轨道尚未准备好")
 		c.String(500, "视频或音频轨道尚未准备好")

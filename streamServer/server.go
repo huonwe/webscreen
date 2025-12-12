@@ -1,7 +1,14 @@
-package httpserver
+package streamServer
 
-import "github.com/gin-gonic/gin"
+import (
+	"net/http"
 
+	"github.com/gin-gonic/gin"
+)
+
+func HandleStatic(c *gin.Context) {
+	http.ServeFile(c.Writer, c.Request, "./public"+c.Request.URL.Path)
+}
 func HTTPServer(sm *StreamManager, port string) {
 	r := gin.Default()
 
