@@ -1,7 +1,8 @@
 package main
 
 import (
-	"fmt"
+	//"fmt"
+
 	"log"
 	"webcpy/scrcpy"
 	"webcpy/streamServer"
@@ -12,7 +13,7 @@ const (
 	ScrcpyVersion = "3.3.3" // 必须与 jar 包完全一致
 	LocalPort     = "6000"
 	// 请确保此路径下有 scrcpy-server-v3.3.3.jar
-	ServerLocalPath  = "./scrcpy-server-v3.3.3"
+	ServerLocalPath  = "./scrcpy-server-v3.3.3-m"
 	ServerRemotePath = "/data/local/tmp/scrcpy-server-dev"
 
 	HTTPPort = "8081"
@@ -41,7 +42,6 @@ func main() {
 
 	videoChan := dataAdapter.VideoChan
 	for frame := range videoChan {
-		fmt.Printf("Frame Timestamp: %v, Size: %v nilType: %v\n", frame.Timestamp, len(frame.Data), frame.Data[4]&0x1F)
 		streamManager.WriteVideoSample(&frame)
 		streamManager.DataAdapter.VideoPayloadPool.Put(frame.Data)
 	}

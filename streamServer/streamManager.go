@@ -9,6 +9,7 @@ import (
 	"webcpy/scrcpy"
 
 	"github.com/gin-gonic/gin"
+	"github.com/pion/rtcp"
 	"github.com/pion/webrtc/v4"
 	"github.com/pion/webrtc/v4/pkg/media"
 )
@@ -17,6 +18,9 @@ type StreamManager struct {
 	sync.RWMutex
 	VideoTrack *webrtc.TrackLocalStaticSample
 	AudioTrack *webrtc.TrackLocalStaticSample
+
+	rtpSenderVideo *webrtc.RTPSender
+	rtpSenderAudio *webrtc.RTPSender
 
 	DataAdapter *scrcpy.DataAdapter
 
@@ -60,8 +64,9 @@ func (sm *StreamManager) UpdateTracks(v *webrtc.TrackLocalStaticSample, a *webrt
 }
 
 func (sm *StreamManager) WriteVideoSample(webrtcFrame *scrcpy.WebRTCVideoFrame) error {
-	sm.Lock()
-	defer sm.Unlock()
+	//sm.Lock()
+	//defer sm.Unlock()
+	//todo
 	if sm.VideoTrack == nil {
 		return fmt.Errorf("视频轨道尚未准备好")
 	}
@@ -89,7 +94,10 @@ func (sm *StreamManager) WriteVideoSample(webrtcFrame *scrcpy.WebRTCVideoFrame) 
 		Duration:  duration,
 		Timestamp: time.UnixMicro(webrtcFrame.Timestamp),
 	}
-	err := sm.VideoTrack.WriteSample(sample)
+	sm.RLock()
+	track := sm.VideoTrack
+	sm.RUnlock()
+	err := track.WriteSample(sample)
 	if err != nil {
 		return fmt.Errorf("写入视频样本失败: %v", err)
 	}
@@ -139,18 +147,21 @@ func (sm *StreamManager) HandleSDP(c *gin.Context) {
 
 	// C. 添加视频轨道 (Video Track)
 	// 只要浏览器一连上来，就把我们从 Android 收到的 H.264 流推给它
-	if _, err := peerConnection.AddTrack(currentVideoTrack); err != nil {
+	sm.rtpSenderVideo, err = peerConnection.AddTrack(currentVideoTrack)
+	if err != nil {
 		log.Println("添加 Track 失败:", err)
 		c.String(500, err.Error())
 		return
 	}
 	// 添加音频轨道 (Audio Track)
-	if _, err := peerConnection.AddTrack(currentAudioTrack); err != nil {
+	sm.rtpSenderAudio, err = peerConnection.AddTrack(currentAudioTrack)
+	if err != nil {
 		log.Println("添加 Audio Track 失败:", err)
 		c.String(500, err.Error())
 		return
 	}
-
+	// 启动协程读取 RTCP 包 (如 PLI 请求关键帧)
+	go sm.HandleRTCP()
 	// D. 设置 Remote Description (浏览器发来的 Offer)
 	if err := peerConnection.SetRemoteDescription(offer); err != nil {
 		log.Println("设置 Remote Description 失败:", err)
@@ -190,4 +201,31 @@ func (sm *StreamManager) HandleSDP(c *gin.Context) {
 	// G. 将最终的 SDP Answer 返回给浏览器
 	c.Writer.Header().Set("Content-Type", "application/sdp")
 	fmt.Fprint(c.Writer, peerConnection.LocalDescription().SDP)
+}
+
+func (sm *StreamManager) HandleRTCP() {
+	rtcpBuf := make([]byte, 1500)
+	lastRTCPTime := time.Now()
+	for {
+		n, _, err := sm.rtpSenderVideo.Read(rtcpBuf)
+		if err != nil {
+			return
+		}
+		packets, err := rtcp.Unmarshal(rtcpBuf[:n])
+		if err != nil {
+			continue
+		}
+		for _, p := range packets {
+			switch p.(type) {
+			case *rtcp.PictureLossIndication:
+				now := time.Now()
+				if now.Sub(lastRTCPTime) < time.Millisecond*500 {
+					continue
+				}
+				lastRTCPTime = now
+				log.Println("收到 PLI 请求 (Keyframe Request)")
+				sm.DataAdapter.RequestKeyFrame()
+			}
+		}
+	}
 }
