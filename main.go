@@ -35,14 +35,31 @@ func main() {
 	defer dataAdapter.Close()
 
 	streamManager := streamServer.NewStreamManager(dataAdapter)
+	defer streamManager.Close()
 	go streamServer.HTTPServer(streamManager, HTTPPort)
 
 	dataAdapter.ShowDeviceInfo()
 	dataAdapter.StartConvertVideoFrame()
+	dataAdapter.StartConvertAudioFrame()
 
-	videoChan := dataAdapter.VideoChan
-	for frame := range videoChan {
-		streamManager.WriteVideoSample(&frame)
-		streamManager.DataAdapter.VideoPayloadPool.Put(frame.Data)
-	}
+	// videoChan := dataAdapter.VideoChan
+	// for frame := range videoChan {
+	// 	streamManager.WriteVideoSample(&frame)
+	// 	streamManager.DataAdapter.VideoPayloadPool.Put(frame.Data)
+	// }
+	go func() {
+		videoChan := dataAdapter.VideoChan
+		for frame := range videoChan {
+			streamManager.WriteVideoSample(&frame)
+			streamManager.DataAdapter.VideoPayloadPool.Put(frame.Data)
+		}
+	}()
+	go func() {
+		audioChan := dataAdapter.AudioChan
+		for frame := range audioChan {
+			streamManager.WriteAudioSample(&frame)
+			streamManager.DataAdapter.AudioPayloadPool.Put(frame.Data)
+		}
+	}()
+	select {}
 }

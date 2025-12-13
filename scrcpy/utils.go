@@ -2,18 +2,10 @@ package scrcpy
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"io"
 )
-
-type SPSInfo struct {
-	Width              int     // 视频宽度（像素）
-	Height             int     // 视频高度（像素）
-	FrameRate          float64 // 估算帧率
-	Profile            uint8   // 新增: H.264 Profile
-	ConstraintSetFlags uint8
-	Level              string // 新增: H.264 Level (字符串表示)
-}
 
 // ParseSPS 精确解析SPS关键参数
 func ParseSPS(sps []byte, readCroppingFlag bool) (SPSInfo, error) {
@@ -330,4 +322,18 @@ func levelToString(level uint8) string {
 		return fmt.Sprintf("%d", major)
 	}
 	return fmt.Sprintf("%d.%d", major, minor)
+}
+
+func ParseOpusHead(data []byte) *OpusHead {
+	var head OpusHead
+	r := bytes.NewReader(data)
+
+	binary.Read(r, binary.LittleEndian, &head.Magic)
+	binary.Read(r, binary.LittleEndian, &head.Version)
+	binary.Read(r, binary.LittleEndian, &head.Channels)
+	binary.Read(r, binary.LittleEndian, &head.PreSkip)
+	binary.Read(r, binary.LittleEndian, &head.SampleRate)
+	binary.Read(r, binary.LittleEndian, &head.OutputGain)
+	binary.Read(r, binary.LittleEndian, &head.Mapping)
+	return &head
 }

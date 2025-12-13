@@ -25,15 +25,15 @@ type ADBClient struct {
 // 如果 address 为空字符串，则表示使用默认设备.
 func NewADBClient(address string) *ADBClient {
 	defaultScrcpyParams := ScrcpyParams{
-		Version:           "3.3.3",
-		SCID:              GenerateSCID(),
-		MaxFPS:            "60",
-		VideoBitRate:      "16000000",
-		Control:           "true",
-		Audio:             "true",
-		VideoCodec:        "h264",
+		Version:      "3.3.3",
+		SCID:         GenerateSCID(),
+		MaxFPS:       "60",
+		VideoBitRate: "16000000",
+		Control:      "true",
+		Audio:        "true",
+		VideoCodec:   "h264",
 		//VideoCodecOptions: "i-frame-interval=1",
-		LogLevel:          "debug",
+		LogLevel: "info",
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	return &ADBClient{Address: address, ScrcpyParams: defaultScrcpyParams, ctx: ctx, cancel: cancel}

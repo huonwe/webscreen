@@ -9,7 +9,6 @@ import (
 	"webcpy/scrcpy"
 
 	"github.com/gin-gonic/gin"
-	"github.com/pion/rtcp"
 	"github.com/pion/webrtc/v4"
 	"github.com/pion/webrtc/v4/pkg/media"
 )
@@ -63,7 +62,7 @@ func (sm *StreamManager) UpdateTracks(v *webrtc.TrackLocalStaticSample, a *webrt
 	sm.AudioTrack = a
 }
 
-func (sm *StreamManager) WriteVideoSample(webrtcFrame *scrcpy.WebRTCVideoFrame) error {
+func (sm *StreamManager) WriteVideoSample(webrtcFrame *scrcpy.WebRTCFrame) error {
 	//sm.Lock()
 	//defer sm.Unlock()
 	//todo
@@ -94,14 +93,39 @@ func (sm *StreamManager) WriteVideoSample(webrtcFrame *scrcpy.WebRTCVideoFrame) 
 		Duration:  duration,
 		Timestamp: time.UnixMicro(webrtcFrame.Timestamp),
 	}
-	sm.RLock()
-	track := sm.VideoTrack
-	sm.RUnlock()
-	err := track.WriteSample(sample)
+	// sm.RLock()
+	// track := sm.VideoTrack
+	// sm.RUnlock()
+	err := sm.VideoTrack.WriteSample(sample)
 	if err != nil {
 		return fmt.Errorf("写入视频样本失败: %v", err)
 	}
 	// sm.DataAdapter.VideoPayloadPool.Put(webrtcFrame.Data)
+	return nil
+}
+
+func (sm *StreamManager) WriteAudioSample(webrtcFrame *scrcpy.WebRTCFrame) error {
+	//sm.Lock()
+	//defer sm.Unlock()
+	//todo
+	if sm.AudioTrack == nil {
+		log.Println("Audio track is nil")
+		return fmt.Errorf("音频轨道尚未准备好")
+	}
+
+	sample := media.Sample{
+		Data:      webrtcFrame.Data,
+		Duration:  time.Millisecond * 20, // 假设每个 Opus 帧是 20ms
+		Timestamp: time.UnixMicro(webrtcFrame.Timestamp),
+	}
+	// sm.RLock()
+	// track := sm.AudioTrack
+	// sm.RUnlock()
+	err := sm.AudioTrack.WriteSample(sample)
+	if err != nil {
+		return fmt.Errorf("写入音频样本失败: %v", err)
+	}
+	// sm.DataAdapter.AudioPayloadPool.Put(webrtcFrame.Data)
 	return nil
 }
 
@@ -201,31 +225,4 @@ func (sm *StreamManager) HandleSDP(c *gin.Context) {
 	// G. 将最终的 SDP Answer 返回给浏览器
 	c.Writer.Header().Set("Content-Type", "application/sdp")
 	fmt.Fprint(c.Writer, peerConnection.LocalDescription().SDP)
-}
-
-func (sm *StreamManager) HandleRTCP() {
-	rtcpBuf := make([]byte, 1500)
-	lastRTCPTime := time.Now()
-	for {
-		n, _, err := sm.rtpSenderVideo.Read(rtcpBuf)
-		if err != nil {
-			return
-		}
-		packets, err := rtcp.Unmarshal(rtcpBuf[:n])
-		if err != nil {
-			continue
-		}
-		for _, p := range packets {
-			switch p.(type) {
-			case *rtcp.PictureLossIndication:
-				now := time.Now()
-				if now.Sub(lastRTCPTime) < time.Millisecond*500 {
-					continue
-				}
-				lastRTCPTime = now
-				log.Println("收到 PLI 请求 (Keyframe Request)")
-				sm.DataAdapter.RequestKeyFrame()
-			}
-		}
-	}
 }

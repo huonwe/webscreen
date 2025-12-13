@@ -3,7 +3,6 @@ package scrcpy
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
 	"io"
 	"log"
 	"net"
@@ -18,10 +17,11 @@ import (
 // }
 
 type DataAdapter struct {
-	VideoChan        chan WebRTCVideoFrame
-	AudioChan        chan WebRTCAudioFrame
+	VideoChan        chan WebRTCFrame
+	AudioChan        chan WebRTCFrame
 	ControlChan      chan WebRTCControlFrame
 	VideoPayloadPool sync.Pool
+	AudioPayloadPool sync.Pool
 
 	DeviceName string
 	VideoMeta  ScrcpyVideoMeta
@@ -67,9 +67,9 @@ func NewDataAdapter(config map[string]string) (*DataAdapter, error) {
 	}
 
 	for i, conn := range conns {
-		// if tcpConn, ok := conn.(*net.TCPConn); ok {
-		// 	tcpConn.SetReadBuffer(256 * 1024)
-		// }
+		if tcpConn, ok := conn.(*net.TCPConn); ok {
+			tcpConn.SetReadBuffer(512 * 1024)
+		}
 		// The target environment is ARM devices, read directly without buffering could be faster because of less memory copy
 		// conn := comm.NewBufferedReadWriteCloser(_conn, 4096)
 		switch i {
@@ -91,14 +91,20 @@ func NewDataAdapter(config map[string]string) (*DataAdapter, error) {
 			log.Println("Scrcpy Control Connection Established")
 		}
 	}
-	da.VideoChan = make(chan WebRTCVideoFrame, 1)
-	da.AudioChan = make(chan WebRTCAudioFrame, 1)
-	da.ControlChan = make(chan WebRTCControlFrame, 1)
+	da.VideoChan = make(chan WebRTCFrame, 20)
+	da.AudioChan = make(chan WebRTCFrame, 20)
+	da.ControlChan = make(chan WebRTCControlFrame, 10)
 
 	da.VideoPayloadPool = sync.Pool{
 		New: func() interface{} {
-			// 预分配 1MB (根据你的 H264 码率调整)
-			return make([]byte, 1024*1024)
+			// 预分配 512KB (根据你的 H264 码率调整)
+			return make([]byte, 512*1024)
+		},
+	}
+	da.AudioPayloadPool = sync.Pool{
+		New: func() interface{} {
+			// 4KB 足够放下任何 Opus 帧，甚至 AAC 帧
+			return make([]byte, 4*1024)
 		},
 	}
 	return da, nil
@@ -159,7 +165,7 @@ func (da *DataAdapter) StartConvertVideoFrame() {
 		// lastNilType := uint8(0)
 
 		var headerBuf [12]byte
-		frame := &ScrcpyVideoFrame{}
+		frame := &ScrcpyFrame{}
 		for {
 			// read frame header
 			if err := readScrcpyFrameHeader(da.videoConn, headerBuf[:], &frame.Header); err != nil {
@@ -168,8 +174,10 @@ func (da *DataAdapter) StartConvertVideoFrame() {
 			}
 			payloadBuf := da.VideoPayloadPool.Get().([]byte)
 			if cap(payloadBuf) < int(frame.Header.Size) {
-				da.VideoPayloadPool.Put(&payloadBuf)
+				da.VideoPayloadPool.Put(payloadBuf)
 				payloadBuf = make([]byte, frame.Header.Size+1024)
+				log.Println("Resized payload buffer for video frame")
+				log.Println("size:  ", frame.Header.Size)
 			}
 			if _, err := io.ReadFull(da.videoConn, payloadBuf[:frame.Header.Size]); err != nil {
 				log.Println("Failed to read video frame payload:", err)
@@ -177,19 +185,19 @@ func (da *DataAdapter) StartConvertVideoFrame() {
 			}
 			frameData := payloadBuf[:frame.Header.Size]
 			nilType := frameData[4] & 0x1F
-			fmt.Printf("Frame Timestamp: %v, Size: %v nilType: %v isKeyFrame: %v isConfig: %v\n", frame.Header.PTS, len(frameData), nilType, frame.Header.IsKeyFrame, frame.Header.IsConfig)
+			// fmt.Printf("Frame Timestamp: %v, Size: %v nilType: %v isKeyFrame: %v isConfig: %v\n", frame.Header.PTS, len(frameData), nilType, frame.Header.IsKeyFrame, frame.Header.IsConfig)
 			if nilType == 7 {
 				log.Println("SPS Frame Received")
 				SPS_PPS_Frame := bytes.Split(frameData, startCode)
-				log.Println("len of SPS_PPS_Frame:", len(SPS_PPS_Frame))
-				for i, data := range SPS_PPS_Frame {
-					if len(data) > 0 {
-						// 打印 NAL type (data[0] & 0x1F)
-						log.Printf("Index %d: Len=%d, NAL Type=%d", i, len(data), data[0]&0x1F)
-					} else {
-						log.Printf("Index %d: Empty (StartCode at beginning)", i)
-					}
-				}
+				// log.Println("len of SPS_PPS_Frame:", len(SPS_PPS_Frame))
+				// for i, data := range SPS_PPS_Frame {
+				// 	if len(data) > 0 {
+				// 		// 打印 NAL type (data[0] & 0x1F)
+				// 		log.Printf("Index %d: Len=%d, NAL Type=%d", i, len(data), data[0]&0x1F)
+				// 	} else {
+				// 		log.Printf("Index %d: Empty (StartCode at beginning)", i)
+				// 	}
+				// }
 				if cachedSPS != nil {
 					if !bytes.Equal(cachedSPS, append(startCode, SPS_PPS_Frame[1]...)) {
 
@@ -209,12 +217,12 @@ func (da *DataAdapter) StartConvertVideoFrame() {
 				log.Println("Sending SPS and PPS")
 				sendPTS = frame.Header.PTS
 				SPSCopy := createCopy(cachedSPS)
-				da.VideoChan <- WebRTCVideoFrame{
+				da.VideoChan <- WebRTCFrame{
 					Data:      SPSCopy,
 					Timestamp: int64(sendPTS),
 				}
 				PPSCopy := createCopy(cachedPPS)
-				da.VideoChan <- WebRTCVideoFrame{
+				da.VideoChan <- WebRTCFrame{
 					Data:      PPSCopy,
 					Timestamp: int64(sendPTS),
 				}
@@ -227,7 +235,7 @@ func (da *DataAdapter) StartConvertVideoFrame() {
 					}
 					// 检查 NAL Type
 					if (nal[0] & 0x1F) == 5 {
-						log.Println("Found IDR in SPS Packet, Sending...")
+						// log.Println("Found IDR in SPS Packet, Sending...")
 						// 拼装 StartCode + NAL
 						totalLen := 4 + len(nal)
 						dst := da.VideoPayloadPool.Get().([]byte)
@@ -239,7 +247,7 @@ func (da *DataAdapter) StartConvertVideoFrame() {
 						copy(dst, startCode)
 						copy(dst[4:], nal)
 
-						da.VideoChan <- WebRTCVideoFrame{
+						da.VideoChan <- WebRTCFrame{
 							Data:      dst,
 							Timestamp: int64(sendPTS),
 						}
@@ -252,25 +260,22 @@ func (da *DataAdapter) StartConvertVideoFrame() {
 			if frame.Header.IsKeyFrame {
 				SPSCopy := createCopy(cachedSPS)
 				PPSCopy := createCopy(cachedPPS)
-				log.Println("is KeyFrame, send cached SPS PPS")
-				da.VideoChan <- WebRTCVideoFrame{
+				// log.Println("is KeyFrame, send cached SPS PPS")
+				da.VideoChan <- WebRTCFrame{
 					Data:      SPSCopy,
 					Timestamp: int64(frame.Header.PTS),
 				}
-				da.VideoChan <- WebRTCVideoFrame{
+				da.VideoChan <- WebRTCFrame{
 					Data:      PPSCopy,
 					Timestamp: int64(frame.Header.PTS),
 				}
 
-				log.Println("keyframe's nilType:", nilType)
+				// log.Println("keyframe's nilType:", nilType)
 			}
 			// lastPTS = frame.Header.PTS
 
-			// SPS/PPS 粘包处理
-			// 00 00 00 01 [SPS数据] 00 00 00 01 [PPS数据]
-
 			// 这里的 Data 引用了 pool 中的内存，消费者用完必须 Put 回去
-			webRTCFrame := WebRTCVideoFrame{
+			webRTCFrame := WebRTCFrame{
 				Data:      frameData,
 				Timestamp: int64(frame.Header.PTS),
 			}
@@ -280,20 +285,52 @@ func (da *DataAdapter) StartConvertVideoFrame() {
 	}()
 }
 
-const ControlMsgTypeReqIDR = 99
+func (da *DataAdapter) StartConvertAudioFrame() {
+	go func() {
+		var headerBuf [12]byte
+		frame := &ScrcpyFrame{}
+		for {
+			// read frame header
+			if err := readScrcpyFrameHeader(da.audioConn, headerBuf[:], &frame.Header); err != nil {
+				log.Println("Failed to read scrcpy audio frame header:", err)
+				return
+			}
+			// log.Printf("Audio Frame Timestamp: %v, Size: %v isConfig: %v\n", frame.Header.PTS, frame.Header.Size, frame.Header.IsConfig)
+			payloadBuf := da.AudioPayloadPool.Get().([]byte)
+			if cap(payloadBuf) < int(frame.Header.Size) {
+				da.AudioPayloadPool.Put(payloadBuf)
+				payloadBuf = make([]byte, frame.Header.Size+1024)
+				log.Println("Resized payload buffer for audio frame")
+				log.Println("size:  ", frame.Header.Size)
+			}
+			// read frame payload
+			n, _ := io.ReadFull(da.audioConn, payloadBuf[:frame.Header.Size])
+			frameData := payloadBuf[:frame.Header.Size]
 
-func (da *DataAdapter) RequestKeyFrame() error {
-	if da.controlConn == nil {
-		return nil
-	}
-	log.Println("⚡ Sending Request KeyFrame (Type 99)...")
-	msg := []byte{ControlMsgTypeReqIDR}
-	_, err := da.controlConn.Write(msg)
-	if err != nil {
-		log.Printf("Error sending keyframe request: %v\n", err)
-		return err
-	}
-	return nil
+			if frame.Header.IsConfig {
+				log.Println("Audio Config Frame Received")
+
+				// 读取并丢弃配置帧的负载
+				buf := new(bytes.Buffer)
+				buf.WriteString("AOPUSHD")                        // Magic
+				binary.Write(buf, binary.LittleEndian, uint64(n)) // Length
+				buf.Write(frameData)
+				da.AudioChan <- WebRTCFrame{
+					Data:      buf.Bytes(),
+					Timestamp: int64(frame.Header.PTS),
+				}
+				da.AudioPayloadPool.Put(payloadBuf)
+				continue
+			}
+
+			// 这里的 Data 引用了 pool 中的内存，消费者用完必须 Put 回去
+			webRTCFrame := WebRTCFrame{
+				Data:      frameData,
+				Timestamp: int64(frame.Header.PTS),
+			}
+			da.AudioChan <- webRTCFrame
+		}
+	}()
 }
 
 func (da *DataAdapter) assignConn(conn net.Conn) error {
@@ -357,7 +394,7 @@ func (da *DataAdapter) readVideoMeta(conn net.Conn) error {
 	return nil
 }
 
-func readScrcpyFrameHeader(conn net.Conn, headerBuf []byte, header *ScrcpyVideoFrameHeader) error {
+func readScrcpyFrameHeader(conn net.Conn, headerBuf []byte, header *ScrcpyFrameHeader) error {
 	if _, err := io.ReadFull(conn, headerBuf); err != nil {
 		return err
 	}

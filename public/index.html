@@ -2,55 +2,47 @@
 <html>
 <head>
     <title>Go Scrcpy WebRTC</title>
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+    </style>
 </head>
 <body>
-    <h2>Scrcpy via WebRTC</h2>
-    <video id="remoteVideo" autoplay muted controls style="width: 500px; border: 1px solid red;"></video>
+    <div style="display: flex; flex-direction: row; width: 100%; height: 100%;">
+        <div style="flex: 1; display: flex; justify-content: flex-end; align-items: center; background-color: #000; height: 100%;">
+            <video id="remoteVideo" autoplay style="max-width: 100%; max-height: 100%; display: block;"></video>
+        </div>
+        <div style="width: 3rem;">
+            这靠右边的一列显示控制按钮，比如电源键，音量键等
+            <button onclick="start()" style="width: 100%;height: 1.5rem;">连接</button>
+        </div>
+
+    </div>
     <br/>
-    <button onclick="start()">Start Stream</button>
-
     <script>
-        async function start() {
-            const pc = new RTCPeerConnection();
-            
-            // 1. 监听远端流
-            pc.ontrack = function (event) {
-                const el = document.getElementById('remoteVideo');
-                el.srcObject = event.streams[0];
-            };
-
-            // 2. 添加一个仅接收的 Transceiver (重要)
-            // 告诉浏览器："我想要接收视频，但我不需要发视频给你"
-            pc.addTransceiver('video', { direction: 'recvonly' });
-
-            // 3. 创建 Offer
-            const offer = await pc.createOffer();
-            await pc.setLocalDescription(offer);
-
-            // 4. 发送 Offer 给 Go 后端 (Wait for ICE gathering inside browser logic for simplicity if not using vanilla ice gathering trick)
-            // 注意：上面的 Go 代码用了 GatheringCompletePromise，所以我们直接发 LocalDescription 即可
-            // 但浏览器侧通常也需要等 ICE，或者为了简单，我们直接把当前的 SDP 发过去（可能不含 candidate，但局域网通常没事）
-            
-            // 为了最稳妥，我们等一下 ICE
-            await new Promise(resolve => {
-                if (pc.iceGatheringState === 'complete') resolve();
-                else pc.onicecandidate = e => { if (!e.candidate) resolve(); }
-            });
-
-            // 5. POST 请求交换 SDP
-            const response = await fetch('/sdp', {
-                method: 'POST',
-                body: pc.localDescription.sdp
-            });
-
-            const answerSdp = await response.text();
-            
-            // 6. 设置 Answer
-            await pc.setRemoteDescription(new RTCSessionDescription({
-                type: 'answer',
-                sdp: answerSdp
-            }));
+        window.ws = new WebSocket('ws://' + window.location.host + '/ws');
+        window.ws.onopen = () => console.log('WebSocket connected');
+        window.ws.onmessage = (event) => {
+            console.log('Received message from server:', event.data);
+        };
+        // Debounce/Throttle check
+        let checkTimeout;
+        function triggerCheck() {
+            clearTimeout(checkTimeout);
+            checkTimeout = setTimeout(checkOrientation, 500);
         }
+
+        window.addEventListener('resize', triggerCheck);
+        
+
+        // start();
     </script>
+    <script src="static/controlMessages.js"></script>
+    <script src="static/connect.js"></script> 
+    <script src="static/control.js"></script>
 </body>
 </html>
