@@ -3,7 +3,6 @@ package streamServer
 import (
 	"log"
 	"net/http"
-	"webcpy/scrcpy"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -37,28 +36,34 @@ func (sm *StreamManager) HandleWebSocket(c *gin.Context) {
 		switch messageType {
 		case websocket.BinaryMessage:
 			// 处理二进制消息 (控制命令)
-			if len(p) < 1 {
-				log.Println("Received empty binary message")
-				continue
-			}
-			if p[0] == 0x01 { // Touch Event
-				event := &scrcpy.TouchEvent{}
-				err := event.UnmarshalBinary(p)
+			// log.Println("msg type:", p[0])
+			switch p[0] {
+			case WS_TYPE_TOUCH: // Touch Event
+				event, err := sm.createScrcpyTouchEvent(p)
+				// log.Printf("Touch Event: %+v\n", event)
 				if err != nil {
 					log.Println("Failed to unmarshal touch event:", err)
 					continue
 				}
-				sm.DataAdapter.SendTouchEvent(*event)
-			} else if p[0] == 0x02 { // Key Event
-				event := &scrcpy.KeyEvent{}
-				err := event.UnmarshalBinary(p)
-				if err != nil {
-					log.Println("Failed to unmarshal key event:", err)
-					continue
-				}
+				sm.DataAdapter.SendTouchEvent(event)
+
+			case WS_TYPE_KEY: // Key Event
+				// event := &scrcpy.KeyEvent{}
+				// err := event.UnmarshalBinary(p)
+				// if err != nil {
+				// 	log.Println("Failed to unmarshal key event:", err)
+				// 	continue
+				// }
 				// sm.DataAdapter.SendKeyEvent(*event)
 				log.Println("key event")
+			case WS_TYPE_ROTATE: // Rotate Device
+				log.Println("Rotate Device command received")
+				sm.DataAdapter.RotateDevice()
+			default:
+				log.Println("Unknown control message type:", p[0])
 			}
+		default:
+			log.Println("Unsupported WebSocket message type:", messageType)
 		}
 
 	}

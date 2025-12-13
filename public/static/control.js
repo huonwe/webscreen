@@ -1,4 +1,18 @@
 const videoElement = document.getElementById('remoteVideo');
+const TOUCH_SAMPLING_RATE = 8; // 采样间隔(ms), 16ms ≈ 60fps
+
+function throttle(func, limit) {
+    let inThrottle;
+    return function() {
+        const args = arguments;
+        const context = this;
+        if (!inThrottle) {
+            func.apply(context, args);
+            inThrottle = true;
+            setTimeout(() => inThrottle = false, limit);
+        }
+    }
+}
 
 function getScreenCoordinates(event) {
     // Ensure video metadata is loaded
@@ -45,6 +59,8 @@ videoElement.addEventListener('mousedown', (event) => {
     if (coords) {
         // console.log(`MouseDown at: ${coords.x}, ${coords.y}`);
         p = createTouchPacket(TOUCH_ACTION_DOWN, 0, coords.x, coords.y);
+        // console.log("x:", coords.x, "y:", coords.y);
+        // console.log(p);
         sendWSMessage(p);
     }
 });
@@ -57,15 +73,17 @@ videoElement.addEventListener('mouseup', (event) => {
         sendWSMessage(p);
     }
 });
-videoElement.addEventListener('mousemove', (event) => {
+
+const handleMouseMove = throttle((event) => {
     if (event.buttons !== 1) return; // Only when left button is pressed
     const coords = getScreenCoordinates(event);
     if (coords) {
-        // console.log(`MouseMove at: ${coords.x}, ${coords.y}`);
         p = createTouchPacket(TOUCH_ACTION_MOVE, 0, coords.x, coords.y);
         sendWSMessage(p);
     }
-});
+}, TOUCH_SAMPLING_RATE);
+
+videoElement.addEventListener('mousemove', handleMouseMove);
 
 videoElement.addEventListener('touchstart', (event) => {
     event.preventDefault(); // Prevent scrolling/mouse emulation
@@ -87,15 +105,16 @@ videoElement.addEventListener('touchend', (event) => {
     }
 }, { passive: false });
 
-videoElement.addEventListener('touchmove', (event) => {
+const handleTouchMove = throttle((event) => {
     event.preventDefault();
     const coords = getScreenCoordinates(event);
     if (coords) {
-        // console.log(`TouchMove at: ${coords.x}, ${coords.y}`);
         p = createTouchPacket(TOUCH_ACTION_MOVE, 0, coords.x, coords.y);
         sendWSMessage(p);
     }
-}, { passive: false });
+}, TOUCH_SAMPLING_RATE);
+
+videoElement.addEventListener('touchmove', handleTouchMove, { passive: false });
 
 function checkOrientation() {
     const video = document.getElementById('remoteVideo');

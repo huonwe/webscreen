@@ -225,4 +225,14 @@ func (sm *StreamManager) HandleSDP(c *gin.Context) {
 	// G. 将最终的 SDP Answer 返回给浏览器
 	c.Writer.Header().Set("Content-Type", "application/sdp")
 	fmt.Fprint(c.Writer, peerConnection.LocalDescription().SDP)
+
+	// H. 请求关键帧 (IDR)
+	// 连接建立后，立即请求一个新的关键帧，确保客户端能马上看到画面
+	if sm.DataAdapter != nil {
+		go func() {
+			// 稍微延迟一下，确保连接完全建立
+			time.Sleep(500 * time.Millisecond)
+			sm.DataAdapter.RequestKeyFrame()
+		}()
+	}
 }

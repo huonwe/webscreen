@@ -1,7 +1,5 @@
 package scrcpy
 
-import "encoding/binary"
-
 // control messages
 var TYPE_INJECT_KEYCODE byte = 0          //输入入键盘
 var TYPE_INJECT_TEXT byte = 1             //输入文本
@@ -63,6 +61,7 @@ var TYPE_UHID_OUTPUT = 2
 // | **Height**     | 2 (uint16)    | 屏幕高 (用于归一化计算，通常填当前分辨率高)                                                            |
 // | **Pressure**   | 2 (uint16)    | 压力值 (0~65535)，通常填 65535 (最大) 或 0 (抬起时)                                             |
 // | **Buttons**    | 4 (int32)     | 按键状态 (通常 0，鼠标点击时才用到)                                                               |
+
 type TouchEvent struct {
 	Type      byte
 	Action    byte
@@ -81,21 +80,17 @@ type KeyEvent struct {
 	KeyCode uint32
 }
 
-func (e *TouchEvent) UnmarshalBinary(data []byte) error {
-	e.Type = data[0]
-	e.Action = data[1]
-	e.PointerID = binary.BigEndian.Uint64(data[2:10])
-	e.PosX = binary.BigEndian.Uint32(data[10:14])
-	e.PosY = binary.BigEndian.Uint32(data[14:18])
-	e.Width = binary.BigEndian.Uint16(data[18:20])
-	e.Height = binary.BigEndian.Uint16(data[20:22])
-	e.Pressure = binary.BigEndian.Uint16(data[22:24])
-	e.Buttons = binary.BigEndian.Uint32(data[24:28])
-	return nil
-}
-func (e *KeyEvent) UnmarshalBinary(data []byte) error {
-	e.Type = data[0]
-	e.Action = data[1]
-	e.KeyCode = binary.BigEndian.Uint32(data[2:6])
-	return nil
-}
+// func (e *TouchEvent) UnmarshalBinary(data []byte) error {
+// 	e.Action = data[1]
+// 	e.PointerID = uint64(data[2])
+// 	e.PosX = binary.BigEndian.Uint32(data[3:5])
+// 	e.PosY = binary.BigEndian.Uint32(data[6:8])
+// 	e.Pressure = binary.BigEndian.Uint16(data[22:24])
+// 	e.Buttons = binary.BigEndian.Uint32(data[24:28])
+// 	return nil
+// }
+// func (e *KeyEvent) UnmarshalBinary(data []byte) error {
+// 	e.Action = data[1]
+// 	e.KeyCode = binary.BigEndian.Uint32(data[2:6])
+// 	return nil
+// }

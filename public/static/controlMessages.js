@@ -1,6 +1,7 @@
 const TYPE_TOUCH = 0x01; // touch event
-const TYPE_BUTTON   = 0x02; // button event
-const TYPE_SP    = 0x03; // special command (such as scroll)
+const TYPE_KEY   = 0x02; // key event
+const TYPE_SCROLL = 0x03; // scroll event
+const TYPE_ROTATE    = 0x04; // rotate event
 
 // 这里WebRTC会自动通过RTCP请求关键帧，但我们也可以手动请求
 const TYPE_RKF   = 0xFF; // request key frame
@@ -24,16 +25,9 @@ const TOUCH_ACTION_MOVE = 2;
 // 0,1,uint8,Type,固定 0x02 (KeyEvent)
 // 1,1,uint8,Action,"0: Down, 1: Up"
 // 2,2,uint16,KeyCode,Android KeyCode (如 Power=26)
-const BUTTON_ACTION_DOWN = 0;
-const BUTTON_ACTION_UP = 1;
+const TYPE_KEY_ACTION_DOWN = 0;
+const TYPE_KEY_ACTION_UP = 1;
 
-// Special Packet Structure:
-// 偏移,长度,类型,字段名,说明
-// 0,1,uint8,Type,"0x03 (Special Command)"
-// 1,1,uint8,Payload,"0: Scroll Data (TBD), 1: Rotate"
-// 2,N,...,Data (根据 Payload 不同而不同)
-const SP_ACTION_SCROLL = 0;
-const SP_ACTION_ROTATE = 1;
 
 function createTouchPacket(action, ptrId, x, y, pressure=65535, buttons=1) {
     const buffer = new ArrayBuffer(10);
@@ -60,17 +54,16 @@ function createKeyPacket(action, keyCode) {
 function createRotatePacket() {
     const buffer = new ArrayBuffer(1);
     const view = new DataView(buffer);
-    view.setUint8(0, TYPE_SP);
+    view.setUint8(0, TYPE_ROTATE);
     return buffer;
 }
 
 function createScrollPacket(deltaX, deltaY) {
     const buffer = new ArrayBuffer(5);
     const view = new DataView(buffer);
-    view.setUint8(0, TYPE_SP);
-    view.setUint8(1, SP_ACTION_SCROLL);
-    view.setInt16(2, deltaX);
-    view.setInt16(4, deltaY);
+    view.setUint8(0, TYPE_SCROLL);
+    view.setInt16(1, deltaX);
+    view.setInt16(3, deltaY);
     return buffer;
 }
 

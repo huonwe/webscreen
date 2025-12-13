@@ -12,10 +12,13 @@ func (da *DataAdapter) SendTouchEvent(e TouchEvent) {
 
 	// 1. 预分配一个固定大小的字节切片 (Scrcpy 协议触摸包固定 28 字节)
 	// 这里的 buf 可以在对象池(sync.Pool)里复用，进一步减少 GC
-	buf := make([]byte, 28)
-
+	buf := make([]byte, 32)
+	if e.Type != TYPE_INJECT_TOUCH_EVENT {
+		log.Printf("Mismatch Event Type: %d\n", e.Type)
+		return
+	}
 	// 2. 使用 Put 系列函数直接填充内存，速度极快
-	buf[0] = TYPE_INJECT_TOUCH_EVENT                   // Type
+	buf[0] = e.Type                                    // Type
 	buf[1] = e.Action                                  // Action
 	binary.BigEndian.PutUint64(buf[2:10], e.PointerID) // PointerID (8 bytes)
 	binary.BigEndian.PutUint32(buf[10:14], e.PosX)     // PosX (4 bytes)
@@ -24,6 +27,7 @@ func (da *DataAdapter) SendTouchEvent(e TouchEvent) {
 	binary.BigEndian.PutUint16(buf[20:22], e.Height)   // Height (2 bytes)
 	binary.BigEndian.PutUint16(buf[22:24], e.Pressure) // Pressure (2 bytes)
 	binary.BigEndian.PutUint32(buf[24:28], e.Buttons)  // Buttons (4 bytes)
+	binary.BigEndian.PutUint32(buf[28:32], e.Buttons)  // Buttons (4 bytes)
 
 	// 3. 一次性发送
 	_, err := da.controlConn.Write(buf)
