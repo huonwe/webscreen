@@ -49,15 +49,24 @@ func (sm *StreamManager) HandleWebSocket(c *gin.Context) {
 
 			case WS_TYPE_KEY: // Key Event
 				event, err := sm.createScrcpyKeyEvent(p)
+				// log.Printf("Key Event: %+v\n", event)
 				if err != nil {
 					log.Println("Failed to unmarshal key event:", err)
 					continue
 				}
 				sm.DataAdapter.SendKeyEvent(event)
-				log.Println("key event sent")
+				// log.Println("key event sent")
 			case WS_TYPE_ROTATE: // Rotate Device
 				log.Println("Rotate Device command received")
 				sm.DataAdapter.RotateDevice()
+			case WS_TYPE_SCROLL: // Scroll Event
+				event, err := sm.createScrcpyScrollEvent(p)
+				// log.Printf("Scroll Event: %+v\n", event)
+				if err != nil {
+					log.Println("Failed to unmarshal scroll event:", err)
+					continue
+				}
+				sm.DataAdapter.SendScrollEvent(event)
 			default:
 				log.Println("Unknown control message type:", p[0])
 			}

@@ -45,8 +45,8 @@ type OpusHead struct {
 	Mapping    byte
 }
 type SPSInfo struct {
-	Width              int     // 视频宽度（像素）
-	Height             int     // 视频高度（像素）
+	Width              uint32  // 视频宽度（像素）
+	Height             uint32  // 视频高度（像素）
 	FrameRate          float64 // 估算帧率
 	Profile            uint8   // 新增: H.264 Profile
 	ConstraintSetFlags uint8

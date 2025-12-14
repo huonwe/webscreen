@@ -11,6 +11,7 @@ func (da *DataAdapter) SendTouchEvent(e TouchEvent) {
 		return
 	}
 	// log.Printf("sending touch event: %v\n", e)
+	// log.Printf("current video width height: %vx%v", da.VideoMeta.Width, da.VideoMeta.Height)
 	// 1. 预分配一个固定大小的字节切片 (Scrcpy 协议触摸包固定 28 字节)
 	// 这里的 buf 可以在对象池(sync.Pool)里复用，进一步减少 GC
 	buf := make([]byte, 32)
@@ -74,14 +75,44 @@ func (da *DataAdapter) RotateDevice() {
 	}
 }
 
+func (da *DataAdapter) SendScrollEvent(e ScrollEvent) {
+	if da.controlConn == nil {
+		return
+	}
+	// Scroll Event Structure (21 bytes):
+	// 0: Type (1 byte)
+	// 1-4: PosX (4 bytes)
+	// 5-8: PosY (4 bytes)
+	// 9-10: Width (2 bytes)
+	// 11-12: Height (2 bytes)
+	// 13-14: HScroll (2 bytes)
+	// 15-16: VScroll (2 bytes)
+	// 17-20: Buttons (4 bytes)
+
+	buf := make([]byte, 21)
+	buf[0] = TYPE_INJECT_SCROLL_EVENT
+	binary.BigEndian.PutUint32(buf[1:5], e.PosX)
+	binary.BigEndian.PutUint32(buf[5:9], e.PosY)
+	binary.BigEndian.PutUint16(buf[9:11], e.Width)
+	binary.BigEndian.PutUint16(buf[11:13], e.Height)
+	binary.BigEndian.PutUint16(buf[13:15], e.HScroll)
+	binary.BigEndian.PutUint16(buf[15:17], e.VScroll)
+	binary.BigEndian.PutUint32(buf[17:21], BUTTON_PRIMARY)
+
+	_, err := da.controlConn.Write(buf)
+	if err != nil {
+		log.Printf("Error sending scroll event: %v\n", err)
+	}
+}
+
 func (da *DataAdapter) RequestKeyFrame() error {
 	if da.controlConn == nil {
 		return nil
 	}
-	da.keyFrameRequestMutex.Lock()
-	defer da.keyFrameRequestMutex.Unlock()
-	log.Printf("Last KeyFrame request time: %v Last Request KeyFrame time: %v", da.lastKeyFrameTime, da.lastRequestKeyFrameTime)
-	if time.Since(da.lastRequestKeyFrameTime) < 2*time.Second {
+	// da.keyFrameRequestMutex.Lock()
+	// defer da.keyFrameRequestMutex.Unlock()
+	log.Printf("Last Request KeyFrame time: %v Last IDR time: %v", da.lastIDRRequestTime, da.LastIDRTime)
+	if time.Since(da.LastIDRTime) < 5*time.Second {
 		log.Println("⏳ KeyFrame request too frequent, use cached")
 		da.keyFrameMutex.RLock()
 
@@ -97,27 +128,15 @@ func (da *DataAdapter) RequestKeyFrame() error {
 			return nil
 		}
 
-		createCopyFromPool := func(src []byte) []byte {
-			dst := da.VideoPayloadPool.Get().([]byte)
-			if cap(dst) < len(src) {
-				da.VideoPayloadPool.Put(dst)
-				dst = make([]byte, len(src))
-			}
-			dst = dst[:len(src)]
-			copy(dst, src)
-			return dst
-		}
-
 		var vpsCopy, spsCopy, ppsCopy, idrCopy []byte
 		if isH265 {
-			vpsCopy = createCopyFromPool(da.LastVPS)
+			vpsCopy = createCopy(da.LastVPS, &da.PayloadPoolLarge)
 		}
-		spsCopy = createCopyFromPool(da.LastSPS)
-		ppsCopy = createCopyFromPool(da.LastPPS)
-		idrCopy = createCopyFromPool(da.LastIDR)
-
+		spsCopy = createCopy(da.LastSPS, &da.PayloadPoolLarge)
+		ppsCopy = createCopy(da.LastPPS, &da.PayloadPoolLarge)
+		idrCopy = createCopy(da.LastIDR, &da.PayloadPoolLarge)
 		// Check freshness of IDR
-		idrFresh := time.Since(da.LastIDRTime) < 500*time.Millisecond
+		// idrFresh := time.Since(da.LastIDRTime) < 500*time.Millisecond
 
 		da.keyFrameMutex.RUnlock()
 
@@ -129,25 +148,26 @@ func (da *DataAdapter) RequestKeyFrame() error {
 			da.VideoChan <- WebRTCFrame{Data: spsCopy, Timestamp: timestamp}
 			da.VideoChan <- WebRTCFrame{Data: ppsCopy, Timestamp: timestamp}
 
-			if idrFresh {
-				da.VideoChan <- WebRTCFrame{Data: idrCopy, Timestamp: timestamp}
-				log.Println("✅ Sent cached keyframe data (Fresh IDR)")
-			} else {
-				log.Println("✅ Sent cached keyframe data (Config only, IDR too old)")
-				// If we don't send IDR, we should probably put the buffer back?
-				// But createCopyFromPool allocates from pool.
-				// The receiver of VideoChan is responsible for putting it back.
-				// If we don't send it, we leak it (or rather, we hold it until GC if we didn't use pool, but we used pool).
-				// Wait, if we don't send it to VideoChan, we MUST put it back manually.
-				da.VideoPayloadPool.Put(idrCopy)
-			}
+			// 为了保证流畅性，即使 IDR 不新鲜也发送
+			// if idrFresh {
+			da.VideoChan <- WebRTCFrame{Data: idrCopy, Timestamp: timestamp}
+			log.Println("✅ Sent cached keyframe data")
+			// } else {
+			// 	log.Println("✅ Sent cached keyframe data (Config only, IDR too old)")
+			// 	// If we don't send IDR, we should probably put the buffer back?
+			// 	// But createCopyFromPool allocates from pool.
+			// 	// The receiver of VideoChan is responsible for putting it back.
+			// 	// If we don't send it, we leak it (or rather, we hold it until GC if we didn't use pool, but we used pool).
+			// 	// Wait, if we don't send it to VideoChan, we MUST put it back manually.
+			// 	da.PayloadPoolLarge.Put(idrCopy)
+			// }
 		}()
 		return nil
 	}
 	log.Println("⚡ Sending Request KeyFrame (Type 99)...")
 	msg := []byte{ControlMsgTypeReqIDR}
 	//<-da.VideoChan
-	da.lastRequestKeyFrameTime = time.Now()
+	da.lastIDRRequestTime = time.Now()
 	_, err := da.controlConn.Write(msg)
 	if err != nil {
 		log.Printf("Error sending keyframe request: %v\n", err)

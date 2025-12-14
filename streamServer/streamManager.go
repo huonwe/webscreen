@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"strings"
 	"sync"
 	"time"
 	"webcpy/scrcpy"
@@ -30,9 +31,20 @@ type StreamManager struct {
 func NewStreamManager(dataAdapter *scrcpy.DataAdapter) *StreamManager {
 	VideoStreamID := "android_live_stream_video"
 	AudioStreamID := "android_live_stream_audio"
+
+	var videoMimeType string
+	switch dataAdapter.VideoMeta.CodecID {
+	case "h265":
+		videoMimeType = webrtc.MimeTypeH265
+	case "av1 ":
+		videoMimeType = webrtc.MimeTypeAV1
+	default:
+		videoMimeType = webrtc.MimeTypeH264
+	}
+
 	// 创建视频轨
 	videoTrack, _ := webrtc.NewTrackLocalStaticSample(
-		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeH264},
+		webrtc.RTPCodecCapability{MimeType: videoMimeType},
 		"video-track-id",
 		VideoStreamID, // <--- 关键点
 	)
@@ -101,7 +113,7 @@ func (sm *StreamManager) WriteVideoSample(webrtcFrame *scrcpy.WebRTCFrame) error
 	if err != nil {
 		return fmt.Errorf("写入视频样本失败: %v", err)
 	}
-	// sm.DataAdapter.VideoPayloadPool.Put(webrtcFrame.Data)
+	sm.DataAdapter.PayloadPoolLarge.Put(webrtcFrame.Data)
 	return nil
 }
 
@@ -126,7 +138,7 @@ func (sm *StreamManager) WriteAudioSample(webrtcFrame *scrcpy.WebRTCFrame) error
 	if err != nil {
 		return fmt.Errorf("写入音频样本失败: %v", err)
 	}
-	// sm.DataAdapter.AudioPayloadPool.Put(webrtcFrame.Data)
+	sm.DataAdapter.PayloadPoolSmall.Put(webrtcFrame.Data)
 	return nil
 }
 
@@ -152,7 +164,37 @@ func (sm *StreamManager) HandleSDP(c *gin.Context) {
 		},
 	}
 
-	peerConnection, err := webrtc.NewAPI().NewPeerConnection(config)
+	// 创建 MediaEngine 并注册默认 Codec
+	m := &webrtc.MediaEngine{}
+	if err := m.RegisterDefaultCodecs(); err != nil {
+		log.Println("RegisterDefaultCodecs failed:", err)
+		c.String(500, err.Error())
+		return
+	}
+
+	// 检查是否需要注册 H.265
+	sm.RLock()
+	videoMime := sm.VideoTrack.Codec().MimeType
+	sm.RUnlock()
+
+	if videoMime == webrtc.MimeTypeH265 {
+		log.Println("Registering H.265 Codec")
+		if err := m.RegisterCodec(webrtc.RTPCodecParameters{
+			RTPCodecCapability: webrtc.RTPCodecCapability{
+				MimeType:     webrtc.MimeTypeH265,
+				ClockRate:    90000,
+				Channels:     0,
+				SDPFmtpLine:  "",
+				RTCPFeedback: []webrtc.RTCPFeedback{{"goog-remb", ""}, {"ccm", "fir"}, {"nack", ""}, {"nack", "pli"}},
+			},
+			PayloadType: 102, // 动态 Payload Type
+		}, webrtc.RTPCodecTypeVideo); err != nil {
+			log.Println("RegisterCodec H265 failed:", err)
+		}
+	}
+
+	api := webrtc.NewAPI(webrtc.WithMediaEngine(m))
+	peerConnection, err := api.NewPeerConnection(config)
 	if err != nil {
 		log.Println("创建 PeerConnection 失败:", err)
 		c.String(500, err.Error())
@@ -225,7 +267,10 @@ func (sm *StreamManager) HandleSDP(c *gin.Context) {
 
 	// G. 将最终的 SDP Answer 返回给浏览器
 	c.Writer.Header().Set("Content-Type", "application/sdp")
-	fmt.Fprint(c.Writer, peerConnection.LocalDescription().SDP)
+
+	// 手动修改 SDP 以突破浏览器默认带宽限制 (SDP Munging)
+	finalSDP := setSDPBandwidth(peerConnection.LocalDescription().SDP, 20000) // 20 Mbps
+	fmt.Fprint(c.Writer, finalSDP)
 
 	// H. 请求关键帧 (IDR)
 	// 连接建立后，立即请求一个新的关键帧，确保客户端能马上看到画面
@@ -236,4 +281,21 @@ func (sm *StreamManager) HandleSDP(c *gin.Context) {
 			sm.DataAdapter.RequestKeyFrame()
 		}()
 	}
+}
+
+// setSDPBandwidth 在 SDP 的 video m-line 后插入 b=AS:20000 (20Mbps)
+func setSDPBandwidth(sdp string, bandwidth int) string {
+	lines := strings.Split(sdp, "\r\n")
+	var newLines []string
+	for _, line := range lines {
+		newLines = append(newLines, line)
+		if strings.HasPrefix(line, "m=video") {
+			// b=AS:<bandwidth>  (Application Specific Maximum, 单位 kbps)
+			// 设置为 20000 kbps = 20 Mbps，远超默认的 2.5 Mbps
+			newLines = append(newLines, fmt.Sprintf("b=AS:%d", bandwidth))
+			// 也可以加上 TIAS (Transport Independent Application Specific Maximum, 单位 bps)
+			// newLines = append(newLines, "b=TIAS:20000000")
+		}
+	}
+	return strings.Join(newLines, "\r\n")
 }

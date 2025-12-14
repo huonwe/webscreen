@@ -51,14 +51,14 @@ func main() {
 		videoChan := dataAdapter.VideoChan
 		for frame := range videoChan {
 			streamManager.WriteVideoSample(&frame)
-			streamManager.DataAdapter.VideoPayloadPool.Put(frame.Data)
+			// streamManager.DataAdapter.VideoPayloadPool.Put(frame.Data)
 		}
 	}()
 	go func() {
 		audioChan := dataAdapter.AudioChan
 		for frame := range audioChan {
 			streamManager.WriteAudioSample(&frame)
-			streamManager.DataAdapter.AudioPayloadPool.Put(frame.Data)
+			// streamManager.DataAdapter.AudioPayloadPool.Put(frame.Data)
 		}
 	}()
 	select {}

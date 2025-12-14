@@ -63,11 +63,14 @@ async function start() {
             console.log('✓ 已启用 WebRTC 低延迟模式 (playoutDelayHint=0, jitterBufferTarget=0)');
         }
     });
-    setInterval(() => force_sync(pc), 2000);
+    setInterval(() => force_sync(pc), 1000);
     
+    // let p = createRequestKeyFramePacket();
+    // sendWSMessage(p);
+
     // 重置按钮状态
-    p = createTouchPacket(TOUCH_ACTION_UP, 0, 0, 0);
-    sendWSMessage(p);
+    // p = createTouchPacket(TOUCH_ACTION_UP, 0, 0, 0);
+    // sendWSMessage(p);
 }
 
 function sendWSMessage(message) {

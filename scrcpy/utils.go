@@ -126,12 +126,11 @@ func ParseSPS(sps []byte, readCroppingFlag bool) (SPSInfo, error) {
 
 	// 10. 关键: 读取宽度 (pic_width_in_mbs_minus1)
 	widthMbsMinus1, _ := bitReader.ReadExpGolomb()
-	info.Width = (int(widthMbsMinus1) + 1) * 16
+	info.Width = uint32((int(widthMbsMinus1) + 1) * 16)
 
 	// 11. 关键: 读取高度 (pic_height_in_map_units_minus1)
 	heightMapUnitsMinus1, _ := bitReader.ReadExpGolomb()
-	info.Height = (int(heightMapUnitsMinus1) + 1) * 16
-
+	info.Height = uint32((int(heightMapUnitsMinus1) + 1) * 16)
 	// 12. 处理场模式 (frame_mbs_only_flag)
 	frameMbsOnlyFlag, _ := bitReader.ReadUint8(1)
 	if frameMbsOnlyFlag == 0 {
@@ -165,8 +164,8 @@ func ParseSPS(sps []byte, readCroppingFlag bool) (SPSInfo, error) {
 			cropTop := int(frameCropTopOffset) * subHeightC
 			cropBottom := int(frameCropBottomOffset) * subHeightC
 
-			info.Width -= cropLeft + cropRight
-			info.Height -= cropTop + cropBottom
+			info.Width -= uint32(cropLeft + cropRight)
+			info.Height -= uint32(cropTop + cropBottom)
 		}
 	}
 

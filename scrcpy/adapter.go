@@ -14,7 +14,7 @@ import (
 // 	VideoChan        chan WebRTCVideoFrame
 // 	AudioChan        chan WebRTCAudioFrame
 // 	ControlChan      chan WebRTCControlFrame
-// 	VideoPayloadPool sync.Pool
+// 	PayloadPoolLarge sync.Pool
 // }
 
 type DataAdapter struct {
@@ -23,8 +23,8 @@ type DataAdapter struct {
 	VideoChan        chan WebRTCFrame
 	AudioChan        chan WebRTCFrame
 	ControlChan      chan WebRTCControlFrame
-	VideoPayloadPool sync.Pool
-	AudioPayloadPool sync.Pool
+	PayloadPoolLarge sync.Pool
+	PayloadPoolSmall sync.Pool
 
 	DeviceName string
 	VideoMeta  ScrcpyVideoMeta
@@ -39,9 +39,8 @@ type DataAdapter struct {
 
 	adbClient *ADBClient
 
-	keyFrameRequestMutex    sync.Mutex
-	lastKeyFrameTime        time.Time
-	lastRequestKeyFrameTime time.Time
+	// keyFrameRequestMutex    sync.Mutex
+	lastIDRRequestTime time.Time
 
 	keyFrameMutex sync.RWMutex // 保护 LastSPS, LastPPS, LastIDR
 	LastVPS       []byte       // 新增：H.265 VPS
@@ -63,13 +62,13 @@ func NewDataAdapter(config map[string]string) (*DataAdapter, error) {
 		VideoChan:   make(chan WebRTCFrame, 10),
 		AudioChan:   make(chan WebRTCFrame, 10),
 		ControlChan: make(chan WebRTCControlFrame, 10),
-		VideoPayloadPool: sync.Pool{
+		PayloadPoolLarge: sync.Pool{
 			New: func() interface{} {
-				// 预分配 512KB (根据你的 H264 码率调整)
-				return make([]byte, 1024*1024)
+				// 预分配 512KB (根据你的 码率调整)
+				return make([]byte, 512*1024)
 			},
 		},
-		AudioPayloadPool: sync.Pool{
+		PayloadPoolSmall: sync.Pool{
 			New: func() interface{} {
 				// 1KB 足够放下大多数 Opus 帧
 				return make([]byte, 1024)
@@ -125,6 +124,7 @@ func NewDataAdapter(config map[string]string) (*DataAdapter, error) {
 			log.Println("Scrcpy Control Connection Established")
 		}
 	}
+	// 甜点值 64KB ~ 128KB
 	da.videoConn.(*net.TCPConn).SetReadBuffer(64 * 1024)
 	da.audioConn.(*net.TCPConn).SetReadBuffer(16 * 1024)
 
@@ -147,22 +147,6 @@ func (da *DataAdapter) Close() {
 	// close(da.AudioChan)
 }
 
-// func (da *DataAdapter) PauseConvertVideo() {
-// 	da.convertVideoPaused = true
-// }
-
-// func (da *DataAdapter) ResumeConvertVideo() {
-// 	da.convertVideoPaused = false
-// }
-
-// func (da *DataAdapter) PauseConvertAudio() {
-// 	da.convertAudioPaused = true
-// }
-
-// func (da *DataAdapter) ResumeConvertAudio() {
-// 	da.convertAudioPaused = false
-// }
-
 func (da *DataAdapter) ShowDeviceInfo() {
 	log.Printf("Device Name: %s", da.DeviceName)
 	log.Printf("Video Codec: %s, Width: %d, Height: %d", da.VideoMeta.CodecID, da.VideoMeta.Width, da.VideoMeta.Height)
@@ -170,34 +154,7 @@ func (da *DataAdapter) ShowDeviceInfo() {
 }
 
 func (da *DataAdapter) StartConvertVideoFrame() {
-	createCopy := func(src []byte) []byte {
-		if len(src) == 0 {
-			return nil
-		}
-		// A. 从池子拿（准备做复印件的纸）
-		dst := da.VideoPayloadPool.Get().([]byte)
-
-		// B. 容量检查
-		// 如果池子里的纸太小（SPS通常很小，这种情况极少发生，但为了健壮性必须写）
-		if cap(dst) < len(src) {
-			// 把太小的还回去
-			da.VideoPayloadPool.Put(dst)
-			// 重新造个大的（这次 GC 无法避免，但仅限初始化阶段，无所谓）
-			dst = make([]byte, len(src))
-			log.Println("resize")
-		}
-
-		// C. 设定长度并拷贝
-		dst = dst[:len(src)]
-		copy(dst, src)
-		return dst
-	}
 	go func() {
-		var startCode = []byte{0x00, 0x00, 0x00, 0x01}
-		var cachedVPS []byte
-		var cachedSPS []byte
-		var cachedPPS []byte
-
 		var headerBuf [12]byte
 		frame := &ScrcpyFrame{}
 
@@ -209,12 +166,17 @@ func (da *DataAdapter) StartConvertVideoFrame() {
 				log.Println("Failed to read scrcpy frame header:", err)
 				return
 			}
-			payloadBuf := da.VideoPayloadPool.Get().([]byte)
+			// showFrameHeaderInfo(frame.Header)
+			payloadBuf := da.PayloadPoolLarge.Get().([]byte)
+			// log.Printf("payload size: %v,PayloadPoolLarge capacity: %v", frame.Header.Size, cap(payloadBuf))
 			if cap(payloadBuf) < int(frame.Header.Size) {
-				da.VideoPayloadPool.Put(payloadBuf)
-				payloadBuf = make([]byte, frame.Header.Size+1024)
-				log.Println("Resized payload buffer for video frame")
-				log.Println("size:  ", frame.Header.Size)
+				log.Println("resize video payload buf, current cap:", cap(payloadBuf))
+				da.PayloadPoolLarge.Put(payloadBuf)
+				newSize := int(frame.Header.Size) + 1024
+				if newSize < 512*1024 {
+					newSize = 512 * 1024
+				}
+				payloadBuf = make([]byte, newSize)
 			}
 			if _, err := io.ReadFull(da.videoConn, payloadBuf[:frame.Header.Size]); err != nil {
 				log.Println("Failed to read video frame payload:", err)
@@ -222,88 +184,20 @@ func (da *DataAdapter) StartConvertVideoFrame() {
 			}
 			frameData := payloadBuf[:frame.Header.Size]
 
-			// Parse NALUs to update cache
-			parts := bytes.Split(frameData, startCode)
-			for _, part := range parts {
-				if len(part) == 0 {
-					continue
-				}
-
-				var nalType uint8
-				if isH265 {
-					nalType = (part[0] >> 1) & 0x3F
-				} else {
-					nalType = part[0] & 0x1F
-				}
-
-				if isH265 {
-					switch nalType {
-					case 32: // VPS
-						cachedVPS = createCopy(append(startCode, part...))
-						da.keyFrameMutex.Lock()
-						da.LastVPS = cachedVPS
-						da.keyFrameMutex.Unlock()
-					case 33: // SPS
-						cachedSPS = createCopy(append(startCode, part...))
-						da.keyFrameMutex.Lock()
-						da.LastSPS = cachedSPS
-						da.keyFrameMutex.Unlock()
-					case 34: // PPS
-						cachedPPS = createCopy(append(startCode, part...))
-						da.keyFrameMutex.Lock()
-						da.LastPPS = cachedPPS
-						da.keyFrameMutex.Unlock()
-					case 19, 20, 21: // IDR
-						da.keyFrameMutex.Lock()
-						da.LastIDR = createCopy(frameData) // Store full frame
-						da.LastIDRTime = time.Now()
-						da.keyFrameMutex.Unlock()
-					}
-				} else {
-					switch nalType {
-					case 7: // SPS
-						cachedSPS = createCopy(append(startCode, part...))
-						da.keyFrameMutex.Lock()
-						da.LastSPS = cachedSPS
-						da.keyFrameMutex.Unlock()
-					case 8: // PPS
-						cachedPPS = createCopy(append(startCode, part...))
-						da.keyFrameMutex.Lock()
-						da.LastPPS = cachedPPS
-						da.keyFrameMutex.Unlock()
-					case 5: // IDR
-						da.keyFrameMutex.Lock()
-						da.LastIDR = createCopy(frameData)
-						da.LastIDRTime = time.Now()
-						da.keyFrameMutex.Unlock()
-					}
-				}
+			var iter func(func(WebRTCFrame) bool)
+			if isH265 {
+				iter = da.GenerateWebRTCFrameH265_v1(frame.Header, frameData)
+			} else {
+				iter = da.GenerateWebRTCFrameH264(frame.Header, frameData)
 			}
 
-			// If it's a keyframe (but not a config frame itself), send cached config first
-			if frame.Header.IsKeyFrame && !frame.Header.IsConfig {
-				if isH265 && cachedVPS != nil {
-					da.VideoChan <- WebRTCFrame{Data: createCopy(cachedVPS), Timestamp: int64(frame.Header.PTS)}
+			for webRTCFrame := range iter {
+				select {
+				case da.VideoChan <- webRTCFrame:
+				default:
+					log.Println("Video channel full, waiting to send frame...")
+					da.VideoChan <- webRTCFrame
 				}
-				if cachedSPS != nil {
-					da.VideoChan <- WebRTCFrame{Data: createCopy(cachedSPS), Timestamp: int64(frame.Header.PTS)}
-				}
-				if cachedPPS != nil {
-					da.VideoChan <- WebRTCFrame{Data: createCopy(cachedPPS), Timestamp: int64(frame.Header.PTS)}
-				}
-			}
-
-			// 这里的 Data 引用了 pool 中的内存，消费者用完必须 Put 回去
-			webRTCFrame := WebRTCFrame{
-				Data:      frameData,
-				Timestamp: int64(frame.Header.PTS),
-			}
-			select {
-			case da.VideoChan <- webRTCFrame:
-
-			default:
-				log.Println("Video channel full, waiting to send frame...")
-				da.VideoChan <- webRTCFrame
 			}
 		}
 	}()
@@ -320,11 +214,11 @@ func (da *DataAdapter) StartConvertAudioFrame() {
 				return
 			}
 			// log.Printf("Audio Frame Timestamp: %v, Size: %v isConfig: %v\n", frame.Header.PTS, frame.Header.Size, frame.Header.IsConfig)
-			payloadBuf := da.AudioPayloadPool.Get().([]byte)
+			payloadBuf := da.PayloadPoolSmall.Get().([]byte)
 			if cap(payloadBuf) < int(frame.Header.Size) {
 				log.Println("current buf cap:", cap(payloadBuf))
 				if cap(payloadBuf) >= 1024 {
-					da.AudioPayloadPool.Put(payloadBuf)
+					da.PayloadPoolSmall.Put(payloadBuf)
 				}
 				payloadBuf = make([]byte, frame.Header.Size+1024)
 				log.Println("Resized payload buffer for audio frame")
@@ -338,10 +232,10 @@ func (da *DataAdapter) StartConvertAudioFrame() {
 				log.Println("Audio Config Frame Received")
 
 				totalLen := 7 + 8 + int(n)
-				configBuf := da.AudioPayloadPool.Get().([]byte)
+				configBuf := da.PayloadPoolSmall.Get().([]byte)
 				if cap(configBuf) < totalLen {
 					if cap(configBuf) >= 1024 {
-						da.AudioPayloadPool.Put(configBuf)
+						da.PayloadPoolSmall.Put(configBuf)
 					}
 					configBuf = make([]byte, 1024)
 					if cap(configBuf) < totalLen {
@@ -357,7 +251,7 @@ func (da *DataAdapter) StartConvertAudioFrame() {
 					Data:      configBuf,
 					Timestamp: int64(frame.Header.PTS),
 				}
-				da.AudioPayloadPool.Put(payloadBuf)
+				da.PayloadPoolSmall.Put(payloadBuf)
 				continue
 			}
 
@@ -438,6 +332,21 @@ func (da *DataAdapter) readVideoMeta(conn net.Conn) error {
 	return nil
 }
 
+func (da *DataAdapter) updateVideoMetaFromSPS(sps []byte) {
+	if da.LastSPS != nil && bytes.Equal(da.LastSPS[4:], sps) {
+		log.Println("SPS unchanged, no need to update video meta")
+		return
+	}
+	spsInfo, err := ParseSPS(sps, true)
+	if err != nil {
+		log.Println("Failed to parse SPS for video meta update:", err)
+		return
+	}
+	da.VideoMeta.Width = spsInfo.Width
+	da.VideoMeta.Height = spsInfo.Height
+	log.Printf("Updated Video Meta from SPS: Width=%d, Height=%d", da.VideoMeta.Width, da.VideoMeta.Height)
+}
+
 func readScrcpyFrameHeader(conn net.Conn, headerBuf []byte, header *ScrcpyFrameHeader) error {
 	if _, err := io.ReadFull(conn, headerBuf); err != nil {
 		return err
@@ -457,4 +366,29 @@ func readScrcpyFrameHeader(conn net.Conn, headerBuf []byte, header *ScrcpyFrameH
 	header.PTS = pts
 	header.Size = packetSize
 	return nil
+}
+
+func showFrameHeaderInfo(header ScrcpyFrameHeader) {
+	log.Printf("Frame Header - PTS: %d, Size: %d, IsConfig: %v, IsKeyFrame: %v",
+		header.PTS, header.Size, header.IsConfig, header.IsKeyFrame)
+}
+
+func createCopy(src []byte, pool *sync.Pool) []byte {
+	if len(src) == 0 {
+		log.Println("createCopy called with empty src")
+		return nil
+	}
+	dst := pool.Get().([]byte)
+	// log.Printf("current pool cap: %d, src size: %d", cap(dst), len(src))
+	if cap(dst) < len(src) {
+		log.Println("resize pool buffer, current cap:", cap(dst))
+		if len(src) <= 1024 {
+			log.Fatalln("!!!!!!!")
+		}
+		// pool.Put(dst)
+		dst = make([]byte, len(src))
+	}
+	copy(dst, src)
+	dst = dst[:len(src)]
+	return dst
 }

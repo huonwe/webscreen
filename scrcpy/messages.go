@@ -80,6 +80,17 @@ type KeyEvent struct {
 	KeyCode uint32
 }
 
+type ScrollEvent struct {
+	Type    byte
+	PosX    uint32
+	PosY    uint32
+	Width   uint16
+	Height  uint16
+	HScroll uint16
+	VScroll uint16
+	Buttons uint32
+}
+
 // func (e *TouchEvent) UnmarshalBinary(data []byte) error {
 // 	e.Action = data[1]
 // 	e.PointerID = uint64(data[2])

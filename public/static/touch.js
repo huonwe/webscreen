@@ -44,6 +44,12 @@ function getScreenCoordinates(event) {
     const offsetX = clientX - rect.left;
     const offsetY = clientY - rect.top;
 
+    // 检查点击是否在视频区域内
+    // 如果是在 document 上触发的 mouseup，且鼠标已经移出了 video 区域，
+    // offsetX/offsetY 可能会超出范围，或者变成负数。
+    // 但更重要的是，如果鼠标完全移出了浏览器窗口，clientX/clientY 可能是有效的，
+    // 但相对于 videoElement 的计算可能需要更鲁棒的处理。
+
     const x = Math.round(offsetX * scaleX);
     const y = Math.round(offsetY * scaleY);
 
@@ -55,28 +61,36 @@ function getScreenCoordinates(event) {
 }
 
 let isMouseDown = false;
+let lastX = 0;
+let lastY = 0;
 
 videoElement.addEventListener('mousedown', (event) => {
     if (event.button !== 0) return; // Only Left Click
     isMouseDown = true;
     const coords = getScreenCoordinates(event);
     if (coords) {
+        lastX = coords.x;
+        lastY = coords.y;
         // console.log(`MouseDown at: ${coords.x}, ${coords.y}`);
-        p = createTouchPacket(TOUCH_ACTION_DOWN, 0, coords.x, coords.y);
-        // console.log("x:", coords.x, "y:", coords.y);
-        // console.log(p);
-        sendWSMessage(p);
+        sendTouchEvent(TOUCH_ACTION_DOWN, 0, coords.x, coords.y);
     }
 });
 
 document.addEventListener('mouseup', (event) => {
     if (isMouseDown) {
         isMouseDown = false;
-        const coords = getScreenCoordinates(event);
+        let coords = getScreenCoordinates(event);
+        
+        // 如果在 document 上释放鼠标，且 getScreenCoordinates 返回 null (例如 video 尺寸未加载)
+        // 或者计算出的坐标异常，我们可以使用最后一次已知的有效坐标 (lastX, lastY)
+        // 这对于“拖拽出屏幕外释放”的情况特别有用，因为我们希望在最后的位置抬起手指。
+        if (!coords) {
+             coords = { x: lastX, y: lastY };
+        }
+
         if (coords) {
             // console.log(`MouseUp at: ${coords.x}, ${coords.y}`);
-            p = createTouchPacket(TOUCH_ACTION_UP, 0, coords.x, coords.y);
-            sendWSMessage(p);
+            sendTouchEvent(TOUCH_ACTION_UP, 0, coords.x, coords.y);
         }
     }
 });
@@ -85,8 +99,9 @@ const handleMouseMove = throttle((event) => {
     if (event.buttons !== 1) return; // Only when left button is pressed
     const coords = getScreenCoordinates(event);
     if (coords) {
-        p = createTouchPacket(TOUCH_ACTION_MOVE, 0, coords.x, coords.y);
-        sendWSMessage(p);
+        lastX = coords.x;
+        lastY = coords.y;
+        sendTouchEvent(TOUCH_ACTION_MOVE, 0, coords.x, coords.y);
     }
 }, TOUCH_SAMPLING_RATE);
 
@@ -97,8 +112,7 @@ videoElement.addEventListener('touchstart', (event) => {
     const coords = getScreenCoordinates(event);
     if (coords) {
         // console.log(`TouchStart at: ${coords.x}, ${coords.y}`);
-        p = createTouchPacket(TOUCH_ACTION_DOWN, 0, coords.x, coords.y);
-        sendWSMessage(p);
+        sendTouchEvent(TOUCH_ACTION_DOWN, 0, coords.x, coords.y);
     }
 }, { passive: false });
 
@@ -107,8 +121,7 @@ videoElement.addEventListener('touchend', (event) => {
     const coords = getScreenCoordinates(event);
     if (coords) {
         // console.log(`TouchEnd at: ${coords.x}, ${coords.y}`);
-        p = createTouchPacket(TOUCH_ACTION_UP, 0, coords.x, coords.y);
-        sendWSMessage(p);
+        sendTouchEvent(TOUCH_ACTION_UP, 0, coords.x, coords.y);
     }
 }, { passive: false });
 
@@ -116,8 +129,7 @@ const handleTouchMove = throttle((event) => {
     event.preventDefault();
     const coords = getScreenCoordinates(event);
     if (coords) {
-        p = createTouchPacket(TOUCH_ACTION_MOVE, 0, coords.x, coords.y);
-        sendWSMessage(p);
+        sendTouchEvent(TOUCH_ACTION_MOVE, 0, coords.x, coords.y);
     }
 }, TOUCH_SAMPLING_RATE);
 
@@ -128,7 +140,16 @@ videoElement.addEventListener('touchcancel', (event) => {
     const coords = getScreenCoordinates(event);
     if (coords) {
         // console.log(`TouchCancel at: ${coords.x}, ${coords.y}`);
-        p = createTouchPacket(TOUCH_ACTION_UP, 0, coords.x, coords.y);
-        sendWSMessage(p);
+        sendTouchEvent(TOUCH_ACTION_UP, 0, coords.x, coords.y);
     }
 }, { passive: false });
+
+function sendTouchEvent(action, ptrId, x, y) {
+    if (!window.ws || window.ws.readyState !== WebSocket.OPEN) {
+        console.warn("WebSocket is not open. Cannot send message.");
+        return;
+    }
+    // console.log(`Sending touch event: action=${action}, ptrId=${ptrId}, x=${x}, y=${y}`);
+    p = createTouchPacket(action, ptrId, x, y);
+    window.ws.send(p);
+}

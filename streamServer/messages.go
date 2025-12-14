@@ -71,3 +71,26 @@ func (sm *StreamManager) createScrcpyTouchEvent(wsMsg []byte) (scrcpy.TouchEvent
 	}
 	return e, nil
 }
+
+func (sm *StreamManager) createScrcpyScrollEvent(wsMsg []byte) (scrcpy.ScrollEvent, error) {
+	// WS Scroll Packet:
+	// 0: Type (0x03)
+	// 1-2: X (uint16)
+	// 3-4: Y (uint16)
+	// 5-6: hScroll (int16)
+	// 7-8: vScroll (int16)
+	if len(wsMsg) != 10 {
+		return scrcpy.ScrollEvent{}, fmt.Errorf("invalid scroll event message length: %d", len(wsMsg))
+	}
+	e := scrcpy.ScrollEvent{
+		Type:    scrcpy.TYPE_INJECT_SCROLL_EVENT,
+		PosX:    uint32(binary.BigEndian.Uint16(wsMsg[1:3])),
+		PosY:    uint32(binary.BigEndian.Uint16(wsMsg[3:5])),
+		Width:   uint16(sm.DataAdapter.VideoMeta.Width),
+		Height:  uint16(sm.DataAdapter.VideoMeta.Height),
+		HScroll: binary.BigEndian.Uint16(wsMsg[5:7]),
+		VScroll: binary.BigEndian.Uint16(wsMsg[7:9]),
+		Buttons: uint32(wsMsg[9]),
+	}
+	return e, nil
+}

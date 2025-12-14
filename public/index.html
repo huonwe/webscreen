@@ -1,31 +1,25 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <title>Go Scrcpy WebRTC</title>
-    <style>
-        html, body {
-            height: 100%;
-            margin: 0;
-            padding: 0;
-            overflow: hidden;
-        }
-    </style>
+    <link rel="stylesheet" href="static/css/index.css">
 </head>
-<body>
-    <div style="display: flex; flex-direction: row; width: 100%; height: 100%;">
-        <div style="flex: 1; display: flex; justify-content: flex-end; align-items: center; background-color: #000; height: 100%;">
-            <video id="remoteVideo" autoplay muted playsinline style="max-width: 100%; max-height: 100%; display: block; touch-action: none;"></video>
-        </div>
-        <div style="width: 3rem;">
-            这靠右边的一列显示控制按钮，比如电源键，音量键等
-            <button onclick="start()" style="width: 100%;height: 1.5rem;">连接</button>
-            <button onclick="homeButton()" style="width: 100%;height: 1.5rem;">主页</button>
-            <button onclick="volumeUpButton()" style="width: 100%;height: 1.5rem;">音量加</button>
-            <button onclick="volumeDownButton()" style="width: 100%;height: 1.5rem;">音量减</button>
-            <button onclick="powerButton()" style="width: 100%;height: 1.5rem;">电源键</button>
 
+<body>
+    <div class="main-container">
+        <div class="video-container">
+            <video id="remoteVideo" autoplay muted playsinline></video>
+        </div>
+        <div class="controls-container">
+            <button onclick="start()" class="control-btn primary">连接</button>
+            <div class="separator"></div>
+            <button onclick="homeButton()" class="control-btn">主页</button>
+            <button onclick="volumeUpButton()" class="control-btn">音量+</button>
+            <button onclick="volumeDownButton()" class="control-btn">音量-</button>
+            <button onclick="powerButton()" class="control-btn">电源</button>
+        </div>
     </div>
-    <br/>
     <script>
         window.ws = new WebSocket('ws://' + window.location.host + '/ws');
         window.ws.onopen = () => console.log('WebSocket connected');
@@ -40,14 +34,36 @@
         }
 
         window.addEventListener('resize', triggerCheck);
-        
 
+        function checkOrientation() {
+            const video = document.getElementById('remoteVideo');
+            if (!video.videoWidth || !video.videoHeight) return;
+
+            const isPagePortrait = window.innerHeight > window.innerWidth;
+            const isVideoLandscape = video.videoWidth > video.videoHeight;
+
+            const isPageLandscape = window.innerWidth > window.innerHeight;
+            const isVideoPortrait = video.videoHeight > video.videoWidth;
+
+            if (isPagePortrait && isVideoLandscape) {
+                // console.log("Auto-rotating: Page Portrait, Video Landscape");
+                p = createRotatePacket();
+                sendButtonEvent(p);
+            } else if (isPageLandscape && isVideoPortrait) {
+                // console.log("Auto-rotating: Page Landscape, Video Portrait");
+                p = createRotatePacket();
+                sendButtonEvent(p);
+            }
+        }
         // start();
     </script>
+    <script src="static/controlMessages.js"></script>
     <script src="static/buttons.js"></script>
     <script src="static/sync.js"></script>
-    <script src="static/controlMessages.js"></script>
-    <script src="static/connect.js"></script> 
     <script src="static/touch.js"></script>
+    <script src="static/keyboard.js"></script>
+    <script src="static/scroll.js"></script>
+    <script src="static/connect.js"></script>
 </body>
+
 </html>

@@ -28,12 +28,12 @@ func NewADBClient(address string) *ADBClient {
 		Version:      "3.3.3",
 		SCID:         GenerateSCID(),
 		MaxFPS:       "60",
-		VideoBitRate: "8000000",
+		VideoBitRate: "20000000",
 		Control:      "true",
 		Audio:        "true",
 		VideoCodec:   "h264",
 		//VideoCodecOptions: "i-frame-interval=1",
-		LogLevel: "info",
+		LogLevel: "debug",
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	return &ADBClient{Address: address, ScrcpyParams: defaultScrcpyParams, ctx: ctx, cancel: cancel}
