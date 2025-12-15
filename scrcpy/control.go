@@ -132,10 +132,10 @@ func (da *DataAdapter) RequestKeyFrame() error {
 
 		var vpsCopy, spsCopy, ppsCopy, idrCopy []byte
 		if isH265 {
-			vpsCopy = createCopy(da.LastVPS, &da.PayloadPoolLarge)
+			vpsCopy = createCopy(da.LastVPS, &da.PayloadPoolSmall)
 		}
-		spsCopy = createCopy(da.LastSPS, &da.PayloadPoolLarge)
-		ppsCopy = createCopy(da.LastPPS, &da.PayloadPoolLarge)
+		spsCopy = createCopy(da.LastSPS, &da.PayloadPoolSmall)
+		ppsCopy = createCopy(da.LastPPS, &da.PayloadPoolSmall)
 		idrCopy = createCopy(da.LastIDR, &da.PayloadPoolLarge)
 		// Check freshness of IDR
 		// idrFresh := time.Since(da.LastIDRTime) < 500*time.Millisecond
@@ -152,7 +152,7 @@ func (da *DataAdapter) RequestKeyFrame() error {
 
 			// 为了保证流畅性，即使 IDR 不新鲜也发送
 			// if idrFresh {
-			da.VideoChan <- WebRTCFrame{Data: idrCopy, Timestamp: timestamp}
+			da.VideoChan <- WebRTCFrame{Data: idrCopy, Timestamp: timestamp, NotConfig: true}
 			log.Println("✅ Sent cached keyframe data")
 			// } else {
 			// 	log.Println("✅ Sent cached keyframe data (Config only, IDR too old)")

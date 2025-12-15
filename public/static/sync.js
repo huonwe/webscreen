@@ -52,26 +52,26 @@ async function force_sync(pc) {
             // --- 策略 B: 延迟爆炸时 (> 500ms)，暴力重置 ---
             // 既然 buffered 读不到，我们不能用 currentTime 跳转
             // 最有效的“清空 Buffer”方法是：暂停一瞬间再播放
-            if (currentDelay > 0.5) {
-                console.warn("延迟严重，执行重置...");
-                videoEl.pause();
-                // 必须通过 setTimeout 给浏览器喘息时间来丢弃 Buffer
-                setTimeout(() => {
-                    videoEl.play().catch(e => console.error(e));
-                }, 0);
+            // if (currentDelay > 0.5) {
+            //     console.warn("延迟严重，执行重置...");
+            //     videoEl.pause();
+            //     // 必须通过 setTimeout 给浏览器喘息时间来丢弃 Buffer
+            //     setTimeout(() => {
+            //         videoEl.play().catch(e => console.error(e));
+            //     }, 0);
 
-                // 重置后强制 playoutDelayHint 再次生效
-                const receivers = pc.getReceivers();
-                const videoReceiver = receivers.find(r => r.track && r.track.kind === 'video');
-                if (videoReceiver) {
-                    if (videoReceiver.playoutDelayHint !== undefined) {
-                        videoReceiver.playoutDelayHint = 0;
-                    }
-                    if (videoReceiver.jitterBufferTarget !== undefined) {
-                        videoReceiver.jitterBufferTarget = 0;
-                    }
-                }
-            }
+            //     // 重置后强制 playoutDelayHint 再次生效
+            //     const receivers = pc.getReceivers();
+            //     const videoReceiver = receivers.find(r => r.track && r.track.kind === 'video');
+            //     if (videoReceiver) {
+            //         if (videoReceiver.playoutDelayHint !== undefined) {
+            //             videoReceiver.playoutDelayHint = 0;
+            //         }
+            //         if (videoReceiver.jitterBufferTarget !== undefined) {
+            //             videoReceiver.jitterBufferTarget = 0;
+            //         }
+            //     }
+            // }
         }
     });
 };

@@ -73,6 +73,7 @@ func (da *DataAdapter) GenerateWebRTCFrameH265_v1(header ScrcpyFrameHeader, payl
 		if !yield(WebRTCFrame{
 			Data:      payload,
 			Timestamp: int64(header.PTS),
+			NotConfig: true,
 		}) {
 			return
 		}

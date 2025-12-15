@@ -125,8 +125,8 @@ func NewDataAdapter(config map[string]string) (*DataAdapter, error) {
 		}
 	}
 	// 甜点值 64KB ~ 128KB
-	da.videoConn.(*net.TCPConn).SetReadBuffer(64 * 1024)
-	da.audioConn.(*net.TCPConn).SetReadBuffer(16 * 1024)
+	da.videoConn.(*net.TCPConn).SetReadBuffer(1 * 1024 * 1024)
+	da.audioConn.(*net.TCPConn).SetReadBuffer(64 * 1024)
 
 	return da, nil
 }
@@ -170,7 +170,7 @@ func (da *DataAdapter) StartConvertVideoFrame() {
 			payloadBuf := da.PayloadPoolLarge.Get().([]byte)
 			// log.Printf("payload size: %v,PayloadPoolLarge capacity: %v", frame.Header.Size, cap(payloadBuf))
 			if cap(payloadBuf) < int(frame.Header.Size) {
-				log.Println("resize video payload buf, current cap:", cap(payloadBuf))
+				log.Printf("resize video payload buf, current cap: %v payloadbuf: %v", cap(payloadBuf), cap(payloadBuf))
 				da.PayloadPoolLarge.Put(payloadBuf)
 				newSize := int(frame.Header.Size) + 1024
 				if newSize < 512*1024 {
@@ -186,9 +186,9 @@ func (da *DataAdapter) StartConvertVideoFrame() {
 
 			var iter func(func(WebRTCFrame) bool)
 			if isH265 {
-				iter = da.GenerateWebRTCFrameH265_v1(frame.Header, frameData)
+				iter = da.GenerateWebRTCFrameH265(frame.Header, frameData)
 			} else {
-				iter = da.GenerateWebRTCFrameH264(frame.Header, frameData)
+				iter = da.GenerateWebRTCFrameH264v1(frame.Header, frameData)
 			}
 
 			for webRTCFrame := range iter {
@@ -381,12 +381,12 @@ func createCopy(src []byte, pool *sync.Pool) []byte {
 	dst := pool.Get().([]byte)
 	// log.Printf("current pool cap: %d, src size: %d", cap(dst), len(src))
 	if cap(dst) < len(src) {
-		log.Println("resize pool buffer, current cap:", cap(dst))
+		log.Printf("resize pool buffer, current cap:%v < src size:%v", cap(dst), len(src))
 		if len(src) <= 1024 {
 			log.Fatalln("!!!!!!!")
 		}
 		// pool.Put(dst)
-		dst = make([]byte, len(src))
+		dst = make([]byte, len(src)+1024)
 	}
 	copy(dst, src)
 	dst = dst[:len(src)]

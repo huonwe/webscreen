@@ -101,11 +101,19 @@ func (sm *StreamManager) WriteVideoSample(webrtcFrame *scrcpy.WebRTCFrame) error
 		duration = time.Millisecond * 16
 	}
 
-	if webrtcFrame.IsConfig {
+	var pool *sync.Pool
+	var dataToWrite []byte
+	if webrtcFrame.NotConfig {
+		pool = &sm.DataAdapter.PayloadPoolLarge
+		dataToWrite = webrtcFrame.Data[4:]
+
+	} else {
 		duration = 0
+		pool = &sm.DataAdapter.PayloadPoolSmall
+		dataToWrite = webrtcFrame.Data
 	}
 	sample := media.Sample{
-		Data:      webrtcFrame.Data,
+		Data:      dataToWrite,
 		Duration:  duration,
 		Timestamp: time.UnixMicro(webrtcFrame.Timestamp),
 	}
@@ -116,7 +124,7 @@ func (sm *StreamManager) WriteVideoSample(webrtcFrame *scrcpy.WebRTCFrame) error
 	if err != nil {
 		return fmt.Errorf("写入视频样本失败: %v", err)
 	}
-	sm.DataAdapter.PayloadPoolLarge.Put(webrtcFrame.Data)
+	pool.Put(webrtcFrame.Data)
 	return nil
 }
 
