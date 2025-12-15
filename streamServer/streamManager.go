@@ -5,6 +5,7 @@ import (
 	"log"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"webcpy/scrcpy"
 
@@ -23,6 +24,13 @@ type StreamManager struct {
 	DataAdapter *scrcpy.DataAdapter
 
 	lastVideoTimestamp int64
+
+	hasSentKeyFrame atomic.Bool // 引入 atomic 避免并发问题
+	webrtcConnected atomic.Bool // 标记 WebRTC 连接状态
+}
+
+func (sm *StreamManager) IsConnected() bool {
+	return sm.webrtcConnected.Load()
 }
 
 // 创建视频轨和音频轨，并初始化 StreamManager. 需要手动添加dataAdapter
@@ -39,6 +47,7 @@ func NewStreamManager(dataAdapter *scrcpy.DataAdapter) *StreamManager {
 	default:
 		videoMimeType = webrtc.MimeTypeH264
 	}
+	log.Printf("Creating video track with codec: %s", videoMimeType)
 
 	// 创建视频轨
 	videoTrack, _ := webrtc.NewTrackLocalStaticSample(

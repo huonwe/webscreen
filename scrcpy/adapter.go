@@ -11,8 +11,6 @@ import (
 )
 
 type DataAdapter struct {
-	// VideoChanMutex   sync.RWMutex
-	// AudioChanMutex   sync.RWMutex
 	VideoChan   chan WebRTCFrame
 	AudioChan   chan WebRTCFrame
 	ControlChan chan WebRTCControlFrame
@@ -25,16 +23,12 @@ type DataAdapter struct {
 	VideoMeta  ScrcpyVideoMeta
 	AudioMeta  ScrcpyAudioMeta
 
-	// convertVideoPaused bool
-	// convertAudioPaused bool
-
 	videoConn   net.Conn
 	audioConn   net.Conn
 	controlConn net.Conn
 
 	adbClient *ADBClient
 
-	// keyFrameRequestMutex    sync.Mutex
 	lastIDRRequestTime time.Time
 
 	keyFrameMutex sync.RWMutex // 保护 LastSPS, LastPPS, LastIDR
@@ -78,8 +72,6 @@ func NewDataAdapter(config map[string]string) (*DataAdapter, error) {
 	var err error
 	da := &DataAdapter{
 		adbClient: NewADBClient(config["device_serial"]),
-		// convertVideoPaused: false,
-		// convertAudioPaused: false,
 
 		VideoChan:   make(chan WebRTCFrame, 10),
 		AudioChan:   make(chan WebRTCFrame, 10),
@@ -139,8 +131,8 @@ func NewDataAdapter(config map[string]string) (*DataAdapter, error) {
 			log.Println("Scrcpy Control Connection Established")
 		}
 	}
-	// 甜点值 64KB ~ 128KB
-	da.videoConn.(*net.TCPConn).SetReadBuffer(1 * 1024 * 1024)
+	// 甜点值
+	da.videoConn.(*net.TCPConn).SetReadBuffer(2 * 1024 * 1024)
 	da.audioConn.(*net.TCPConn).SetReadBuffer(64 * 1024)
 
 	return da, nil
@@ -177,14 +169,17 @@ func (da *DataAdapter) StartConvertVideoFrame() {
 
 		for {
 			// read frame header
-			if err := readScrcpyFrameHeader(da.videoConn, headerBuf[:], &frame.Header); err != nil {
+			if _, err := io.ReadFull(da.videoConn, headerBuf[:]); err != nil {
+				log.Println("Failed to read scrcpy frame header:", err)
+			}
+			if err := readScrcpyFrameHeader(headerBuf[:], &frame.Header); err != nil {
 				log.Println("Failed to read scrcpy frame header:", err)
 				return
 			}
 			// showFrameHeaderInfo(frame.Header)
 			frameSize := int(frame.Header.Size)
 
-			// 2. 从 LinearBuffer 获取内存
+			// 从 LinearBuffer 获取内存
 			payloadBuf := da.videoBuffer.Get(frameSize)
 			if payloadBuf == nil {
 				// 当前 Buffer 满了，分配一个新的 (旧的会被 GC，只要 WebRTC 发送完)
@@ -201,20 +196,14 @@ func (da *DataAdapter) StartConvertVideoFrame() {
 				log.Println("Failed to read video frame payload:", err)
 				return
 			}
-			frameData := payloadBuf
-			// if da.VideoMeta.CodecID == "h264" {
-			// 	niltype := frameData[4] & 0x1F
-			// 	log.Printf("(h264) NALU Type of first NALU in frame: %d; total size: %d", niltype, len(frameData))
-			// } else {
-			// 	niltype := (frameData[4] >> 1) & 0x3F
-			// 	log.Printf("(h265) NALU Type of first NALU in frame: %d; total size: %d", niltype, len(frameData))
-			// }
 
 			var iter func(func(WebRTCFrame) bool)
 			if isH265 {
-				iter = da.GenerateWebRTCFrameH265(frame.Header, frameData)
+				iter = da.GenerateWebRTCFrameH265(frame.Header, payloadBuf)
 			} else {
-				iter = da.GenerateWebRTCFrameH264(frame.Header, frameData)
+				// 	niltype := (frameData[4] >> 1) & 0x3F
+				// 	log.Printf("(h265) NALU Type of first NALU in frame: %d; total size: %d", niltype, len(frameData))
+				iter = da.GenerateWebRTCFrameH264(frame.Header, payloadBuf)
 			}
 
 			for webRTCFrame := range iter {
@@ -235,7 +224,10 @@ func (da *DataAdapter) StartConvertAudioFrame() {
 		frame := &ScrcpyFrame{}
 		for {
 			// read frame header
-			if err := readScrcpyFrameHeader(da.audioConn, headerBuf[:], &frame.Header); err != nil {
+			if _, err := io.ReadFull(da.audioConn, headerBuf[:]); err != nil {
+				log.Println("Failed to read scrcpy frame header:", err)
+			}
+			if err := readScrcpyFrameHeader(headerBuf[:], &frame.Header); err != nil {
 				log.Println("Failed to read scrcpy audio frame header:", err)
 				return
 			}
@@ -252,36 +244,15 @@ func (da *DataAdapter) StartConvertAudioFrame() {
 			}
 
 			// read frame payload
-			n, _ := io.ReadFull(da.audioConn, payloadBuf)
-			frameData := payloadBuf
+			_, _ = io.ReadFull(da.audioConn, payloadBuf)
 
-			if frame.Header.IsConfig {
-				log.Println("Audio Config Frame Received")
-
-				totalLen := 7 + 8 + int(n)
-				configBuf := make([]byte, totalLen) // Config 帧很少，直接分配
-
-				copy(configBuf[0:7], []byte("AOPUSHC"))                   // Magic
-				binary.LittleEndian.PutUint64(configBuf[7:15], uint64(n)) // Length
-				copy(configBuf[15:], frameData)
-				da.AudioChan <- WebRTCFrame{
-					Data:      configBuf,
-					Timestamp: int64(frame.Header.PTS),
+			for webRTCFrame := range da.GenerateWebRTCFrameOpus(frame.Header, payloadBuf) {
+				select {
+				case da.AudioChan <- webRTCFrame:
+				default:
+					log.Println("Audio channel full, waiting to send frame...")
+					da.AudioChan <- webRTCFrame
 				}
-				continue
-			}
-
-			// 这里的 Data 引用了 LinearBuffer 中的内存，零拷贝
-			webRTCFrame := WebRTCFrame{
-				Data:      frameData,
-				Timestamp: int64(frame.Header.PTS),
-			}
-			select {
-			case da.AudioChan <- webRTCFrame:
-
-			default:
-				log.Println("Audio channel full, waiting to send frame...")
-				da.AudioChan <- webRTCFrame
 			}
 		}
 	}()
@@ -381,10 +352,7 @@ func (da *DataAdapter) updateVideoMetaFromSPS(sps []byte, codec string) {
 
 // }
 
-func readScrcpyFrameHeader(conn net.Conn, headerBuf []byte, header *ScrcpyFrameHeader) error {
-	if _, err := io.ReadFull(conn, headerBuf); err != nil {
-		return err
-	}
+func readScrcpyFrameHeader(headerBuf []byte, header *ScrcpyFrameHeader) error {
 
 	ptsAndFlags := binary.BigEndian.Uint64(headerBuf[0:8])
 	packetSize := binary.BigEndian.Uint32(headerBuf[8:12])

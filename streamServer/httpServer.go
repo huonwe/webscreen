@@ -5,6 +5,8 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -74,7 +76,7 @@ func (sm *StreamManager) HandleSDP(c *gin.Context) {
 
 	// A. 读取浏览器发来的 Offer SDP
 	body, _ := io.ReadAll(c.Request.Body)
-	log.Println("Browser Offer SDP:", string(body)) // <--- 添加这行
+	// log.Println("Browser Offer SDP:", string(body)) // <--- 添加这行
 	offer := webrtc.SessionDescription{
 		Type: webrtc.SDPTypeOffer,
 		SDP:  string(body),
@@ -121,22 +123,96 @@ func (sm *StreamManager) HandleSDP(c *gin.Context) {
 	videoMime := sm.VideoTrack.Codec().MimeType
 	sm.RUnlock()
 
+	// if videoMime == webrtc.MimeTypeH265 {
+	// 	log.Println("Registering H.265 Codec")
+	// 	if err := m.RegisterCodec(webrtc.RTPCodecParameters{
+	// 		RTPCodecCapability: webrtc.RTPCodecCapability{
+	// 			MimeType:    webrtc.MimeTypeH265,
+	// 			ClockRate:   90000,
+	// 			Channels:    0,
+	// 			SDPFmtpLine: "level-id=180;profile-id=1;tier-flag=0;tx-mode=SRST",
+	// 			// SDPFmtpLine:  "",                                                                                    // H.265 通常不需要复杂的 fmtp，或者可以留空让 Pion 处理
+	// 			RTCPFeedback: []webrtc.RTCPFeedback{{"goog-remb", ""}, {"ccm", "fir"}, {"nack", ""}, {"nack", "pli"}}, // 禁用 {"nack", ""} 以关闭重传
+	// 		},
+	// 		PayloadType: 49, // 使用 104，避开 Offer 中的 49/51 和 H.264 的 102
+	// 	}, webrtc.RTPCodecTypeVideo); err != nil {
+	// 		log.Println("RegisterCodec H265 failed:", err)
+	// 	}
+	// }
 	if videoMime == webrtc.MimeTypeH265 {
-		log.Println("Registering H.265 Codec")
+		// --- 核心修复：从 Offer 中提取 H.265 的 fmtp ---
+		// 我们需要找到浏览器 Offer 里 PayloadType 为 49 (或其他 H265 PT) 的 fmtp 字符串
+		// 简单的解析逻辑：
+		var matchFmtp string
+		var matchPT uint8 = 0
+
+		// 1. 先把 Offer 解析出来
+		offerSDP := webrtc.SessionDescription{Type: webrtc.SDPTypeOffer, SDP: string(body)}
+		parsedSDP, _ := offerSDP.Unmarshal()
+
+		// 2. 遍历找 video
+		for _, md := range parsedSDP.MediaDescriptions {
+			if md.MediaName.Media == "video" {
+				// 3. 这里的逻辑要改：优先寻找 profile-id=1 的 PayloadType
+				// 我们用一个 map 来存 PT -> fmtp 的映射
+				ptMap := make(map[uint8]string)
+
+				// 先收集所有的 H265 PT
+				for _, attr := range md.Attributes {
+					if attr.Key == "rtpmap" && strings.Contains(attr.Value, "H265/90000") {
+						parts := strings.Split(attr.Value, " ")
+						if len(parts) >= 1 {
+							ptInt, _ := strconv.Atoi(parts[0])
+							ptMap[uint8(ptInt)] = "" // 先占位
+						}
+					}
+				}
+
+				// 再找对应的 fmtp
+				for pt := range ptMap {
+					for _, attr := range md.Attributes {
+						// 查找格式如 "49 level-id=..."
+						if attr.Key == "fmtp" && strings.HasPrefix(attr.Value, fmt.Sprintf("%d ", pt)) {
+							ptMap[pt] = strings.TrimPrefix(attr.Value, fmt.Sprintf("%d ", pt))
+						}
+					}
+				}
+
+				// 4. 核心修正：在收集到的列表中，优先选 profile-id=1
+				// 如果找不到 profile-id=1，再随便选一个
+				for pt, fmtp := range ptMap {
+					// 只有当 fmtp 包含 profile-id=1 时，才立刻选中并跳出
+					if strings.Contains(fmtp, "profile-id=1") {
+						matchPT = pt
+						matchFmtp = fmtp
+						break // <--- 找到最佳匹配，立即停止！
+					}
+
+					// 如果还没找到最佳的，先暂存任意一个 H265 (作为备选)
+					if matchPT == 0 {
+						matchPT = pt
+						matchFmtp = fmtp
+					}
+				}
+			}
+		}
+
+		log.Printf("Matching Browser H.265: PT=%d, FMTP=%s", matchPT, matchFmtp)
+
 		if err := m.RegisterCodec(webrtc.RTPCodecParameters{
 			RTPCodecCapability: webrtc.RTPCodecCapability{
 				MimeType:     webrtc.MimeTypeH265,
 				ClockRate:    90000,
 				Channels:     0,
-				SDPFmtpLine:  "",                                                                                      // H.265 通常不需要复杂的 fmtp，或者可以留空让 Pion 处理
-				RTCPFeedback: []webrtc.RTCPFeedback{{"goog-remb", ""}, {"ccm", "fir"}, {"nack", ""}, {"nack", "pli"}}, // 禁用 {"nack", ""} 以关闭重传
+				SDPFmtpLine:  matchFmtp, // <--- 关键：完全复制浏览器的参数
+				RTCPFeedback: []webrtc.RTCPFeedback{{"goog-remb", ""}, {"ccm", "fir"}, {"nack", ""}, {"nack", "pli"}},
 			},
-			PayloadType: 104, // 使用 104，避开 Offer 中的 49/51 和 H.264 的 102
+			PayloadType: webrtc.PayloadType(matchPT), // <--- 关键：动态使用浏览器想要的 PT
 		}, webrtc.RTPCodecTypeVideo); err != nil {
 			log.Println("RegisterCodec H265 failed:", err)
 		}
 	}
-
+	// m.RegisterHeaderExtension(webrtc.RTPHeaderExtensionCapability{URI: ""}, webrtc.RTPCodecTypeVideo)
 	api := webrtc.NewAPI(webrtc.WithMediaEngine(m))
 	peerConnection, err := api.NewPeerConnection(config)
 	if err != nil {
@@ -208,7 +284,22 @@ func (sm *StreamManager) HandleSDP(c *gin.Context) {
 
 	// 阻塞等待 ICE 收集完成 (通常几百毫秒)
 	<-gatherComplete
-
+	// log.Println("Final Server SDP:", peerConnection.LocalDescription().SDP)
+	// params := sm.rtpSenderVideo.GetParameters()
+	// if len(params.Encodings) > 0 {
+	// 	log.Printf(">>> [DEBUG] Actual Outbound SSRC: %d", params.Encodings[0].SSRC)
+	// }
+	// // 1765815565
+	// for _, codec := range params.Codecs {
+	// 	// 找到 H.265 的那个 Codec
+	// 	if strings.Contains(codec.MimeType, "H265") {
+	// 		log.Printf(">>> [DEBUG] Actual Outbound PayloadType: %d | Mime: %s | Fmtp: %s",
+	// 			codec.PayloadType,
+	// 			codec.MimeType,
+	// 			codec.SDPFmtpLine,
+	// 		)
+	// 	}
+	// }
 	// G. 将最终的 SDP Answer 返回给浏览器
 	c.Writer.Header().Set("Content-Type", "application/sdp")
 
@@ -218,6 +309,7 @@ func (sm *StreamManager) HandleSDP(c *gin.Context) {
 
 	// H. 请求关键帧 (IDR)
 	// 连接建立后，立即请求一个新的关键帧，确保客户端能马上看到画面
+	sm.webrtcConnected.Store(true)
 	if sm.DataAdapter != nil {
 		go func() {
 			// 稍微延迟一下，确保连接完全建立

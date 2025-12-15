@@ -2,7 +2,9 @@ package scrcpy
 
 import (
 	"bytes"
+	"fmt"
 	"iter"
+	"log"
 	"time"
 )
 
@@ -18,6 +20,9 @@ func (da *DataAdapter) GenerateWebRTCFrameH265(header ScrcpyFrameHeader, payload
 		// 如果包头就是起始码，直接跳过
 		if bytes.HasPrefix(payload, startCode) {
 			pos = 4
+		}
+		if header.IsKeyFrame {
+			fmt.Println("--------------Key Frame -------------------------")
 		}
 
 		totalLen := len(payload)
@@ -47,53 +52,61 @@ func (da *DataAdapter) GenerateWebRTCFrameH265(header ScrcpyFrameHeader, payload
 			// H.265 NALU Header: F(1) + Type(6) + LayerId(6) + TID(3)
 			// Type 在第一个字节的中间 6 位
 			nalType := (nal[0] >> 1) & 0x3F
-			isConfig := false
+			isConfig := true
 
 			switch nalType {
 			case 32: // VPS
+				// log.Printf("Debug H265: VPS NALU, Size: %d", len(nal))
 				da.keyFrameMutex.Lock()
 				da.LastVPS = createCopy(nal) // 必须拷贝
 				da.keyFrameMutex.Unlock()
-				isConfig = true
 			case 33: // SPS
+				// log.Printf("Debug H265: SPS NALU, Size: %d", len(nal))
 				// da.updateVideoMetaFromSPS(nal, "h265") // H265 SPS 解析暂略
 				da.keyFrameMutex.Lock()
 				da.LastSPS = createCopy(nal) // 必须拷贝
 				da.keyFrameMutex.Unlock()
-				isConfig = true
 			case 34: // PPS
+				// log.Printf("Debug H265: PPS NALU, Size: %d", len(nal))
 				da.keyFrameMutex.Lock()
 				da.LastPPS = createCopy(nal) // 必须拷贝
 				da.keyFrameMutex.Unlock()
-				isConfig = true
+			case 39, 40: // SEI (Prefix, Suffix)
+				continue
 			case 19, 20, 21: // IDR (W_RADL, W_LP, CRA)
 				da.keyFrameMutex.Lock()
 				da.LastIDR = createCopy(nal) // 必须拷贝
 				da.LastIDRTime = time.Now()
 				da.keyFrameMutex.Unlock()
-			}
+				isConfig = false
+				// log.Fatalln("收到关键帧！！！")
 
-			// 如果是 IDR 帧，先发送缓存的 VPS/SPS/PPS
-			if nalType == 19 || nalType == 20 || nalType == 21 {
-				da.keyFrameMutex.RLock()
-				vps, sps, pps := da.LastVPS, da.LastSPS, da.LastPPS
-				da.keyFrameMutex.RUnlock()
+				// 强制注入缓存的 VPS/SPS/PPS，即使包内已经包含了它们
+				// 这能解决部分浏览器兼容性问题，并防止 buffer 复用导致的数据损坏
+				// da.keyFrameMutex.RLock()
+				// vps, sps, pps := da.LastVPS, da.LastSPS, da.LastPPS
+				// da.keyFrameMutex.RUnlock()
 
-				if vps != nil {
-					if !yield(WebRTCFrame{Data: createCopy(vps), Timestamp: int64(header.PTS)}) {
-						return
-					}
-				}
-				if sps != nil {
-					if !yield(WebRTCFrame{Data: createCopy(sps), Timestamp: int64(header.PTS)}) {
-						return
-					}
-				}
-				if pps != nil {
-					if !yield(WebRTCFrame{Data: createCopy(pps), Timestamp: int64(header.PTS)}) {
-						return
-					}
-				}
+				// if vps != nil {
+				// 	if !yield(WebRTCFrame{Data: createCopy(vps), Timestamp: int64(header.PTS)}) {
+				// 		return
+				// 	}
+				// 	log.Printf("(cached VPS) Sending NALU Type: %d, Size: %d", 32, len(vps))
+				// }
+				// if sps != nil {
+				// 	if !yield(WebRTCFrame{Data: createCopy(sps), Timestamp: int64(header.PTS)}) {
+				// 		return
+				// 	}
+				// 	log.Printf("(cached SPS) Sending NALU Type: %d, Size: %d", 33, len(sps))
+				// }
+				// if pps != nil {
+				// 	if !yield(WebRTCFrame{Data: createCopy(pps), Timestamp: int64(header.PTS)}) {
+				// 		return
+				// 	}
+				// 	log.Printf("(cached PPS) Sending NALU Type: %d, Size: %d", 34, len(pps))
+				// }
+			case 0, 1:
+				isConfig = false
 			}
 
 			// 发送当前 NALU (零拷贝，直接引用 LinearBuffer)
@@ -104,6 +117,10 @@ func (da *DataAdapter) GenerateWebRTCFrameH265(header ScrcpyFrameHeader, payload
 			}) {
 				return
 			}
+			log.Printf("Sending NALU Type: %d, Size: %d", nalType, len(nal))
+		}
+		if header.IsKeyFrame {
+			fmt.Println("-------------------Key Frame End-----------------------------")
 		}
 	}
 }

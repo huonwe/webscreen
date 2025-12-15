@@ -36,20 +36,20 @@ async function force_sync(pc) {
             const videoEl = document.getElementById('remoteVideo');
             if (!videoEl) return;
 
-            // --- 策略 A: 延迟较低时 (50ms - 200ms)，通过 1.25倍速 偷偷追帧 ---
-            if (currentDelay > 0.05 && currentDelay < 0.5) {
+            // --- 策略 A: 延迟较低时 (100ms - 500ms)，通过 1.25倍速 偷偷追帧 ---
+            if (currentDelay > 0.1 && currentDelay < 0.5) {
                 if (videoEl.playbackRate !== 1.25) {
                     console.log("轻微延迟，启用 1.25x 倍速追赶");
                     videoEl.playbackRate = 1.25;
                 }
             }
             // 延迟恢复正常后，切回 1.0
-            else if (currentDelay <= 0.05 && videoEl.playbackRate !== 1.0) {
+            else if (currentDelay <= 0.1 && videoEl.playbackRate !== 1.0) {
                 console.log("延迟恢复正常，切回 1.0x");
                 videoEl.playbackRate = 1.0;
             }
 
-            // --- 策略 B: 延迟爆炸时 (> 500ms)，暴力重置 ---
+            // --- 策略 B: 延迟爆炸时 (> 1000ms)，暴力重置 ---
             // 既然 buffered 读不到，我们不能用 currentTime 跳转
             // 最有效的“清空 Buffer”方法是：暂停一瞬间再播放
             if (currentDelay > 1.0) {
