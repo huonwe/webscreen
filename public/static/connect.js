@@ -52,17 +52,17 @@ async function start() {
         type: 'answer',
         sdp: answerSdp
     }));
-    // pc.getReceivers().forEach(receiver => {
-    //     if (receiver.track.kind === 'video') {
-    //         if (receiver.playoutDelayHint !== undefined) {
-    //             receiver.playoutDelayHint = 0.05;
-    //         }
-    //         if (receiver.jitterBufferTarget !== undefined) {
-    //             receiver.jitterBufferTarget = 50;
-    //         }
-    //         console.log('✓ 已启用 WebRTC 低延迟模式 (playoutDelayHint=0, jitterBufferTarget=0)');
-    //     }
-    // });
+    pc.getReceivers().forEach(receiver => {
+        if (receiver.track.kind === 'video') {
+            if (receiver.playoutDelayHint !== undefined) {
+                receiver.playoutDelayHint = 0;
+            }
+            if (receiver.jitterBufferTarget !== undefined) {
+                receiver.jitterBufferTarget = 0;
+            }
+            console.log('✓ 已启用 WebRTC 低延迟模式 (playoutDelayHint=', receiver.playoutDelayHint, ', jitterBufferTarget=', receiver.jitterBufferTarget, ')');
+        }
+    });
     setInterval(() => force_sync(pc), 1000);
     
     // let p = createRequestKeyFramePacket();

@@ -32,7 +32,7 @@ func NewADBClient(address string) *ADBClient {
 		Control:      "true",
 		Audio:        "true",
 		VideoCodec:   "h264",
-		//VideoCodecOptions: "i-frame-interval=1",
+		// VideoCodecOptions: "i-frame-interval=1",
 		LogLevel: "debug",
 	}
 	ctx, cancel := context.WithCancel(context.Background())

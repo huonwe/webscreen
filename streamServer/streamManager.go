@@ -1,16 +1,13 @@
 package streamServer
 
 import (
-	"bytes"
 	"fmt"
-	"io"
 	"log"
 	"strings"
 	"sync"
 	"time"
 	"webcpy/scrcpy"
 
-	"github.com/gin-gonic/gin"
 	"github.com/pion/webrtc/v4"
 	"github.com/pion/webrtc/v4/pkg/media"
 )
@@ -102,34 +99,42 @@ func (sm *StreamManager) WriteVideoSample(webrtcFrame *scrcpy.WebRTCFrame) error
 		duration = time.Millisecond * 16
 	}
 
-	var pool *sync.Pool
-	var dataToWrite []byte
+	var pool sync.Pool
+	// var dataToWrite []byte
 	// log.Printf("length of payload: %v", cap(webrtcFrame.Data))
 	if webrtcFrame.NotConfig {
-		pool = &sm.DataAdapter.PayloadPoolLarge
+		pool = sm.DataAdapter.PayloadPoolLarge
 	} else {
 		duration = 0
-		pool = &sm.DataAdapter.PayloadPoolSmall
+		pool = sm.DataAdapter.PayloadPoolSmall
 	}
-	if bytes.Equal(webrtcFrame.Data[:4], []byte{0, 0, 0, 1}) {
-		// 去掉起始码
-		dataToWrite = webrtcFrame.Data[4:]
-	} else {
-		dataToWrite = webrtcFrame.Data
-	}
+	// if bytes.HasPrefix(webrtcFrame.Data, []byte{0, 0, 0, 1}) {
+	// 	// 去掉 4 字节起始码
+	// 	dataToWrite = webrtcFrame.Data[4:]
+	// 	log.Fatalln("Removed 4-byte start code from video frame, which is unexpected.")
+	// } else if bytes.HasPrefix(webrtcFrame.Data, []byte{0, 0, 1}) {
+	// 	// 去掉 3 字节起始码
+	// 	dataToWrite = webrtcFrame.Data[3:]
+	// 	log.Fatalln("Removed 3-byte start code from video frame, which is unexpected.")
+	// } else {
+	// 	dataToWrite = webrtcFrame.Data
+	// }
+	// dataToWrite = append([]byte{0, 0, 0, 1}, dataToWrite...)
+	// dataToWrite = webrtcFrame.Data
 	sample := media.Sample{
-		Data:      dataToWrite,
+		Data:      webrtcFrame.Data,
 		Duration:  duration,
 		Timestamp: time.UnixMicro(webrtcFrame.Timestamp),
 	}
 	// sm.RLock()
 	// track := sm.VideoTrack
 	// sm.RUnlock()
+	// log.Printf("Writing video sample, size: %d, duration: %v", len(sample.Data), sample.Duration)
 	err := sm.VideoTrack.WriteSample(sample)
 	if err != nil {
 		return fmt.Errorf("写入视频样本失败: %v", err)
 	}
-	pool.Put(webrtcFrame.Data)
+	pool.Put(webrtcFrame.Data) // ⚠️ 禁止回收！Pion 的 NACK/RTX 机制会持有切片引用，回收会导致重传数据损坏（绿屏/花屏）
 	return nil
 }
 
@@ -154,149 +159,8 @@ func (sm *StreamManager) WriteAudioSample(webrtcFrame *scrcpy.WebRTCFrame) error
 	if err != nil {
 		return fmt.Errorf("写入音频样本失败: %v", err)
 	}
-	sm.DataAdapter.PayloadPoolSmall.Put(webrtcFrame.Data)
+	sm.DataAdapter.PayloadPoolSmall.Put(webrtcFrame.Data) // 同上，防止音频重传数据损坏
 	return nil
-}
-
-func (sm *StreamManager) HandleSDP(c *gin.Context) {
-	// 允许跨域 (方便调试)
-	c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
-	if c.Request.Method == "OPTIONS" {
-		return
-	}
-
-	// A. 读取浏览器发来的 Offer SDP
-	body, _ := io.ReadAll(c.Request.Body)
-	offer := webrtc.SessionDescription{
-		Type: webrtc.SDPTypeOffer,
-		SDP:  string(body),
-	}
-
-	// B. 创建 PeerConnection
-	// 配置 ICE 服务器 (STUN)，用于穿透 NAT
-	config := webrtc.Configuration{
-		ICEServers: []webrtc.ICEServer{
-			{URLs: []string{"stun:stun.l.google.com:19302"}},
-		},
-	}
-
-	// 创建 MediaEngine 并注册默认 Codec
-	m := &webrtc.MediaEngine{}
-	if err := m.RegisterDefaultCodecs(); err != nil {
-		log.Println("RegisterDefaultCodecs failed:", err)
-		c.String(500, err.Error())
-		return
-	}
-
-	// 检查是否需要注册 H.265
-	sm.RLock()
-	videoMime := sm.VideoTrack.Codec().MimeType
-	sm.RUnlock()
-
-	if videoMime == webrtc.MimeTypeH265 {
-		log.Println("Registering H.265 Codec")
-		if err := m.RegisterCodec(webrtc.RTPCodecParameters{
-			RTPCodecCapability: webrtc.RTPCodecCapability{
-				MimeType:     webrtc.MimeTypeH265,
-				ClockRate:    90000,
-				Channels:     0,
-				SDPFmtpLine:  "",
-				RTCPFeedback: []webrtc.RTCPFeedback{{"goog-remb", ""}, {"ccm", "fir"}, {"nack", ""}, {"nack", "pli"}},
-			},
-			PayloadType: 102, // 动态 Payload Type
-		}, webrtc.RTPCodecTypeVideo); err != nil {
-			log.Println("RegisterCodec H265 failed:", err)
-		}
-	}
-
-	api := webrtc.NewAPI(webrtc.WithMediaEngine(m))
-	peerConnection, err := api.NewPeerConnection(config)
-	if err != nil {
-		log.Println("创建 PeerConnection 失败:", err)
-		c.String(500, err.Error())
-		return
-	}
-
-	// 加读锁，防止读取的时候 track 正在被替换
-	sm.RLock()
-	currentVideoTrack := sm.VideoTrack
-	currentAudioTrack := sm.AudioTrack
-	sm.RUnlock()
-	if currentVideoTrack == nil || currentAudioTrack == nil {
-		log.Println("视频或音频轨道尚未准备好")
-		c.String(500, "视频或音频轨道尚未准备好")
-		return
-	}
-
-	// C. 添加视频轨道 (Video Track)
-	// 只要浏览器一连上来，就把我们从 Android 收到的 H.264 流推给它
-	sm.rtpSenderVideo, err = peerConnection.AddTrack(currentVideoTrack)
-	if err != nil {
-		log.Println("添加 Track 失败:", err)
-		c.String(500, err.Error())
-		return
-	}
-	// 添加音频轨道 (Audio Track)
-	sm.rtpSenderAudio, err = peerConnection.AddTrack(currentAudioTrack)
-	if err != nil {
-		log.Println("添加 Audio Track 失败:", err)
-		c.String(500, err.Error())
-		return
-	}
-	// 启动协程读取 RTCP 包 (如 PLI 请求关键帧)
-	go sm.HandleRTCP()
-	// D. 设置 Remote Description (浏览器发来的 Offer)
-	if err := peerConnection.SetRemoteDescription(offer); err != nil {
-		log.Println("设置 Remote Description 失败:", err)
-		c.String(500, err.Error())
-		return
-	}
-
-	// E. 创建 Answer
-	answer, err := peerConnection.CreateAnswer(nil)
-	if err != nil {
-		log.Println("创建 Answer 失败:", err)
-		c.String(500, err.Error())
-		return
-	}
-	peerConnection.OnConnectionStateChange(func(s webrtc.PeerConnectionState) {
-		log.Printf("连接状态改变: %s", s)
-		if s == webrtc.PeerConnectionStateFailed || s == webrtc.PeerConnectionStateClosed {
-			// 做一些清理工作，比如移除引用
-			peerConnection.Close()
-		}
-	})
-
-	// F. 设置 Local Description 并等待 ICE 收集完成
-	// 这一步是为了生成一个包含所有网络路径信息的完整 SDP，
-	// 这样我们就不需要写复杂的 Trickle ICE 逻辑了。
-	gatherComplete := webrtc.GatheringCompletePromise(peerConnection)
-
-	if err := peerConnection.SetLocalDescription(answer); err != nil {
-		log.Println("设置 Local Description 失败:", err)
-		c.String(500, err.Error())
-		return
-	}
-
-	// 阻塞等待 ICE 收集完成 (通常几百毫秒)
-	<-gatherComplete
-
-	// G. 将最终的 SDP Answer 返回给浏览器
-	c.Writer.Header().Set("Content-Type", "application/sdp")
-
-	// 手动修改 SDP 以突破浏览器默认带宽限制 (SDP Munging)
-	finalSDP := setSDPBandwidth(peerConnection.LocalDescription().SDP, 20000) // 20 Mbps
-	fmt.Fprint(c.Writer, finalSDP)
-
-	// H. 请求关键帧 (IDR)
-	// 连接建立后，立即请求一个新的关键帧，确保客户端能马上看到画面
-	if sm.DataAdapter != nil {
-		go func() {
-			// 稍微延迟一下，确保连接完全建立
-			time.Sleep(500 * time.Millisecond)
-			sm.DataAdapter.RequestKeyFrame()
-		}()
-	}
 }
 
 // setSDPBandwidth 在 SDP 的 video m-line 后插入 b=AS:20000 (20Mbps)

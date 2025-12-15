@@ -113,51 +113,51 @@ func (da *DataAdapter) RequestKeyFrame() error {
 	}
 	// da.keyFrameRequestMutex.Lock()
 	// defer da.keyFrameRequestMutex.Unlock()
-	log.Printf("Last Request KeyFrame time: %v Last IDR time: %v", da.lastIDRRequestTime, da.LastIDRTime)
-	if time.Since(da.LastIDRTime) < 1*time.Second || time.Since(da.lastIDRRequestTime) < 1*time.Second {
-		log.Println("⏳ KeyFrame request too frequent, use cached")
-		da.keyFrameMutex.RLock()
+	// log.Printf("Last Request KeyFrame time: %v Last IDR time: %v", da.lastIDRRequestTime, da.LastIDRTime)
+	// if time.Since(da.LastIDRTime) < 1*time.Second || time.Since(da.lastIDRRequestTime) < 1*time.Second {
+	// 	log.Println("⏳ KeyFrame request too frequent, use cached")
+	// 	da.keyFrameMutex.RLock()
 
-		isH265 := da.VideoMeta.CodecID == "h265"
-		hasSPS := len(da.LastSPS) > 0
-		hasPPS := len(da.LastPPS) > 0
-		hasIDR := len(da.LastIDR) > 0
-		hasVPS := len(da.LastVPS) > 0
+	// 	isH265 := da.VideoMeta.CodecID == "h265"
+	// 	hasSPS := len(da.LastSPS) > 0
+	// 	hasPPS := len(da.LastPPS) > 0
+	// 	hasIDR := len(da.LastIDR) > 0
+	// 	hasVPS := len(da.LastVPS) > 0
 
-		if !hasSPS || !hasPPS || !hasIDR || (isH265 && !hasVPS) {
-			da.keyFrameMutex.RUnlock()
-			log.Println("⚠️ Cached keyframe data incomplete, skipping...")
-			return nil
-		}
+	// 	if !hasSPS || !hasPPS || !hasIDR || (isH265 && !hasVPS) {
+	// 		da.keyFrameMutex.RUnlock()
+	// 		log.Println("⚠️ Cached keyframe data incomplete, skipping...")
+	// 		return nil
+	// 	}
 
-		var vpsCopy, spsCopy, ppsCopy []byte
-		if isH265 {
-			vpsCopy = createCopy(da.LastVPS, &da.PayloadPoolSmall)
-		}
-		spsCopy = createCopy(da.LastSPS, &da.PayloadPoolSmall)
-		ppsCopy = createCopy(da.LastPPS, &da.PayloadPoolSmall)
-		// idrCopy = createCopy(da.LastIDR, &da.PayloadPoolLarge)
-		// Check freshness of IDR
-		// idrFresh := time.Since(da.LastIDRTime) < 500*time.Millisecond
+	// 	var vpsCopy, spsCopy, ppsCopy []byte
+	// 	if isH265 {
+	// 		vpsCopy = createCopy(da.LastVPS, &da.PayloadPoolSmall)
+	// 	}
+	// 	spsCopy = createCopy(da.LastSPS, &da.PayloadPoolSmall)
+	// 	ppsCopy = createCopy(da.LastPPS, &da.PayloadPoolSmall)
+	// 	// idrCopy = createCopy(da.LastIDR, &da.PayloadPoolLarge)
+	// 	// Check freshness of IDR
+	// 	// idrFresh := time.Since(da.LastIDRTime) < 500*time.Millisecond
 
-		da.keyFrameMutex.RUnlock()
+	// 	da.keyFrameMutex.RUnlock()
 
-		go func() {
-			timestamp := time.Now().Unix()
-			if isH265 && vpsCopy != nil {
-				da.VideoChan <- WebRTCFrame{Data: vpsCopy, Timestamp: timestamp}
-			}
-			da.VideoChan <- WebRTCFrame{Data: spsCopy, Timestamp: timestamp}
-			da.VideoChan <- WebRTCFrame{Data: ppsCopy, Timestamp: timestamp}
+	// 	go func() {
+	// 		timestamp := time.Now().Unix()
+	// 		if isH265 && vpsCopy != nil {
+	// 			da.VideoChan <- WebRTCFrame{Data: vpsCopy, Timestamp: timestamp}
+	// 		}
+	// 		da.VideoChan <- WebRTCFrame{Data: spsCopy, Timestamp: timestamp}
+	// 		da.VideoChan <- WebRTCFrame{Data: ppsCopy, Timestamp: timestamp}
 
-			// 为了保证流畅性，即使 IDR 不新鲜也发送
-			// if idrCopy != nil {
-			// 	da.VideoChan <- WebRTCFrame{Data: idrCopy, Timestamp: timestamp, NotConfig: true}
-			// 	log.Println("✅ Sent cached keyframe data")
-			// }
-		}()
-		return nil
-	}
+	// 		// 为了保证流畅性，即使 IDR 不新鲜也发送
+	// 		// if idrCopy != nil {
+	// 		// 	da.VideoChan <- WebRTCFrame{Data: idrCopy, Timestamp: timestamp, NotConfig: true}
+	// 		// 	log.Println("✅ Sent cached keyframe data")
+	// 		// }
+	// 	}()
+	// 	return nil
+	// }
 	log.Println("⚡ Sending Request KeyFrame (Type 99)...")
 	msg := []byte{ControlMsgTypeReqIDR}
 	//<-da.VideoChan

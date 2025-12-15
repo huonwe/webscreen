@@ -171,7 +171,7 @@ func (da *DataAdapter) StartConvertVideoFrame() {
 			// log.Printf("payload size: %v,PayloadPoolLarge capacity: %v", frame.Header.Size, cap(payloadBuf))
 			if cap(payloadBuf) < int(frame.Header.Size) {
 				log.Printf("resize video payload buf, current cap: %v payloadbuf: %v", cap(payloadBuf), cap(payloadBuf))
-				da.PayloadPoolLarge.Put(payloadBuf)
+				// da.PayloadPoolLarge.Put(payloadBuf) // 不要回收过小的 buffer，直接丢弃让 GC 回收
 				newSize := int(frame.Header.Size) + 1024
 				if newSize < 512*1024 {
 					newSize = 512 * 1024
@@ -183,11 +183,17 @@ func (da *DataAdapter) StartConvertVideoFrame() {
 				return
 			}
 			frameData := payloadBuf[:frame.Header.Size]
-			// niltype := frameData[4] & 0x1F
-			// log.Printf("NALU Type of first NALU in frame: %d", niltype)
+			// if da.VideoMeta.CodecID == "h264" {
+			// 	niltype := frameData[4] & 0x1F
+			// 	log.Printf("(h264) NALU Type of first NALU in frame: %d; total size: %d", niltype, len(frameData))
+			// } else {
+			// 	niltype := (frameData[4] >> 1) & 0x3F
+			// 	log.Printf("(h265) NALU Type of first NALU in frame: %d; total size: %d", niltype, len(frameData))
+			// }
+
 			var iter func(func(WebRTCFrame) bool)
 			if isH265 {
-				iter = da.GenerateWebRTCFrameH265(frame.Header, frameData)
+				iter = da.GenerateWebRTCFrameH265_debug(frame.Header, frameData)
 			} else {
 				iter = da.GenerateWebRTCFrameH264(frame.Header, frameData)
 			}
@@ -334,7 +340,7 @@ func (da *DataAdapter) readVideoMeta(conn net.Conn) error {
 }
 
 func (da *DataAdapter) updateVideoMetaFromSPS(sps []byte, codec string) {
-	if da.LastSPS != nil && bytes.Equal(da.LastSPS[4:], sps) {
+	if da.LastSPS != nil && bytes.Equal(da.LastSPS, sps) {
 		log.Println("SPS unchanged, no need to update video meta")
 		return
 	}
