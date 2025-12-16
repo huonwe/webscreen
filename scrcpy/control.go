@@ -97,11 +97,112 @@ func (da *DataAdapter) SendScrollEvent(e ScrollEvent) {
 	binary.BigEndian.PutUint16(buf[11:13], e.Height)
 	binary.BigEndian.PutUint16(buf[13:15], e.HScroll)
 	binary.BigEndian.PutUint16(buf[15:17], e.VScroll)
-	binary.BigEndian.PutUint32(buf[17:21], BUTTON_PRIMARY)
+	binary.BigEndian.PutUint32(buf[17:21], e.Buttons)
 
 	_, err := da.controlConn.Write(buf)
 	if err != nil {
 		log.Printf("Error sending scroll event: %v\n", err)
+	}
+}
+
+func (da *DataAdapter) SendUHIDCreateEvent(e UHIDCreateEvent) {
+	if da.controlConn == nil {
+		return
+	}
+
+	nameSize := uint8(len(e.Name)) // 强转为 uint8
+
+	// 包总大小:
+	// 1(Type) + 2(ID) + 2(Vendor) + 2(Product) + 1(NameSize) + N(Name) + 2(DescSize) + N(Desc)
+	totalSize := 1 + 2 + 2 + 2 + 1 + int(nameSize) + 2 + int(e.ReportDescSize)
+
+	buf := make([]byte, totalSize)
+	offset := 0
+
+	// 1. Type
+	buf[offset] = e.Type
+	offset++
+
+	// 2. ID
+	binary.BigEndian.PutUint16(buf[offset:], e.ID)
+	offset += 2
+
+	// 3. Vendor
+	binary.BigEndian.PutUint16(buf[offset:], e.VendorID)
+	offset += 2
+
+	// 4. Product
+	binary.BigEndian.PutUint16(buf[offset:], e.ProductID)
+	offset += 2
+
+	// 5. Name Size (关键修改：只写 1 个字节)
+	buf[offset] = nameSize
+	offset++
+
+	// 6. Name Data
+	if nameSize > 0 {
+		copy(buf[offset:], e.Name)
+		offset += int(nameSize)
+	}
+
+	// 7. Desc Size (这里依然是 2 字节，因为 Java 里是 parseByteArray(2))
+	binary.BigEndian.PutUint16(buf[offset:], e.ReportDescSize)
+	offset += 2
+
+	// 8. Desc Data
+	copy(buf[offset:], e.ReportDesc)
+
+	log.Printf("Sending UHID_CREATE (Final Fix): ID=%d NameLen=%d", e.ID, nameSize)
+
+	_, err := da.controlConn.Write(buf)
+	if err != nil {
+		log.Printf("Error sending uhid create event: %v\n", err)
+	}
+}
+
+func (da *DataAdapter) SendUHIDInputEvent(e UHIDInputEvent) {
+	if da.controlConn == nil {
+		return
+	}
+	// Scrcpy UHID Input Protocol:
+	// [1] Type
+	// [2] ID (uint16)
+	// [2] Size (uint16)
+	// [N] Data
+
+	totalSize := 1 + 2 + 2 + int(e.Size)
+	buf := make([]byte, totalSize)
+
+	offset := 0
+	buf[offset] = e.Type
+	offset++
+	binary.BigEndian.PutUint16(buf[offset:], e.ID)
+	offset += 2
+	binary.BigEndian.PutUint16(buf[offset:], e.Size)
+	offset += 2
+	copy(buf[offset:], e.Data)
+
+	_, err := da.controlConn.Write(buf)
+	if err != nil {
+		log.Printf("Error sending uhid input event: %v\n", err)
+	}
+}
+
+func (da *DataAdapter) SendUHIDDestroyEvent(e UHIDDestroyEvent) {
+	if da.controlConn == nil {
+		return
+	}
+	// Scrcpy UHID Destroy Protocol:
+	// [1] Type
+	// [2] ID (uint16)
+
+	buf := make([]byte, 3)
+	buf[0] = e.Type
+	binary.BigEndian.PutUint16(buf[1:], e.ID)
+
+	_, err := da.controlConn.Write(buf)
+	if err != nil {
+		log.Printf("Error sending uhid destroy event: %v\n", err)
 	}
 }
 
@@ -150,7 +251,7 @@ func (da *DataAdapter) RequestKeyFrame() error {
 
 			// 为了保证流畅性，即使 IDR 不新鲜也发送
 			// if idrCopy != nil {
-			// 	da.VideoChan <- WebRTCFrame{Data: idrCopy, Timestamp: timestamp, NotConfig: true}
+			// da.VideoChan <- WebRTCFrame{Data: idrCopy, Timestamp: timestamp, NotConfig: true}
 			// 	log.Println("✅ Sent cached keyframe data")
 			// }
 		}()

@@ -14,10 +14,19 @@
         <div class="controls-container">
             <button onclick="start()" class="control-btn primary">连接</button>
             <div class="separator"></div>
-            <button onclick="homeButton()" class="control-btn">主页</button>
             <button onclick="volumeUpButton()" class="control-btn">音量+</button>
             <button onclick="volumeDownButton()" class="control-btn">音量-</button>
             <button onclick="powerButton()" class="control-btn">电源</button>
+            <div class="separator"></div>
+            <button onclick="homeButton()" class="control-btn">主页</button>
+            <button onclick="backButton()" class="control-btn">返回</button>
+            <button onclick="menuButton()" class="control-btn">菜单</button>
+            <div class="separator"></div>
+            <button onclick="rotateButton()" class="control-btn">旋转</button>
+            <div class="separator"></div>
+            <button onclick="fullscreenPlayer()" class="control-btn">全屏</button>
+            <div class="separator"></div>
+            <button onclick="toggleUHIDMouse()" class="control-btn" id="uhidToggleBtn">鼠标模式</button>
         </div>
     </div>
     <script>
@@ -52,12 +61,19 @@
         }
         //start();
     </script>
-    <script src="static/controlMessages.js"></script>
-    <script src="static/buttons.js"></script>
-    <script src="static/touch.js"></script>
-    <script src="static/keyboard.js"></script>
-    <script src="static/scroll.js"></script>
+    <!-- ------------ -->
     <script src="static/connect.js"></script>
+    <script src="static/controlMessages.js"></script>
+    <!-- ------------ -->
+    <script src="static/keyboard.js"></script>
+    <script src="static/buttons.js"></script>
+    <!-- ------------ -->
+    <script src="static/touch.js"></script>
+    <script src="static/scroll.js"></script>
+    <script src="static/fullscreen.js"></script>
+    <!-- ------------ -->
+    <script src="static/uhid_mouse.js"></script>
+    
 </body>
 
 </html>

@@ -1,4 +1,6 @@
 
+const TYPE_SCROLL = 0x03; // scroll event
+
 const videoElementScroll = document.getElementById('remoteVideo');
 const SCROLL_SCALE = 30; // 调整此值以改变滚动灵敏度
 
@@ -55,3 +57,24 @@ const handleWheel = (event) => {
 };
 
 videoElementScroll.addEventListener('wheel', handleWheel, { passive: false });
+
+
+function createScrollPacket(x, y, hScroll, vScroll) {
+    // Scroll Packet Structure (Custom for WebSocket, will be converted to Scrcpy format on server):
+    // 0: Type (0x03)
+    // 1-2: X (uint16)
+    // 3-4: Y (uint16)
+    // 5-6: hScroll (int16)
+    // 7-8: vScroll (int16)
+    // 9: Buttons (uint8)
+    const buffer = new ArrayBuffer(10);
+    const view = new DataView(buffer);
+    view.setUint8(0, TYPE_SCROLL);
+    view.setUint16(1, x);
+    view.setUint16(3, y);
+    view.setInt16(5, hScroll);
+    view.setInt16(7, vScroll);
+    view.setUint8(9, 0); // No buttons pressed
+    // console.log("Created Scroll Packet:", {x, y, hScroll, vScroll});
+    return buffer;
+}

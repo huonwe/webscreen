@@ -1,3 +1,11 @@
+const TYPE_KEY   = 0x02; // key event
+// Key Packet Structure:
+// 偏移,长度,类型,字段名,说明
+// 0,1,uint8,Type,固定 0x02 (KeyEvent)
+// 1,1,uint8,Action,"0: Down, 1: Up"
+// 2,2,uint16,KeyCode,Android KeyCode (如 Power=26)
+const TYPE_KEY_ACTION_DOWN = 0;
+const TYPE_KEY_ACTION_UP = 1;
 
 const ANDROID_KEYCODES = {
     "Enter": 66,
@@ -79,4 +87,13 @@ function sendKeyboardEvent(action, keyCode) {
         const packet = createKeyPacket(action, keyCode);
         window.ws.send(packet);
     }
+}
+
+function createKeyPacket(action, keyCode) {
+    const buffer = new ArrayBuffer(4);
+    const view = new DataView(buffer);
+    view.setUint8(0, TYPE_KEY);
+    view.setUint8(1, action);
+    view.setUint16(2, keyCode);
+    return buffer;
 }

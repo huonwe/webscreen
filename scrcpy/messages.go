@@ -1,54 +1,58 @@
 package scrcpy
 
 // control messages
-var TYPE_INJECT_KEYCODE byte = 0          //输入入键盘
-var TYPE_INJECT_TEXT byte = 1             //输入文本
-var TYPE_INJECT_TOUCH_EVENT byte = 2      //输入触摸事件
-var TYPE_INJECT_SCROLL_EVENT byte = 3     //输入滚动事件
-var TYPE_BACK_OR_SCREEN_ON = 4            //返回或者屏幕开
-var TYPE_EXPAND_NOTIFICATION_PANEL = 5    //展开通知面板
-var TYPE_EXPAND_SETTINGS_PANEL = 6        //展开设置面板
-var TYPE_COLLAPSE_PANELS = 7              //收起面板
-var TYPE_GET_CLIPBOARD = 8                //获取剪贴板
-var TYPE_SET_CLIPBOARD = 9                //设置剪贴板
-var TYPE_SET_DISPLAY_POWER byte = 10      //关闭屏幕
-var TYPE_ROTATE_DEVICE byte = 11          //旋转屏幕
-var TYPE_UHID_CREATE = 12                 //创建uhid
-var TYPE_UHID_INPUT = 13                  //uhid输入
-var TYPE_UHID_DESTROY = 14                //销毁uhid
-var TYPE_OPEN_HARD_KEYBOARD_SETTINGS = 15 //打开硬件键盘设置
-var TYPE_START_APP = 16                   //启动应用
-var TYPE_RESET_VIDEO = 17
+const TYPE_INJECT_KEYCODE byte = 0          //输入入键盘
+const TYPE_INJECT_TEXT byte = 1             //输入文本
+const TYPE_INJECT_TOUCH_EVENT byte = 2      //输入触摸事件
+const TYPE_INJECT_SCROLL_EVENT byte = 3     //输入滚动事件
+const TYPE_BACK_OR_SCREEN_ON = 4            //返回或者屏幕开
+const TYPE_EXPAND_NOTIFICATION_PANEL = 5    //展开通知面板
+const TYPE_EXPAND_SETTINGS_PANEL = 6        //展开设置面板
+const TYPE_COLLAPSE_PANELS = 7              //收起面板
+const TYPE_GET_CLIPBOARD = 8                //获取剪贴板
+const TYPE_SET_CLIPBOARD = 9                //设置剪贴板
+const TYPE_SET_DISPLAY_POWER byte = 10      //关闭屏幕
+const TYPE_ROTATE_DEVICE byte = 11          //旋转屏幕
+const TYPE_UHID_CREATE = 12                 //创建uhid
+const TYPE_UHID_INPUT = 13                  //uhid输入
+const TYPE_UHID_DESTROY = 14                //销毁uhid
+const TYPE_OPEN_HARD_KEYBOARD_SETTINGS = 15 //打开硬件键盘设置
+const TYPE_START_APP = 16                   //启动应用
+const TYPE_RESET_VIDEO = 17
 
 const ControlMsgTypeReqIDR = 99
 
+const COPY_KEY_NONE = 0
+const COPY_KEY_COPY = 1
+const COPY_KEY_CUT = 2
+
 // android keycode ev
-var ACTION_DOWN byte = 0
-var ACTION_UP byte = 1
-var ACTION_MOVE byte = 2
+const ACTION_DOWN byte = 0
+const ACTION_UP byte = 1
+const ACTION_MOVE byte = 2
 
 //android mouse event
 
-var BUTTON_PRIMARY uint32 = 1 << 0
+const BUTTON_PRIMARY uint32 = 1 << 0
 
 /**
  * Button constant: Secondary button (right mouse button).
  *
  * @see #getButtonState
  */
-var BUTTON_SECONDARY uint32 = 1 << 1
+const BUTTON_SECONDARY uint32 = 1 << 1
 
 /**
  * Button constant: Tertiary button (middle mouse button).
  *
  * @see #getButtonState
  */
-var BUTTON_TERTIARY uint32 = 1 << 2
+const BUTTON_TERTIARY uint32 = 1 << 2
 
 // device messages
-var TYPE_CLIPBOARD = 0
-var TYPE_ACK_CLIPBOARD = 1
-var TYPE_UHID_OUTPUT = 2
+const TYPE_CLIPBOARD = 0
+const TYPE_ACK_CLIPBOARD = 1
+const TYPE_UHID_OUTPUT = 2
 
 // | **字段**         | **长度 (Byte)** | **说明**                                                                             |
 // | -------------- | ------------- | ---------------------------------------------------------------------------------- |
@@ -89,6 +93,29 @@ type ScrollEvent struct {
 	HScroll uint16
 	VScroll uint16
 	Buttons uint32
+}
+
+type UHIDCreateEvent struct {
+	Type           byte
+	ID             uint16 // 设备 ID (对应官方的 id 字段)
+	VendorID       uint16
+	ProductID      uint16
+	NameSize       uint8
+	Name           []byte
+	ReportDescSize uint16
+	ReportDesc     []byte
+}
+
+type UHIDInputEvent struct {
+	Type byte
+	ID   uint16 // 设备 ID (对应官方的 id 字段)
+	Size uint16
+	Data []byte
+}
+
+type UHIDDestroyEvent struct {
+	Type byte
+	ID   uint16 // 设备 ID (对应官方的 id 字段)
 }
 
 // func (e *TouchEvent) UnmarshalBinary(data []byte) error {

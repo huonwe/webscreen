@@ -35,7 +35,26 @@ function powerButton() {
     sendButtonEvent(p);
 }
 
+function backButton() {
+    const KEYCODE_BACK = 4;
+    let p = createKeyPacket(TYPE_KEY_ACTION_DOWN, KEYCODE_BACK);
+    sendButtonEvent(p);
+    p = createKeyPacket(TYPE_KEY_ACTION_UP, KEYCODE_BACK);
+    sendButtonEvent(p);
+}
 
+function menuButton() {
+    const KEYCODE_APP_SWITCH = 187;
+    let p = createKeyPacket(TYPE_KEY_ACTION_DOWN, KEYCODE_APP_SWITCH);
+    sendButtonEvent(p);
+    p = createKeyPacket(TYPE_KEY_ACTION_UP, KEYCODE_APP_SWITCH);
+    sendButtonEvent(p);
+}
+
+function rotateButton() {
+    let p = createRotatePacket();
+    sendButtonEvent(p);
+}
 
 function sendButtonEvent(packet) {
     if (window.ws && window.ws.readyState === WebSocket.OPEN) {

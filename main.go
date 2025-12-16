@@ -49,38 +49,39 @@ func main() {
 	// }
 	go func() {
 		videoChan := dataAdapter.VideoChan
-		hasSentKeyFrame := false
+		// hasSentKeyFrame := false
 
 		for frame := range videoChan {
-			// 如果 WebRTC 未连接，则丢弃视频帧 (不写入 Track)
-			if !streamManager.IsConnected() {
-				hasSentKeyFrame = false // 重置关键帧等待状态
-				continue
-			}
-
-			// if dataAdapter.VideoMeta.CodecID == "h265" {
-			if !hasSentKeyFrame {
-				// H.265 NALU Header: F(1) + Type(6) + LayerId(6) + TID(3)
-				// Type 在第一个字节的中间 6 位
-				if len(frame.Data) > 0 {
-					nalType := (frame.Data[0] >> 1) & 0x3F
-					isKeyFrame := nalType >= 19 && nalType <= 21
-					isConfig := nalType >= 32 && nalType <= 34
-
-					if !isKeyFrame && !isConfig {
-						// 丢弃非关键帧，等待 IDR
-						continue
-					}
-
-					if isKeyFrame || isConfig {
-						log.Println(">>> 收到首个关键帧 (IDR)，开始推流！<<<")
-						hasSentKeyFrame = true
-					}
-				}
-			}
-			// }
 			streamManager.WriteVideoSample(&frame)
-			// streamManager.DataAdapter.VideoPayloadPool.Put(frame.Data)
+			// 如果 WebRTC 未连接，则丢弃视频帧 (不写入 Track)
+			// if !streamManager.IsConnected() {
+			// 	hasSentKeyFrame = false // 重置关键帧等待状态
+			// 	continue
+			// }
+
+			// // if dataAdapter.VideoMeta.CodecID == "h265" {
+			// if !hasSentKeyFrame {
+			// 	// H.265 NALU Header: F(1) + Type(6) + LayerId(6) + TID(3)
+			// 	// Type 在第一个字节的中间 6 位
+			// 	if len(frame.Data) > 0 {
+			// 		nalType := (frame.Data[0] >> 1) & 0x3F
+			// 		isKeyFrame := nalType >= 19 && nalType <= 21
+			// 		isConfig := nalType >= 32 && nalType <= 34
+
+			// 		if !isKeyFrame && !isConfig {
+			// 			// 丢弃非关键帧，等待 IDR
+			// 			continue
+			// 		}
+
+			// 		if isKeyFrame || isConfig {
+			// 			log.Println(">>> 收到首个关键帧 (IDR)，开始推流！<<<")
+			// 			hasSentKeyFrame = true
+			// 		}
+			// 	}
+			// }
+			// // }
+			// streamManager.WriteVideoSample(&frame)
+			// // streamManager.DataAdapter.VideoPayloadPool.Put(frame.Data)
 		}
 	}()
 	go func() {

@@ -91,27 +91,27 @@ func (sm *StreamManager) WriteVideoSample(webrtcFrame *scrcpy.WebRTCFrame) error
 	}
 
 	var duration time.Duration
-	if sm.lastVideoTimestamp == 0 {
-		duration = time.Millisecond * 16
-	} else {
-		delta := webrtcFrame.Timestamp - sm.lastVideoTimestamp
-		if delta <= 0 {
-			duration = time.Microsecond
+	if webrtcFrame.NotConfig {
+		if sm.lastVideoTimestamp == 0 {
+			duration = time.Millisecond * 16
 		} else {
-			duration = time.Duration(delta) * time.Microsecond
+			delta := webrtcFrame.Timestamp - sm.lastVideoTimestamp
+			if delta <= 0 {
+				duration = time.Microsecond
+			} else {
+				duration = time.Duration(delta) * time.Microsecond
+			}
 		}
-	}
-	sm.lastVideoTimestamp = webrtcFrame.Timestamp
-
-	// 简单的防抖动：如果计算出的间隔太离谱（比如由暂停引起），重置为标准值
-	if duration > time.Second {
-		duration = time.Millisecond * 16
-	}
-
-	// Config 帧 (SPS/PPS) 不需要持续时间
-	if !webrtcFrame.NotConfig {
+		sm.lastVideoTimestamp = webrtcFrame.Timestamp
+	} else {
+		// Config 帧 (VPS/SPS/PPS) 不需要持续时间
 		duration = 0
 	}
+
+	// 简单的防抖动：如果计算出的间隔太离谱（比如由暂停引起），重置为标准值
+	// if duration > time.Second {
+	// 	duration = time.Millisecond * 16
+	// }
 
 	sample := media.Sample{
 		Data:      webrtcFrame.Data,

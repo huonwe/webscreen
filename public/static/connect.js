@@ -110,7 +110,10 @@ async function force_sync(pc) {
                 currentDelay = deltaDelay / deltaCount;
             }
 
-            console.log(`WebRTC 内部延迟: ${(currentDelay * 1000).toFixed(2)} ms`);
+            let delay_ms = (currentDelay * 1000).toFixed(2);
+            if (delay_ms > 50) {
+            console.log(`WebRTC 内部延迟: ${delay_ms} ms`);
+            }
 
             const videoEl = document.getElementById('remoteVideo');
             if (!videoEl) return;
