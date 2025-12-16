@@ -31,6 +31,8 @@ type StreamManager struct {
 
 	clients      map[*websocket.Conn]bool
 	clientsMutex sync.Mutex
+
+	StreamController *StreamController
 }
 
 func (sm *StreamManager) IsConnected() bool {
@@ -38,7 +40,7 @@ func (sm *StreamManager) IsConnected() bool {
 }
 
 // 创建视频轨和音频轨，并初始化 StreamManager. 需要手动添加dataAdapter
-func NewStreamManager(dataAdapter *scrcpy.DataAdapter) *StreamManager {
+func NewStreamManager(dataAdapter *scrcpy.DataAdapter, controller *StreamController) *StreamManager {
 	VideoStreamID := "android_live_stream_video"
 	AudioStreamID := "android_live_stream_audio"
 
@@ -67,10 +69,11 @@ func NewStreamManager(dataAdapter *scrcpy.DataAdapter) *StreamManager {
 		AudioStreamID, // <--- 使用不同的 StreamID 以取消强制同步
 	)
 	sm := &StreamManager{
-		VideoTrack:  videoTrack,
-		AudioTrack:  audioTrack,
-		DataAdapter: dataAdapter,
-		clients:     make(map[*websocket.Conn]bool),
+		VideoTrack:       videoTrack,
+		AudioTrack:       audioTrack,
+		DataAdapter:      dataAdapter,
+		clients:          make(map[*websocket.Conn]bool),
+		StreamController: controller,
 	}
 	go sm.StartBroadcaster()
 	return sm
@@ -103,14 +106,26 @@ func (sm *StreamManager) AddClient(conn *websocket.Conn) {
 
 func (sm *StreamManager) RemoveClient(conn *websocket.Conn) {
 	sm.clientsMutex.Lock()
-	defer sm.clientsMutex.Unlock()
 	delete(sm.clients, conn)
+	count := len(sm.clients)
+	sm.clientsMutex.Unlock()
+
+	if count == 0 {
+		log.Println("No more clients, stopping stream...")
+		if sm.StreamController != nil {
+			// Run in goroutine to avoid deadlock if called from within a lock
+			go sm.StreamController.StopStream()
+		}
+	}
 }
 
 func (sm *StreamManager) Close() {
-	close(sm.DataAdapter.VideoChan)
-	close(sm.DataAdapter.AudioChan)
-	close(sm.DataAdapter.ControlChan)
+	// Channels are closed by DataAdapter.Close() or should be managed there.
+	// But DataAdapter.Close() in adapter.go currently does NOT close channels.
+	// If we close them here, we might panic if writing to closed channel.
+	// Better to let GC handle channels or close them if we are sure no writers.
+	// For now, we just rely on DataAdapter.Close() closing the connection,
+	// which stops the reader loop, which stops writing to channels.
 }
 
 func (sm *StreamManager) UpdateTracks(v *webrtc.TrackLocalStaticSample, a *webrtc.TrackLocalStaticSample) {

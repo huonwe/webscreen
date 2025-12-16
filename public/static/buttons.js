@@ -35,6 +35,16 @@ function powerButton() {
     sendButtonEvent(p);
 }
 
+function pressButton(keyCode) {
+    let p = createKeyPacket(TYPE_KEY_ACTION_DOWN, keyCode);
+    sendButtonEvent(p);
+}
+
+function releaseButton(keyCode) {
+    let p = createKeyPacket(TYPE_KEY_ACTION_UP, keyCode);
+    sendButtonEvent(p);
+}
+
 function backButton() {
     const KEYCODE_BACK = 4;
     let p = createKeyPacket(TYPE_KEY_ACTION_DOWN, KEYCODE_BACK);

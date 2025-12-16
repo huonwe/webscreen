@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"time"
+	"webcpy/scrcpy"
 
 	"github.com/gin-gonic/gin"
 	"github.com/pion/rtcp"
@@ -15,20 +16,62 @@ import (
 func HandleStatic(c *gin.Context) {
 	http.ServeFile(c.Writer, c.Request, "./public"+c.Request.URL.Path)
 }
-func HTTPServer(sm *StreamManager, port string) {
+func HTTPServer(sc *StreamController, port string) {
 	r := gin.Default()
 
 	// 提供静态文件服务
 	r.Static("/static", "./public/static")
 	r.GET("/", HandleStatic)
 	r.GET("/index.html", HandleStatic)
+	r.GET("/console.html", func(c *gin.Context) {
+		http.ServeFile(c.Writer, c.Request, "./public/console.html")
+	})
 
 	// 处理 SDP 协商
-	r.POST("/sdp", sm.HandleSDP)
-	r.OPTIONS("/sdp", sm.HandleSDP)
+	r.POST("/sdp", func(c *gin.Context) {
+		sc.RLock()
+		sm := sc.CurrentStreamManager
+		sc.RUnlock()
+		if sm == nil {
+			c.String(503, "Stream not started")
+			return
+		}
+		sm.HandleSDP(c)
+	})
+	r.OPTIONS("/sdp", func(c *gin.Context) {
+		sc.RLock()
+		sm := sc.CurrentStreamManager
+		sc.RUnlock()
+		if sm == nil {
+			c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+			c.Status(200)
+			return
+		}
+		sm.HandleSDP(c)
+	})
 
 	// WebSocket 路由
-	r.GET("/ws", sm.HandleWebSocket)
+	r.GET("/ws", func(c *gin.Context) {
+		sc.RLock()
+		sm := sc.CurrentStreamManager
+		sc.RUnlock()
+		if sm == nil {
+			c.String(503, "Stream not started")
+			return
+		}
+		sm.HandleWebSocket(c)
+	})
+
+	// ADB API Routes
+	api := r.Group("/api")
+	{
+		api.GET("/devices", HandleListDevices)
+		api.POST("/connect", HandleConnectDevice)
+		api.POST("/pair", HandlePairDevice)
+		api.POST("/start_stream", func(c *gin.Context) {
+			HandleStartStream(c, sc)
+		})
+	}
 
 	// 启动服务器
 	gin.SetMode(gin.ReleaseMode)
@@ -240,4 +283,101 @@ func (sm *StreamManager) HandleSDP(c *gin.Context) {
 			sm.DataAdapter.RequestKeyFrame()
 		}()
 	}
+}
+
+type ConnectRequest struct {
+	IP   string `json:"ip"`
+	Port string `json:"port"`
+}
+
+type PairRequest struct {
+	IP   string `json:"ip"`
+	Port string `json:"port"`
+	Code string `json:"code"`
+}
+
+type StartStreamRequest struct {
+	Serial string `json:"serial"`
+	// Options can be added here
+}
+
+func HandleStartStream(c *gin.Context, sc *StreamController) {
+	var req StartStreamRequest
+	if err := c.BindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+
+	if req.Serial == "" {
+		c.JSON(400, gin.H{"error": "Serial is required"})
+		return
+	}
+
+	// Check if already running for this device
+	sc.RLock()
+	if sc.CurrentDataAdapter != nil && sc.CurrentDataAdapter.DeviceName == req.Serial { // Note: DeviceName might not be serial, check logic
+		// Actually DataAdapter.DeviceName is read from device, might not match serial exactly or might be model name.
+		// But we can check if we are already streaming.
+		// For simplicity, let's just restart if requested, or maybe we should check.
+		// Let's just restart to be safe and ensure clean state.
+	}
+	sc.RUnlock()
+
+	// Use default options for now, or parse from request
+	options := scrcpy.ScrcpyOptions{
+		Version:      "3.3.3",
+		SCID:         "01234567", // Should be random
+		MaxFPS:       "60",
+		VideoBitRate: "20000000",
+		Control:      "true",
+		Audio:        "true",
+		VideoCodec:   "h264",
+	}
+
+	if err := sc.StartStream(req.Serial, options); err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(200, gin.H{"status": "started"})
+}
+
+func HandleListDevices(c *gin.Context) {
+	devices, err := scrcpy.GetConnectedDevices()
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, gin.H{"devices": devices})
+}
+
+func HandleConnectDevice(c *gin.Context) {
+	var req ConnectRequest
+	if err := c.BindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	addr := req.IP
+	if req.Port != "" {
+		addr = addr + ":" + req.Port
+	}
+	if err := scrcpy.ConnectDevice(addr); err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, gin.H{"status": "connected"})
+}
+
+func HandlePairDevice(c *gin.Context) {
+	var req PairRequest
+	if err := c.BindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	addr := req.IP + ":" + req.Port
+	if err := scrcpy.PairDevice(addr, req.Code); err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, gin.H{"status": "paired"})
 }

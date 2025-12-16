@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ADB Console - WebCPY</title>
+    <link rel="stylesheet" href="static/css/console.css">
+</head>
+<body>
+    <div class="container">
+        <h1>ADB Console</h1>
+        
+        <div class="card">
+            <div class="card-header">
+                <h2>Connected Devices</h2>
+                <div class="card-actions">
+                    <button class="btn" onclick="showConnectModal()">+ Connect Device</button>
+                    <button class="btn btn-secondary" onclick="showPairModal()">Pair Device</button>
+                    <button class="btn btn-secondary" onclick="fetchDevices()">Refresh</button>
+                </div>
+            </div>
+            <table id="deviceTable">
+                <thead>
+                    <tr>
+                        <th>Serial / IP</th>
+                        <th>Status</th>
+                        <th>Scrcpy Options</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Devices will be populated here -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Connect Modal -->
+    <div id="connectModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Connect New Device</h3>
+                <span class="modal-close" onclick="closeModal('connectModal')">&times;</span>
+            </div>
+            <div class="form-group">
+                <label>IP Address</label>
+                <input type="text" id="connectIP" placeholder="192.168.0.x">
+            </div>
+            <div class="form-group">
+                <label>Port (Optional, default 5555)</label>
+                <input type="text" id="connectPort" placeholder="5555">
+            </div>
+            
+            <!-- Scrcpy Options Placeholder -->
+            <div class="form-group">
+                <label>Scrcpy Options (Future Feature)</label>
+                <div style="font-size: 12px; color: #666;">
+                    Bitrate, Max Size, etc. will be configurable here when starting stream.
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('connectModal')">Cancel</button>
+                <button class="btn" onclick="connectDevice()">Connect</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pair Modal -->
+    <div id="pairModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Pair Device</h3>
+                <span class="modal-close" onclick="closeModal('pairModal')">&times;</span>
+            </div>
+            <div class="form-group">
+                <label>IP Address</label>
+                <input type="text" id="pairIP" placeholder="192.168.0.x">
+            </div>
+            <div class="form-group">
+                <label>Port</label>
+                <input type="text" id="pairPort" placeholder="Port from Wireless Debugging">
+            </div>
+            <div class="form-group">
+                <label>Pairing Code</label>
+                <input type="text" id="pairCode" placeholder="6-digit code">
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('pairModal')">Cancel</button>
+                <button class="btn" onclick="pairDevice()">Pair</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Device Configuration Modal -->
+    <div id="configModal" class="modal">
+        <div class="modal-content config-modal">
+            <div class="modal-header">
+                <h3 id="configModalTitle">Configure Device</h3>
+                <span class="modal-close" onclick="closeModal('configModal')">&times;</span>
+            </div>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="configProxyPort">Proxy Port</label>
+                    <input type="number" id="configProxyPort" placeholder="6000" min="0">
+                </div>
+            </div>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="configMaxFPS">Max FPS</label>
+                    <input type="number" id="configMaxFPS" placeholder="60" min="1">
+                </div>
+                <div class="form-group">
+                    <label for="configVideoBitrate">Video Bitrate</label>
+                    <input type="text" id="configVideoBitrate" placeholder="8M">
+                </div>
+                <div class="form-group">
+                    <label for="configVideoCodec">Video Codec</label>
+                    <select id="configVideoCodec">
+                        <option value="h264">H.264</option>
+                        <option value="h265">H.265</option>
+                        <option value="av1">AV1</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="configVideoCodecOptions">Video Codec Options</label>
+                    <input type="text" id="configVideoCodecOptions" placeholder="i-frame-interval=10">
+                </div>
+            </div>
+            <div class="form-grid form-grid-toggle">
+                <label class="toggle">
+                    <input type="checkbox" id="configControl">
+                    <span>Enable Control</span>
+                </label>
+                <label class="toggle">
+                    <input type="checkbox" id="configAudio">
+                    <span>Enable Audio</span>
+                </label>
+            </div>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="configDisplayWidth">New Display Width</label>
+                    <input type="number" id="configDisplayWidth" placeholder="e.g. 1080" min="0">
+                </div>
+                <div class="form-group">
+                    <label for="configDisplayHeight">New Display Height</label>
+                    <input type="number" id="configDisplayHeight" placeholder="e.g. 1920" min="0">
+                </div>
+                <div class="form-group">
+                    <label for="configDisplayFPS">New Display FPS</label>
+                    <input type="number" id="configDisplayFPS" placeholder="e.g. 60" min="0">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('configModal')">Cancel</button>
+                <button class="btn" onclick="saveDeviceConfig()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="static/console.js"></script>
+</body>
+</html>

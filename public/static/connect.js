@@ -176,8 +176,6 @@ async function force_sync(pc) {
         }
     });
 };
-
-
 // function sendWSMessage(message) {
 //     if (window.ws && window.ws.readyState === WebSocket.OPEN) {
 //         window.ws.send(message);

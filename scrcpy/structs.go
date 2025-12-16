@@ -1,6 +1,7 @@
 package scrcpy
 
 type ScrcpyOptions struct {
+	Adress            string
 	CLASSPATH         string
 	Version           string
 	SCID              string

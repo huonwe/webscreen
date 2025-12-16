@@ -8,7 +8,21 @@ import (
 	"net"
 	"sync"
 	"time"
+	"webcpy/scrcpy/adb"
 )
+
+// defaultScrcpyOptions := ScrcpyOptions{
+// 	Version:      "3.3.3",
+// 	SCID:         GenerateSCID(),
+// 	MaxFPS:       "60",
+// 	VideoBitRate: "20000000",
+// 	Control:      "true",
+// 	Audio:        "true",
+// 	VideoCodec:   "h264",
+// 	NewDisplay:   "",
+// 	// VideoCodecOptions: "i-frame-interval=1",
+// 	LogLevel: "info",
+// }
 
 type DataAdapter struct {
 	VideoChan   chan WebRTCFrame
@@ -27,7 +41,7 @@ type DataAdapter struct {
 	audioConn   net.Conn
 	controlConn net.Conn
 
-	adbClient *ADBClient
+	adbClient *adb.ADBClient
 
 	lastIDRRequestTime time.Time
 
@@ -37,74 +51,14 @@ type DataAdapter struct {
 	LastPPS       []byte
 	LastIDR       []byte
 	LastIDRTime   time.Time
-	// LastPFrames   [][]byte
-}
-
-// LinearBuffer 管理器
-type LinearBuffer struct {
-	buf    []byte
-	offset int
-	size   int
-}
-
-func (da *DataAdapter) startControlReader() {
-	header := make([]byte, 5) // Type (1) + Length (4)
-	for {
-		_, err := io.ReadFull(da.controlConn, header)
-		if err != nil {
-			log.Println("Control connection read error:", err)
-			return
-		}
-
-		msgType := header[0]
-		length := binary.BigEndian.Uint32(header[1:])
-
-		switch msgType {
-		case DEVICE_MSG_TYPE_CLIPBOARD:
-			content := make([]byte, length)
-			_, err := io.ReadFull(da.controlConn, content)
-			if err != nil {
-				log.Println("Control connection read content error:", err)
-				return
-			}
-			da.ControlChan <- WebRTCControlFrame{
-				Data: append([]byte{17}, content...),
-			}
-		default:
-			// Skip unknown message
-			if length > 0 {
-				io.CopyN(io.Discard, da.controlConn, int64(length))
-			}
-		}
-	}
-}
-
-func NewLinearBuffer(size int) *LinearBuffer {
-	if size == 0 {
-		size = 8 * 1024 * 1024 // 默认 8MB
-	}
-	return &LinearBuffer{
-		buf:  make([]byte, size),
-		size: size,
-	}
-}
-
-// Get 获取一段空闲内存用于写入。如果空间不足，返回 nil
-func (lb *LinearBuffer) Get(length int) []byte {
-	if lb.offset+length > lb.size {
-		return nil
-	}
-	start := lb.offset
-	lb.offset += length
-	return lb.buf[start:lb.offset]
 }
 
 // 一个DataAdapter对应一个scrcpy实例，通过本地端口建立三个连接：视频、音频、控制
 func NewDataAdapter(config map[string]string) (*DataAdapter, error) {
 	var err error
+	serial := config["device_serial"]
 	da := &DataAdapter{
-		adbClient: NewADBClient(config["device_serial"]),
-
+		adbClient:   adb.NewADBClient(serial),
 		VideoChan:   make(chan WebRTCFrame, 10),
 		AudioChan:   make(chan WebRTCFrame, 10),
 		ControlChan: make(chan WebRTCControlFrame, 10),
@@ -116,17 +70,19 @@ func NewDataAdapter(config map[string]string) (*DataAdapter, error) {
 	}
 	err = da.adbClient.Push(config["server_local_path"], config["server_remote_path"])
 	if err != nil {
-		log.Fatalf("设置 推送scrcpy-server失败: %v", err)
+		log.Printf("设置 推送scrcpy-server失败: %v", err)
+		return nil, err
 	}
 	err = da.adbClient.Reverse("localabstract:scrcpy", "tcp:"+config["local_port"])
 	if err != nil {
-		log.Fatalf("设置 Reverse 隧道失败: %v", err)
+		log.Printf("设置 Reverse 隧道失败: %v", err)
 		return nil, err
 	}
-	da.adbClient.StartScrcpyServer()
+	// TODO: 使用 ScrcpyOptions 配置参数
+	da.adbClient.StartScrcpyServer(config)
 	listener, err := net.Listen("tcp", ":"+config["local_port"])
 	if err != nil {
-		log.Fatalf("监听端口失败: %v", err)
+		log.Printf("监听端口失败: %v", err)
 		return nil, err
 	}
 	defer listener.Close()
@@ -134,7 +90,7 @@ func NewDataAdapter(config map[string]string) (*DataAdapter, error) {
 	for i := 0; i < 3; i++ {
 		conn, err := listener.Accept()
 		if err != nil {
-			log.Fatalf("Accept 失败: %v", err)
+			log.Printf("Accept 失败: %v", err)
 			return nil, err
 		}
 		log.Println("Accept Connection", i)
@@ -149,7 +105,7 @@ func NewDataAdapter(config map[string]string) (*DataAdapter, error) {
 			// Device Metadata and Video
 			err = da.readDeviceMeta(conn)
 			if err != nil {
-				log.Fatalln("Failed to read device metadata:", err)
+				log.Println("Failed to read device metadata:", err)
 				return nil, err
 			}
 			log.Printf("Connected Device: %s", da.DeviceName)
@@ -291,8 +247,40 @@ func (da *DataAdapter) StartConvertAudioFrame() {
 	}()
 }
 
+func (da *DataAdapter) startControlReader() {
+	header := make([]byte, 5) // Type (1) + Length (4)
+	for {
+		_, err := io.ReadFull(da.controlConn, header)
+		if err != nil {
+			log.Println("Control connection read error:", err)
+			return
+		}
+
+		msgType := header[0]
+		length := binary.BigEndian.Uint32(header[1:])
+
+		switch msgType {
+		case DEVICE_MSG_TYPE_CLIPBOARD:
+			content := make([]byte, length)
+			_, err := io.ReadFull(da.controlConn, content)
+			if err != nil {
+				log.Println("Control connection read content error:", err)
+				return
+			}
+			da.ControlChan <- WebRTCControlFrame{
+				Data: append([]byte{17}, content...),
+			}
+		default:
+			// Skip unknown message
+			if length > 0 {
+				io.CopyN(io.Discard, da.controlConn, int64(length))
+			}
+		}
+	}
+}
+
 func (da *DataAdapter) assignConn(conn net.Conn) error {
-	codecID := ReadCodecID(conn)
+	codecID := readCodecID(conn)
 	switch codecID {
 	case "h264", "h265", "av1 ":
 		da.videoConn = conn
@@ -325,7 +313,7 @@ func (da *DataAdapter) readDeviceMeta(conn net.Conn) error {
 	return nil
 }
 
-func ReadCodecID(conn net.Conn) string {
+func readCodecID(conn net.Conn) string {
 	// Codec ID (4 bytes)
 	codecBuf := make([]byte, 4)
 	if _, err := io.ReadFull(conn, codecBuf); err != nil {
