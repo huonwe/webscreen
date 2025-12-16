@@ -72,7 +72,7 @@ func (sm *StreamManager) HandleWebSocket(c *gin.Context) {
 					log.Println("Failed to unmarshal uhid create event:", err)
 					continue
 				}
-				log.Printf("UHID Create Event: %+v\n", event)
+				// log.Printf("UHID Create Event: %+v\n", event)
 				sm.DataAdapter.SendUHIDCreateEvent(event)
 				// log.Fatalln("UHID Create Event sent, exiting for debug")
 			case WS_TYPE_UHID_INPUT: // UHID Input

@@ -239,133 +239,133 @@ document.addEventListener('pointerlockerror', () => {
 });
 
 // UHID Mouse HID Report Descriptor (标准鼠标描述符)
-// const MOUSE_REPORT_DESCRIPTOR = new Uint8Array([
-//     // Usage Page (Generic Desktop)
-//     0x05, 0x01,
-//     // Usage (Mouse)
-//     0x09, 0x02,
+const MOUSE_REPORT_DESCRIPTOR = new Uint8Array([
+    // Usage Page (Generic Desktop)
+    0x05, 0x01,
+    // Usage (Mouse)
+    0x09, 0x02,
 
-//     // Collection (Application)
-//     0xA1, 0x01,
+    // Collection (Application)
+    0xA1, 0x01,
 
-//     // Usage (Pointer)
-//     0x09, 0x01,
+    // Usage (Pointer)
+    0x09, 0x01,
 
-//     // Collection (Physical)
-//     0xA1, 0x00,
+    // Collection (Physical)
+    0xA1, 0x00,
 
-//     // Usage Page (Buttons)
-//     0x05, 0x09,
+    // Usage Page (Buttons)
+    0x05, 0x09,
 
-//     // Usage Minimum (1)
-//     0x19, 0x01,
-//     // Usage Maximum (5)
-//     0x29, 0x05,
-//     // Logical Minimum (0)
-//     0x15, 0x00,
-//     // Logical Maximum (1)
-//     0x25, 0x01,
-//     // Report Count (5)
-//     0x95, 0x05,
-//     // Report Size (1)
-//     0x75, 0x01,
-//     // Input (Data, Variable, Absolute): 5 buttons bits
-//     0x81, 0x02,
+    // Usage Minimum (1)
+    0x19, 0x01,
+    // Usage Maximum (5)
+    0x29, 0x05,
+    // Logical Minimum (0)
+    0x15, 0x00,
+    // Logical Maximum (1)
+    0x25, 0x01,
+    // Report Count (5)
+    0x95, 0x05,
+    // Report Size (1)
+    0x75, 0x01,
+    // Input (Data, Variable, Absolute): 5 buttons bits
+    0x81, 0x02,
 
-//     // Report Count (1)
-//     0x95, 0x01,
-//     // Report Size (3)
-//     0x75, 0x03,
-//     // Input (Constant): 3 bits padding
-//     0x81, 0x01,
+    // Report Count (1)
+    0x95, 0x01,
+    // Report Size (3)
+    0x75, 0x03,
+    // Input (Constant): 3 bits padding
+    0x81, 0x01,
 
-//     // Usage Page (Generic Desktop)
-//     0x05, 0x01,
-//     // Usage (X)
-//     0x09, 0x30,
-//     // Usage (Y)
-//     0x09, 0x31,
-//     // Usage (Wheel)
-//     0x09, 0x38,
-//     // Logical Minimum (-127)
-//     0x15, 0x81,
-//     // Logical Maximum (127)
-//     0x25, 0x7F,
-//     // Report Size (8)
-//     0x75, 0x08,
-//     // Report Count (3)
-//     0x95, 0x03,
-//     // Input (Data, Variable, Relative): 3 position bytes (X, Y, Wheel)
-//     0x81, 0x06,
+    // Usage Page (Generic Desktop)
+    0x05, 0x01,
+    // Usage (X)
+    0x09, 0x30,
+    // Usage (Y)
+    0x09, 0x31,
+    // Usage (Wheel)
+    0x09, 0x38,
+    // Logical Minimum (-127)
+    0x15, 0x81,
+    // Logical Maximum (127)
+    0x25, 0x7F,
+    // Report Size (8)
+    0x75, 0x08,
+    // Report Count (3)
+    0x95, 0x03,
+    // Input (Data, Variable, Relative): 3 position bytes (X, Y, Wheel)
+    0x81, 0x06,
 
-//     // Usage Page (Consumer Page)
-//     0x05, 0x0C,
-//     // Usage(AC Pan)
-//     0x0A, 0x38, 0x02,
-//     // Logical Minimum (-127)
-//     0x15, 0x81,
-//     // Logical Maximum (127)
-//     0x25, 0x7F,
-//     // Report Size (8)
-//     0x75, 0x08,
-//     // Report Count (1)
-//     0x95, 0x01,
-//     // Input (Data, Variable, Relative): 1 byte (AC Pan)
-//     0x81, 0x06,
+    // Usage Page (Consumer Page)
+    0x05, 0x0C,
+    // Usage(AC Pan)
+    0x0A, 0x38, 0x02,
+    // Logical Minimum (-127)
+    0x15, 0x81,
+    // Logical Maximum (127)
+    0x25, 0x7F,
+    // Report Size (8)
+    0x75, 0x08,
+    // Report Count (1)
+    0x95, 0x01,
+    // Input (Data, Variable, Relative): 1 byte (AC Pan)
+    0x81, 0x06,
 
-//     // End Collection
-//     0xC0,
+    // End Collection
+    0xC0,
 
-//     // End Collection
-//     0xC0,
-// ]);
+    // End Collection
+    0xC0,
+]);
 
 // Scrcpy 官方对应的 8-bit 鼠标描述符
 // 兼容性最强版本：带 Report ID 的描述符
-const MOUSE_REPORT_DESCRIPTOR = new Uint8Array([
-    0x05, 0x01, // Usage Page (Generic Desktop)
-    0x09, 0x02, // Usage (Mouse)
-    0xA1, 0x01, // Collection (Application)
-    0x09, 0x01, // Usage (Pointer)
-    0xA1, 0x00, // Collection (Physical)
+// const MOUSE_REPORT_DESCRIPTOR = new Uint8Array([
+//     0x05, 0x01, // Usage Page (Generic Desktop)
+//     0x09, 0x02, // Usage (Mouse)
+//     0xA1, 0x01, // Collection (Application)
+//     0x09, 0x01, // Usage (Pointer)
+//     0xA1, 0x00, // Collection (Physical)
     
-    // Buttons (3 buttons)
-    0x05, 0x09, // Usage Page (Buttons)
-    0x19, 0x01, // Usage Minimum (1)
-    0x29, 0x05, // Usage Maximum (5) - Scrcpy定义了5个键
-    0x15, 0x00, // Logical Minimum (0)
-    0x25, 0x01, // Logical Maximum (1)
-    0x95, 0x05, // Report Count (5)
-    0x75, 0x01, // Report Size (1)
-    0x81, 0x02, // Input (Data, Variable, Absolute)
+//     // Buttons (3 buttons)
+//     0x05, 0x09, // Usage Page (Buttons)
+//     0x19, 0x01, // Usage Minimum (1)
+//     0x29, 0x05, // Usage Maximum (5) - Scrcpy定义了5个键
+//     0x15, 0x00, // Logical Minimum (0)
+//     0x25, 0x01, // Logical Maximum (1)
+//     0x95, 0x05, // Report Count (5)
+//     0x75, 0x01, // Report Size (1)
+//     0x81, 0x02, // Input (Data, Variable, Absolute)
     
-    // Padding (3 bits) - 凑齐 1 字节
-    0x95, 0x01, // Report Count (1)
-    0x75, 0x03, // Report Size (3)
-    0x81, 0x01, // Input (Constant)
+//     // Padding (3 bits) - 凑齐 1 字节
+//     0x95, 0x01, // Report Count (1)
+//     0x75, 0x03, // Report Size (3)
+//     0x81, 0x01, // Input (Constant)
     
-    // X, Y, Wheel (8-bit)
-    0x05, 0x01, // Usage Page (Generic Desktop)
-    0x09, 0x30, // Usage (X)
-    0x09, 0x31, // Usage (Y)
-    0x09, 0x38, // Usage (Wheel)
-    0x15, 0x81, // Logical Minimum (-127)
-    0x25, 0x7F, // Logical Maximum (127)
-    0x75, 0x08, // Report Size (8)
-    0x95, 0x03, // Report Count (3) -> X, Y, Wheel
-    0x81, 0x06, // Input (Data, Variable, Relative)
+//     // X, Y, Wheel (8-bit)
+//     0x05, 0x01, // Usage Page (Generic Desktop)
+//     0x09, 0x30, // Usage (X)
+//     0x09, 0x31, // Usage (Y)
+//     0x09, 0x38, // Usage (Wheel)
+//     0x15, 0x81, // Logical Minimum (-127)
+//     0x25, 0x7F, // Logical Maximum (127)
+//     0x75, 0x08, // Report Size (8)
+//     0x95, 0x03, // Report Count (3) -> X, Y, Wheel
+//     0x81, 0x06, // Input (Data, Variable, Relative)
     
-    // H-Wheel (AC Pan)
-    0x05, 0x0C, // Usage Page (Consumer)
-    0x0A, 0x38, 0x02, // Usage (AC Pan)
-    0x15, 0x81, // Logical Min (-127)
-    0x25, 0x7F, // Logical Max (127)
-    0x75, 0x08, // Report Size (8)
-    0x95, 0x01, // Report Count (1)
-    0x81, 0x06, // Input (Data, Var, Rel)
+//     // H-Wheel (AC Pan)
+//     0x05, 0x0C, // Usage Page (Consumer)
+//     0x0A, 0x38, 0x02, // Usage (AC Pan)
+//     0x15, 0x81, // Logical Min (-127)
+//     0x25, 0x7F, // Logical Max (127)
+//     0x75, 0x08, // Report Size (8)
+//     0x95, 0x01, // Report Count (1)
+//     0x81, 0x06, // Input (Data, Var, Rel)
 
-    0xC0, 0xC0  // End Collection
-]);
+//     0xC0, 0xC0  // End Collection
+// ]);
 // 前端 JavaScript 修改
 function createUHIDCreatePacket(deviceID = UHID_DEVICE_ID) {
     // 1. 编码名字
