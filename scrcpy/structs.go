@@ -1,7 +1,6 @@
 package scrcpy
 
 type ScrcpyOptions struct {
-	Adress            string
 	CLASSPATH         string
 	Version           string
 	SCID              string
@@ -14,6 +13,12 @@ type ScrcpyOptions struct {
 	VideoCodecOptions string
 	NewDisplay        string
 	LogLevel          string
+}
+
+type ConnectOptions struct {
+	DeviceSerial  string
+	ReversePort   int
+	ScrcpyOptions ScrcpyOptions
 }
 
 type ScrcpyVideoMeta struct {
