@@ -47,6 +47,13 @@ for (let i = 0; i < 10; i++) {
     ANDROID_KEYCODES[code] = 7 + i; // AKEYCODE_0 starts at 7
 }
 
+// if not UHID, don't map F1-F12
+// Map F1-F12
+// for (let i = 1; i <= 12; i++) {
+//     const code = "F" + i;
+//     ANDROID_KEYCODES[code] = 130 + i; // AKEYCODE_F1 starts at 131
+// }
+
 function getAndroidKeyCode(e) {
     if (ANDROID_KEYCODES[e.code]) {
         return ANDROID_KEYCODES[e.code];

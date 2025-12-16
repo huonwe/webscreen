@@ -107,14 +107,17 @@ function destroyUHIDKeyboard() {
 }
 
 function toggleUHIDKeyboard() {
+    const btn = document.getElementById('uhidKeyboardToggleBtn');
     if (!uhidKeyboardEnabled) {
         initUHIDKeyboard();
         uhidKeyboardEnabled = true;
         console.log("UHID Keyboard enabled");
+        if (btn) btn.classList.add('active');
     } else {
         destroyUHIDKeyboard();
         uhidKeyboardEnabled = false;
         console.log("UHID Keyboard disabled");
+        if (btn) btn.classList.remove('active');
     }
 }
 
@@ -131,10 +134,8 @@ function sendKeyboardReport() {
 window.addEventListener('keydown', (event) => {
     if (!uhidKeyboardEnabled) return;
     
-    // 阻止默认行为 (除了 F12 等调试键)
-    if (event.code !== 'F12' && event.code !== 'F5') {
-        event.preventDefault();
-    }
+    // 阻止默认行为 (拦截所有按键，包括 F1-F12)
+    event.preventDefault();
 
     let changed = false;
 
@@ -163,9 +164,7 @@ window.addEventListener('keydown', (event) => {
 window.addEventListener('keyup', (event) => {
     if (!uhidKeyboardEnabled) return;
     
-    if (event.code !== 'F12' && event.code !== 'F5') {
-        event.preventDefault();
-    }
+    event.preventDefault();
 
     let changed = false;
 

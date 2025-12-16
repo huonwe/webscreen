@@ -47,6 +47,38 @@ type LinearBuffer struct {
 	size   int
 }
 
+func (da *DataAdapter) startControlReader() {
+	header := make([]byte, 5) // Type (1) + Length (4)
+	for {
+		_, err := io.ReadFull(da.controlConn, header)
+		if err != nil {
+			log.Println("Control connection read error:", err)
+			return
+		}
+
+		msgType := header[0]
+		length := binary.BigEndian.Uint32(header[1:])
+
+		switch msgType {
+		case DEVICE_MSG_TYPE_CLIPBOARD:
+			content := make([]byte, length)
+			_, err := io.ReadFull(da.controlConn, content)
+			if err != nil {
+				log.Println("Control connection read content error:", err)
+				return
+			}
+			da.ControlChan <- WebRTCControlFrame{
+				Data: append([]byte{17}, content...),
+			}
+		default:
+			// Skip unknown message
+			if length > 0 {
+				io.CopyN(io.Discard, da.controlConn, int64(length))
+			}
+		}
+	}
+}
+
 func NewLinearBuffer(size int) *LinearBuffer {
 	if size == 0 {
 		size = 8 * 1024 * 1024 // 默认 8MB
@@ -129,6 +161,7 @@ func NewDataAdapter(config map[string]string) (*DataAdapter, error) {
 			// The third connection is always Control
 			da.controlConn = conn
 			log.Println("Scrcpy Control Connection Established")
+			go da.startControlReader()
 		}
 	}
 	// 甜点值

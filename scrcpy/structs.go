@@ -11,6 +11,7 @@ type ScrcpyOptions struct {
 	Audio             string
 	VideoCodec        string
 	VideoCodecOptions string
+	NewDisplay        string
 	LogLevel          string
 }
 

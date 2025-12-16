@@ -24,6 +24,9 @@ func (sm *StreamManager) HandleWebSocket(c *gin.Context) {
 
 	log.Println("Client connected via WebSocket")
 
+	sm.AddClient(conn)
+	defer sm.RemoveClient(conn)
+
 	for {
 		// Read message from client
 		messageType, p, err := conn.ReadMessage()
@@ -81,7 +84,7 @@ func (sm *StreamManager) HandleWebSocket(c *gin.Context) {
 					log.Println("Failed to unmarshal uhid input event:", err)
 					continue
 				}
-				log.Printf("UHID Input Event: %+v\n", event)
+				// log.Printf("UHID Input Event: %+v\n", event)
 				sm.DataAdapter.SendUHIDInputEvent(event)
 			case WS_TYPE_UHID_DESTROY: // UHID Destroy
 				event, err := sm.createScrcpyUHIDDestroyEvent(p)
@@ -89,8 +92,15 @@ func (sm *StreamManager) HandleWebSocket(c *gin.Context) {
 					log.Println("Failed to unmarshal uhid destroy event:", err)
 					continue
 				}
-				log.Printf("UHID Destroy Event: %+v\n", event)
+				// log.Printf("UHID Destroy Event: %+v\n", event)
 				sm.DataAdapter.SendUHIDDestroyEvent(event)
+			case WS_TYPE_SET_CLIPBOARD:
+				if len(p) > 1 {
+					content := string(p[1:])
+					sm.DataAdapter.SendSetClipboardEvent(content, true)
+				}
+			case WS_TYPE_GET_CLIPBOARD:
+				sm.DataAdapter.SendGetClipboardEvent()
 			default:
 				log.Println("Unknown control message type:", p[0])
 			}

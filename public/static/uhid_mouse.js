@@ -57,16 +57,19 @@ function destroyUHIDMouse() {
 }
 
 function toggleUHIDMouse() {
+    const btn = document.getElementById('uhidToggleBtn');
     if (!uhidMouseEnabled) {
         initUHIDMouse();
         uhidMouseEnabled = true;
         console.log("UHID Mouse enabled - relative mouse mode");
         requestPointerLock();
+        if (btn) btn.classList.add('active');
     } else {
         destroyUHIDMouse();
         uhidMouseEnabled = false;
         console.log("UHID Mouse disabled - touch mode");
         exitPointerLock();
+        if (btn) btn.classList.remove('active');
     }
 }
 

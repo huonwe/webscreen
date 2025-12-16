@@ -9,6 +9,7 @@ import (
 	"time"
 	"webcpy/scrcpy"
 
+	"github.com/gorilla/websocket"
 	"github.com/pion/webrtc/v4"
 	"github.com/pion/webrtc/v4/pkg/media"
 )
@@ -27,6 +28,9 @@ type StreamManager struct {
 
 	hasSentKeyFrame atomic.Bool // 引入 atomic 避免并发问题
 	webrtcConnected atomic.Bool // 标记 WebRTC 连接状态
+
+	clients      map[*websocket.Conn]bool
+	clientsMutex sync.Mutex
 }
 
 func (sm *StreamManager) IsConnected() bool {
@@ -62,11 +66,45 @@ func NewStreamManager(dataAdapter *scrcpy.DataAdapter) *StreamManager {
 		"audio-track-id",
 		AudioStreamID, // <--- 使用不同的 StreamID 以取消强制同步
 	)
-	return &StreamManager{
+	sm := &StreamManager{
 		VideoTrack:  videoTrack,
 		AudioTrack:  audioTrack,
 		DataAdapter: dataAdapter,
+		clients:     make(map[*websocket.Conn]bool),
 	}
+	go sm.StartBroadcaster()
+	return sm
+}
+
+func (sm *StreamManager) StartBroadcaster() {
+	for msg := range sm.DataAdapter.ControlChan {
+		// Currently only broadcasting clipboard data (Type 17)
+		// But we can broadcast other types if needed
+		if len(msg.Data) > 0 && msg.Data[0] == WS_TYPE_CLIPBOARD_DATA {
+			sm.clientsMutex.Lock()
+			for client := range sm.clients {
+				err := client.WriteMessage(websocket.BinaryMessage, msg.Data)
+				if err != nil {
+					log.Println("Broadcast error:", err)
+					client.Close()
+					delete(sm.clients, client)
+				}
+			}
+			sm.clientsMutex.Unlock()
+		}
+	}
+}
+
+func (sm *StreamManager) AddClient(conn *websocket.Conn) {
+	sm.clientsMutex.Lock()
+	defer sm.clientsMutex.Unlock()
+	sm.clients[conn] = true
+}
+
+func (sm *StreamManager) RemoveClient(conn *websocket.Conn) {
+	sm.clientsMutex.Lock()
+	defer sm.clientsMutex.Unlock()
+	delete(sm.clients, conn)
 }
 
 func (sm *StreamManager) Close() {

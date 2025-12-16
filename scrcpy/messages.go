@@ -49,6 +49,11 @@ const BUTTON_SECONDARY uint32 = 1 << 1
  */
 const BUTTON_TERTIARY uint32 = 1 << 2
 
+// Device -> Client messages
+const DEVICE_MSG_TYPE_CLIPBOARD = 0
+const DEVICE_MSG_TYPE_ACK_CLIPBOARD = 1
+const DEVICE_MSG_TYPE_UHID_OUTPUT = 2
+
 // device messages
 const TYPE_CLIPBOARD = 0
 const TYPE_ACK_CLIPBOARD = 1
@@ -117,18 +122,3 @@ type UHIDDestroyEvent struct {
 	Type byte
 	ID   uint16 // 设备 ID (对应官方的 id 字段)
 }
-
-// func (e *TouchEvent) UnmarshalBinary(data []byte) error {
-// 	e.Action = data[1]
-// 	e.PointerID = uint64(data[2])
-// 	e.PosX = binary.BigEndian.Uint32(data[3:5])
-// 	e.PosY = binary.BigEndian.Uint32(data[6:8])
-// 	e.Pressure = binary.BigEndian.Uint16(data[22:24])
-// 	e.Buttons = binary.BigEndian.Uint32(data[24:28])
-// 	return nil
-// }
-// func (e *KeyEvent) UnmarshalBinary(data []byte) error {
-// 	e.Action = data[1]
-// 	e.KeyCode = binary.BigEndian.Uint32(data[2:6])
-// 	return nil
-// }

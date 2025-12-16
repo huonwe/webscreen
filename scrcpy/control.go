@@ -105,6 +105,57 @@ func (da *DataAdapter) SendScrollEvent(e ScrollEvent) {
 	}
 }
 
+func (da *DataAdapter) SendSetClipboardEvent(content string, paste bool) {
+	if da.controlConn == nil {
+		return
+	}
+
+	data := []byte(content)
+	length := len(data)
+
+	// Structure:
+	// Type (1)
+	// Sequence (8)
+	// Paste (1)
+	// Length (4)
+	// Content (length)
+
+	buf := make([]byte, 1+8+1+4+length)
+
+	buf[0] = TYPE_SET_CLIPBOARD
+	binary.BigEndian.PutUint64(buf[1:9], 0) // Sequence, can be 0
+	if paste {
+		buf[9] = 1
+	} else {
+		buf[9] = 0
+	}
+	binary.BigEndian.PutUint32(buf[10:14], uint32(length))
+	copy(buf[14:], data)
+
+	_, err := da.controlConn.Write(buf)
+	if err != nil {
+		log.Printf("Error sending set clipboard event: %v\n", err)
+	}
+}
+
+func (da *DataAdapter) SendGetClipboardEvent() {
+	if da.controlConn == nil {
+		return
+	}
+
+	// Structure:
+	// Type (1)
+	// CopyKey (1)
+	buf := make([]byte, 2)
+	buf[0] = TYPE_GET_CLIPBOARD
+	buf[1] = COPY_KEY_COPY
+
+	_, err := da.controlConn.Write(buf)
+	if err != nil {
+		log.Printf("Error sending get clipboard event: %v\n", err)
+	}
+}
+
 func (da *DataAdapter) SendUHIDCreateEvent(e UHIDCreateEvent) {
 	if da.controlConn == nil {
 		return

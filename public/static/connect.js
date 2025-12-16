@@ -64,9 +64,31 @@ async function start() {
     setInterval(() => force_sync(pc), 1000);
 
     window.ws = new WebSocket('ws://' + window.location.host + '/ws');
-        window.ws.onopen = () => console.log('WebSocket connected');
-        window.ws.onmessage = (event) => {
+    window.ws.binaryType = "arraybuffer";
+    window.ws.onopen = () => {
+        console.log('WebSocket connected')
+    };
+    window.ws.onmessage = (event) => {
+        if (event.data instanceof ArrayBuffer) {
+            const view = new Uint8Array(event.data);
+            if (view[0] === 17) { // WS_TYPE_CLIPBOARD_DATA
+                const decoder = new TextDecoder();
+                const text = decoder.decode(view.slice(1));
+                // console.log("Clipboard from device:", text);
+                // Copy to browser clipboard
+                try {
+                    navigator.clipboard.writeText(text).catch(err => {
+                    console.error('Failed to write to clipboard:', err);
+                });
+                } catch (e) {
+                    console.error('Clipboard API not available:', e);
+                    console.log("HTTPS is required for clipboard access.");
+                }
+                
+            }
+        } else {
             console.log('Received message from server:', event.data);
+        }
     };
     
     // let p = createRequestKeyFramePacket();
@@ -163,3 +185,20 @@ async function force_sync(pc) {
 //         console.warn("WebSocket is not open. Cannot send message.");
 //     }
 // }
+
+function setClipboard(text) {
+    if (!window.ws || window.ws.readyState !== WebSocket.OPEN) return;
+    const encoder = new TextEncoder();
+    const data = encoder.encode(text);
+    const packet = new Uint8Array(1 + data.length);
+    packet[0] = 15; // WS_TYPE_SET_CLIPBOARD
+    packet.set(data, 1);
+    window.ws.send(packet);
+}
+
+function getClipboard() {
+    if (!window.ws || window.ws.readyState !== WebSocket.OPEN) return;
+    const packet = new Uint8Array(1);
+    packet[0] = 16; // WS_TYPE_GET_CLIPBOARD
+    window.ws.send(packet);
+}

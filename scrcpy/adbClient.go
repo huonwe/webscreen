@@ -32,8 +32,9 @@ func NewADBClient(address string) *ADBClient {
 		Control:      "true",
 		Audio:        "true",
 		VideoCodec:   "h264",
+		NewDisplay:   "",
 		// VideoCodecOptions: "i-frame-interval=1",
-		LogLevel: "debug",
+		LogLevel: "info",
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	return &ADBClient{Address: address, ScrcpyParams: defaultScrcpyParams, ctx: ctx, cancel: cancel}
@@ -119,6 +120,9 @@ func ScrcpyParamsToArgs(p ScrcpyOptions) []string {
 		fmt.Sprintf("control=%s", p.Control),
 		fmt.Sprintf("audio=%s", p.Audio),
 		fmt.Sprintf("video_codec=%s", p.VideoCodec),
+	}
+	if p.NewDisplay != "" {
+		args = append(args, fmt.Sprintf("new_display=%s", p.NewDisplay))
 	}
 	if p.MaxSize != "" {
 		args = append(args, fmt.Sprintf("max_size=%s", p.MaxSize))

@@ -96,6 +96,11 @@ html, body {
     background-color: #0062a3;
 }
 
+.control-btn.active {
+    border: 2px solid #4caf50; /* Green border */
+    color: #4caf50;
+}
+
 .separator {
     height: 1px;
     width: 100%;

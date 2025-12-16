@@ -19,13 +19,16 @@ import (
 // 9,       1,          uint8,      Buttons,    "鼠标按键 (1:主键, 2:右键)"
 
 const (
-	WS_TYPE_TOUCH        = 0x01 // touch event
-	WS_TYPE_KEY          = 0x02 // key event
-	WS_TYPE_SCROLL       = 0x03 // scroll event
-	WS_TYPE_ROTATE       = 0x04 // rotate event
-	WS_TYPE_UHID_CREATE  = 12   // create uhid
-	WS_TYPE_UHID_INPUT   = 13   // uhid input
-	WS_TYPE_UHID_DESTROY = 14   // destroy uhid
+	WS_TYPE_TOUCH          = 0x01 // touch event
+	WS_TYPE_KEY            = 0x02 // key event
+	WS_TYPE_SCROLL         = 0x03 // scroll event
+	WS_TYPE_ROTATE         = 0x04 // rotate event
+	WS_TYPE_UHID_CREATE    = 12   // create uhid
+	WS_TYPE_UHID_INPUT     = 13   // uhid input
+	WS_TYPE_UHID_DESTROY   = 14   // destroy uhid
+	WS_TYPE_SET_CLIPBOARD  = 15   // set clipboard
+	WS_TYPE_GET_CLIPBOARD  = 16   // get clipboard
+	WS_TYPE_CLIPBOARD_DATA = 17   // clipboard data (server -> client)
 )
 
 // ScrcpyTypeFromWSMsgType converts websocket message type to scrcpy control message type

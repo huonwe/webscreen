@@ -94,16 +94,19 @@ function destroyUHIDGamepad() {
 }
 
 function toggleUHIDGamepad() {
+    const btn = document.getElementById('uhidGamepadToggleBtn');
     if (!uhidGamepadEnabled) {
         initUHIDGamepad();
         uhidGamepadEnabled = true;
         createVirtualGamepadUI();
         console.log("UHID Gamepad enabled");
+        if (btn) btn.classList.add('active');
     } else {
         removeVirtualGamepadUI();
         destroyUHIDGamepad();
         uhidGamepadEnabled = false;
         console.log("UHID Gamepad disabled");
+        if (btn) btn.classList.remove('active');
     }
 }
 
