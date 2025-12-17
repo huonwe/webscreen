@@ -92,12 +92,20 @@ function renderDeviceList() {
         return;
     }
 
-    knownDevices.forEach(serial => {
+    knownDevices.forEach(device => {
+        // Handle both string (legacy/fallback) and object formats
+        const serial = typeof device === 'string' ? device : device.device_id;
         const config = ensureDeviceConfig(serial);
         const tr = document.createElement('tr');
         tr.dataset.serial = serial;
+
+        let displayInfo = serial;
+        if (device.ip) {
+            displayInfo += ` <span style="color: #888; font-size: 0.9em;">(${device.ip}:${device.port})</span>`;
+        }
+
         tr.innerHTML = `
-            <td>${serial}</td>
+            <td>${displayInfo}</td>
             <td><span class="status-connected">Connected</span></td>
             <td class="device-summary">${formatScrcpySummary(config.scrcpyOptions)}</td>
             <td class="device-actions">
@@ -113,14 +121,19 @@ async function fetchDevices() {
     try {
         const response = await fetch('/api/devices');
         const data = await response.json();
-        const devices = Array.isArray(data.devices) ? data.devices : [];
+        console.log('Fetched devices:', data);
+        // API returns array directly: [{type, device_id, ip, port}, ...]
+        const devices = Array.isArray(data) ? data : [];
         knownDevices = devices;
-        pruneDeviceConfigs(devices);
-        devices.forEach(ensureDeviceConfig);
+
+        const serials = devices.map(d => d.device_id);
+        pruneDeviceConfigs(serials);
+        serials.forEach(ensureDeviceConfig);
+
         renderDeviceList();
     } catch (error) {
         console.error('Error fetching devices:', error);
-        alert('Failed to fetch devices');
+        // alert('Failed to fetch devices');
     }
 }
 
