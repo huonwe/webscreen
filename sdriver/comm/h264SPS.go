@@ -342,7 +342,7 @@ func skipScalingList(br *BitReader) {
 			nextScale = (lastScale + int(deltaScale) + 256) % 256
 		}
 		if nextScale == 0 {
-			lastScale = lastScale
+			// lastScale = lastScale
 		} else {
 			lastScale = nextScale
 		}
