@@ -6,7 +6,7 @@ type StreamConfig struct {
 	// DeviceID   string            `json:"device_id"`
 	VideoCodec string            `json:"video_codec"`
 	AudioCodec string            `json:"audio_codec"`
-	Bitrate    int               `json:"bitrate"`
+	Bitrate    int               `json:"bitrate"` // bps
 	OtherOpts  map[string]string `json:"other_opts"`
 }
 
@@ -26,9 +26,9 @@ type ControlEvent struct {
 
 type MediaMeta struct {
 	VideoCodecID string `json:"video_codec_id"`
-	Width        int    `json:"width"`
-	Height       int    `json:"height"`
-	FPS          int    `json:"fps"`
+	Width        uint32 `json:"width"`
+	Height       uint32 `json:"height"`
+	FPS          uint32 `json:"fps"`
 	AudioCodecID string `json:"audio_codec_id"`
 }
 

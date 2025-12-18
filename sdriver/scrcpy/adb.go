@@ -1,4 +1,4 @@
-package adb
+package scrcpy
 
 import (
 	"context"
@@ -28,7 +28,7 @@ func ExecADB(args ...string) error {
 
 // NewClient 创建一个新的 ADB 客户端结构体.
 // 如果 address 为空字符串，则表示使用默认设备.
-func NewClient(deviceSerial string) *ADBClient {
+func NewADBClient(deviceSerial string) *ADBClient {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	return &ADBClient{deviceSerial: deviceSerial, ctx: ctx, cancel: cancel}
@@ -51,8 +51,11 @@ func (c *ADBClient) Shell(cmd string) error {
 	return c.adb("shell", cmd)
 }
 
-// Push 将本地文件推送到设备上，并更新 ScrcpyParams 中的 CLASSPATH 字段.
-func (c *ADBClient) Push(localPath, remotePath string) error {
+// Push 将本地文件推送到设备上
+func (c *ADBClient) Push(localPath string, remotePath string) error {
+	if remotePath == "" {
+		remotePath = "/data/local/tmp/scrcpy-server"
+	}
 	err := c.adb("push", localPath, remotePath)
 	if err != nil {
 		return fmt.Errorf("ADB Push failed: %v", err)
@@ -100,6 +103,7 @@ func GenerateSCID() string {
 func scrcpyParamsToArgs(params map[string]string) []string {
 	var args []string
 	keys := []string{
+		"scid",
 		"max_fps",
 		"video_bit_rate",
 		"control",
@@ -118,15 +122,12 @@ func scrcpyParamsToArgs(params map[string]string) []string {
 	return args
 }
 
-func toScrcpyCommand(params map[string]string) string {
-	classpath := params["server_remote_path"]
-	if classpath == "" {
-		classpath = params["CLASSPATH"]
-	}
-	version := params["scrcpy_version"]
+func toScrcpyCommand(options map[string]string) string {
+	classpath := options["CLASSPATH"]
+	version := options["Version"]
 	base := fmt.Sprintf("CLASSPATH=%s app_process / com.genymobile.scrcpy.Server %s ",
 		classpath, version)
-	args := scrcpyParamsToArgs(params)
+	args := scrcpyParamsToArgs(options)
 	return strings.Join(append([]string{base}, args...), " ")
 }
 

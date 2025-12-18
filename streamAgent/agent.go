@@ -8,8 +8,9 @@ import (
 	"time"
 	"webcpy/sdriver"
 	"webcpy/sdriver/dummy"
-	"webcpy/streamAgent/webrtcHelper"
+	"webcpy/sdriver/scrcpy"
 
+	"github.com/pion/rtcp"
 	"github.com/pion/webrtc/v4"
 	"github.com/pion/webrtc/v4/pkg/media"
 )
@@ -19,6 +20,7 @@ type Agent struct {
 	VideoTrack *webrtc.TrackLocalStaticSample
 	AudioTrack *webrtc.TrackLocalStaticSample
 	driver     sdriver.SDriver
+	driverCaps sdriver.DriverCaps
 	config     ConnectionConfig
 	// 用来接收前端的 RTCP 请求
 	rtpSenderVideo *webrtc.RTPSender
@@ -26,7 +28,7 @@ type Agent struct {
 	// chan
 	videoCh   <-chan sdriver.AVBox
 	audioCh   <-chan sdriver.AVBox
-	controlCh chan sdriver.ControlEvent
+	controlCh <-chan sdriver.ControlEvent
 
 	// 用于音视频推流的 PTS 记录
 	lastVideoPTS time.Duration
@@ -53,17 +55,23 @@ func NewAgent(config ConnectionConfig) (*Agent, error) {
 		sa.driver = dummyDriver
 	case DEVICE_TYPE_ANDROID:
 		// 初始化 Android Driver
-		// scrcpyDriver :=
+		androidDriver, err := scrcpy.New(config.StreamCfg, config.DeviceID)
+		if err != nil {
+			log.Printf("Failed to initialize Android driver: %v", err)
+			return nil, err
+		}
+		sa.driver = androidDriver
 	default:
 		log.Printf("Unsupported device type: %s", config.DeviceType)
 		return nil, fmt.Errorf("unsupported device type: %s", config.DeviceType)
 	}
+	sa.driverCaps = sa.driver.Capabilities()
 	// sa.videoCh, sa.audioCh, sa.controlCh = sa.driver.GetReceivers()
 	sa.videoCh, sa.audioCh, sa.controlCh = sa.driver.GetReceivers()
-	videoCodec, audioCodec := sa.driver.CodecInfo()
-	log.Printf("Driver codecs - Video: %s, Audio: %s", videoCodec, audioCodec)
+	mediaMeta := sa.driver.MediaMeta()
+	log.Printf("Driver media meta: %+v", mediaMeta)
 	var videoMimeType, audioMimeType string
-	switch videoCodec {
+	switch mediaMeta.VideoCodecID {
 	case "h264":
 		videoMimeType = webrtc.MimeTypeH264
 	case "h265":
@@ -71,13 +79,13 @@ func NewAgent(config ConnectionConfig) (*Agent, error) {
 	case "av1":
 		videoMimeType = webrtc.MimeTypeAV1
 	default:
-		log.Printf("Unsupported video codec: %s", videoCodec)
+		log.Printf("Unsupported video codec: %s", mediaMeta.VideoCodecID)
 	}
-	switch audioCodec {
+	switch mediaMeta.AudioCodecID {
 	case "opus":
 		audioMimeType = webrtc.MimeTypeOpus
 	default:
-		log.Printf("Unsupported audio codec: %s", audioCodec)
+		log.Printf("Unsupported audio codec: %s", mediaMeta.AudioCodecID)
 	}
 	log.Printf("Creating tracks with MIME types - Video: %s, Audio: %s", videoMimeType, audioMimeType)
 	streamID := generateStreamID()
@@ -115,18 +123,47 @@ func NewAgent(config ConnectionConfig) (*Agent, error) {
 	return sa, nil
 }
 
+func (sa *Agent) HandleRTCP() {
+	rtcpBuf := make([]byte, 1500)
+	lastRTCPTime := time.Now()
+	for {
+		n, _, err := sa.rtpSenderVideo.Read(rtcpBuf)
+		if err != nil {
+			return
+		}
+		packets, err := rtcp.Unmarshal(rtcpBuf[:n])
+		if err != nil {
+			continue
+		}
+		for _, p := range packets {
+			switch p.(type) {
+			case *rtcp.PictureLossIndication:
+				now := time.Now()
+				if now.Sub(lastRTCPTime) < time.Second*2 {
+					continue
+				}
+				lastRTCPTime = now
+				log.Println("收到 PLI 请求 (Keyframe Request)")
+				sa.driver.RequestIDR()
+			}
+		}
+	}
+}
+
 func (sa *Agent) CreateWebRTCConnection(offer string) string {
 	var finalSDP string
-	finalSDP, sa.rtpSenderVideo, sa.rtpSenderAudio = webrtcHelper.HandleSDP(offer, sa.VideoTrack, sa.AudioTrack)
+	finalSDP, sa.rtpSenderVideo, sa.rtpSenderAudio = HandleSDP(offer, sa.VideoTrack, sa.AudioTrack)
 	return finalSDP
 }
 
 func (sa *Agent) Close() {
-
+	log.Printf("Closing agent for device %s", sa.config.DeviceID)
+	sa.driver.Stop()
 }
 
 func (sa *Agent) GetCodecInfo() (string, string) {
-	return sa.driver.CodecInfo()
+	m := sa.driver.MediaMeta()
+	return m.VideoCodecID, m.AudioCodecID
 }
 
 func (sa *Agent) GetMediaMeta() sdriver.MediaMeta {
@@ -141,6 +178,8 @@ func (sa *Agent) StartStreaming() {
 	sa.driver.StartStreaming()
 	go sa.StreamingVideo()
 	go sa.StreamingAudio()
+	go sa.HandleRTCP()
+	sa.driver.RequestIDR()
 }
 
 func (sa *Agent) PauseStreaming() {
@@ -152,7 +191,6 @@ func (sa *Agent) ResumeStreaming() {
 
 func (sa *Agent) StreamingVideo() {
 	// Default frame duration (e.g. 30fps) if delta is invalid
-	defaultDuration := time.Millisecond * 33
 	var baseTime time.Time
 
 	for vBox := range sa.videoCh {
@@ -164,28 +202,28 @@ func (sa *Agent) StreamingVideo() {
 		var duration time.Duration
 		if !vBox.IsConfig {
 			if sa.lastVideoPTS == 0 {
-				duration = defaultDuration
+				duration = time.Millisecond * 16
 			} else {
 				delta := vBox.PTS - sa.lastVideoPTS
 				if delta <= 0 {
-					duration = defaultDuration
+					duration = time.Millisecond * 16
 				} else {
 					duration = delta
+					sa.lastVideoPTS = vBox.PTS
 				}
 			}
-			sa.lastVideoPTS = vBox.PTS
 		} else {
 			// Config 帧 (VPS/SPS/PPS) 不需要持续时间
 			duration = 1 * time.Microsecond
 		}
 
 		// Use logical timestamp based on PTS instead of wall clock time
-		timestamp := baseTime.Add(vBox.PTS)
-
+		// timestamp := baseTime.Add(vBox.PTS)
+		// timestamp := time.Now().Unix() // 毫秒时间戳
 		sample := media.Sample{
-			Data:      vBox.Data,
-			Duration:  duration,
-			Timestamp: timestamp,
+			Data:     vBox.Data,
+			Duration: duration,
+			// Timestamp: timestamp,
 		}
 		sa.VideoTrack.WriteSample(sample)
 	}
@@ -211,11 +249,10 @@ func (sa *Agent) StreamingAudio() {
 				duration = time.Microsecond
 			} else {
 				duration = delta
+				// 3. 更新上一帧时间
+				sa.lastAudioPTS = currentPTS
 			}
 		}
-
-		// 3. 更新上一帧时间
-		sa.lastAudioPTS = currentPTS
 
 		// 4. 构造 Sample
 		sample := media.Sample{
@@ -228,9 +265,16 @@ func (sa *Agent) StreamingAudio() {
 	}
 }
 
-func (sa *Agent) SendControlEvent(event []byte) error {
-	parsedEvent := sdriver.ControlEvent{}
-	return sa.driver.SendControl(parsedEvent)
+func (sa *Agent) SendEvent(raw []byte) error {
+	if !sa.driverCaps.CanControl {
+		return fmt.Errorf("driver does not support control events")
+	}
+	event, err := sa.parseEvent(raw)
+	if err != nil {
+		return err
+	}
+	// log.Printf("Parsed control event: %+v", event)
+	return sa.driver.SendEvent(event)
 }
 
 func generateStreamID() string {

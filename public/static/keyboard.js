@@ -1,4 +1,4 @@
-const TYPE_KEY   = 0x02; // key event
+const TYPE_KEY   = 0x00; // key event
 // Key Packet Structure:
 // 偏移,长度,类型,字段名,说明
 // 0,1,uint8,Type,固定 0x02 (KeyEvent)

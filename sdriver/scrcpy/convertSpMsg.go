@@ -4,19 +4,21 @@ import (
 	"encoding/binary"
 	"io"
 	"log"
+	"webcpy/sdriver"
 	"webcpy/sdriver/comm"
 )
 
-func (da *DataAdapter) convertVideoFrame() {
+func (da *ScrcpyDriver) convertVideoFrame() {
 	var headerBuf [12]byte
 	frame := &ScrcpyFrame{}
 
-	isH265 := da.VideoMeta.CodecID == "h265"
+	isH265 := da.mediaMeta.VideoCodecID == "h265"
 
 	for {
 		// read frame header
 		if _, err := io.ReadFull(da.videoConn, headerBuf[:]); err != nil {
 			log.Println("Failed to read scrcpy frame header:", err)
+			return
 		}
 		if err := readScrcpyFrameHeader(headerBuf[:], &frame.Header); err != nil {
 			log.Println("Failed to read scrcpy frame header:", err)
@@ -43,7 +45,7 @@ func (da *DataAdapter) convertVideoFrame() {
 			return
 		}
 
-		var iter func(func(WebRTCFrame) bool)
+		var iter func(func(sdriver.AVBox) bool)
 		if isH265 {
 			iter = da.GenerateWebRTCFrameH265(frame.Header, payloadBuf)
 		} else {
@@ -63,13 +65,14 @@ func (da *DataAdapter) convertVideoFrame() {
 	}
 }
 
-func (da *DataAdapter) convertAudioFrame() {
+func (da *ScrcpyDriver) convertAudioFrame() {
 	var headerBuf [12]byte
 	frame := &ScrcpyFrame{}
 	for {
 		// read frame header
 		if _, err := io.ReadFull(da.audioConn, headerBuf[:]); err != nil {
 			log.Println("Failed to read scrcpy frame header:", err)
+			return
 		}
 		if err := readScrcpyFrameHeader(headerBuf[:], &frame.Header); err != nil {
 			log.Println("Failed to read scrcpy audio frame header:", err)
@@ -101,7 +104,7 @@ func (da *DataAdapter) convertAudioFrame() {
 	}
 }
 
-func (da *DataAdapter) transferControlMsg() {
+func (da *ScrcpyDriver) transferControlMsg() {
 	header := make([]byte, 5) // Type (1) + Length (4)
 	for {
 		_, err := io.ReadFull(da.controlConn, header)
@@ -121,7 +124,7 @@ func (da *DataAdapter) transferControlMsg() {
 				log.Println("Control connection read content error:", err)
 				return
 			}
-			da.ControlChan <- WebRTCControlFrame{
+			da.ControlChan <- sdriver.ControlEvent{
 				Data: append([]byte{17}, content...),
 			}
 		default:

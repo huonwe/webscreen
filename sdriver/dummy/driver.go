@@ -62,7 +62,7 @@ func New(c sdriver.StreamConfig) (*DummyDriver, error) {
 }
 
 // GetReceiver returns the channels for video, audio, and control events.
-func (d *DummyDriver) GetReceivers() (<-chan sdriver.AVBox, <-chan sdriver.AVBox, chan sdriver.ControlEvent) {
+func (d *DummyDriver) GetReceivers() (<-chan sdriver.AVBox, <-chan sdriver.AVBox, <-chan sdriver.ControlEvent) {
 	return d.videoCh, d.audioCh, d.controlCh
 }
 
@@ -89,11 +89,11 @@ func (d *DummyDriver) StopStreaming() {
 	d.Stop()
 }
 
-// SendControl is a no-op for dummy driver.
-func (d *DummyDriver) SendControl(event sdriver.ControlEvent) error { return nil }
+// SendEvent is a no-op for dummy driver.
+func (d *DummyDriver) SendEvent(event sdriver.Event) error { return nil }
 
 // RequestIDR attempts to resend cached SPS/PPS instantly (if available).
-func (d *DummyDriver) RequestIDR() error {
+func (d *DummyDriver) RequestIDR() {
 	d.mu.RLock()
 	sps := append([]byte(nil), d.lastSPS...)
 	pps := append([]byte(nil), d.lastPPS...)
@@ -111,7 +111,6 @@ func (d *DummyDriver) RequestIDR() error {
 		default:
 		}
 	}
-	return nil
 }
 
 // Capabilities reports what this driver supports.
@@ -132,12 +131,11 @@ func (d *DummyDriver) MediaMeta() sdriver.MediaMeta {
 }
 
 // Stop stops the streaming loop and closes channels.
-func (d *DummyDriver) Stop() error {
+func (d *DummyDriver) Stop() {
 	d.stopOnce.Do(func() {
 		close(d.stopCh)
 		// Allow the loop to close the output channels
 	})
-	return nil
 }
 
 func (d *DummyDriver) loop() {
@@ -313,11 +311,11 @@ func (d *DummyDriver) fetchMediaMeta() {
 					rbsp := comm.RemoveEmulationPreventionBytes(nal)
 					spsInfo, err := comm.ParseSPS_H264(rbsp, false)
 					if err == nil {
-						d.mediaMeta.Width = int(spsInfo.Width)
-						d.mediaMeta.Height = int(spsInfo.Height)
+						d.mediaMeta.Width = spsInfo.Width
+						d.mediaMeta.Height = spsInfo.Height
 						d.mediaMeta.VideoCodecID = "h264"
 						if spsInfo.FrameRate > 0 {
-							d.mediaMeta.FPS = int(spsInfo.FrameRate + 0.5)
+							d.mediaMeta.FPS = uint32(spsInfo.FrameRate + 0.5)
 						}
 					}
 					break
@@ -383,17 +381,17 @@ func trimTrailingZeros(b []byte) []byte {
 // 	return out
 // }
 
-func parseFPS(s string) (int, error) {
-	// very small helper: accept simple integer
-	var v int
-	for _, ch := range s {
-		if ch < '0' || ch > '9' {
-			return 0, errors.New("invalid fps")
-		}
-		v = v*10 + int(ch-'0')
-	}
-	if v <= 0 {
-		return 0, errors.New("invalid fps")
-	}
-	return v, nil
-}
+// func parseFPS(s string) (int, error) {
+// 	// very small helper: accept simple integer
+// 	var v int
+// 	for _, ch := range s {
+// 		if ch < '0' || ch > '9' {
+// 			return 0, errors.New("invalid fps")
+// 		}
+// 		v = v*10 + int(ch-'0')
+// 	}
+// 	if v <= 0 {
+// 		return 0, errors.New("invalid fps")
+// 	}
+// 	return v, nil
+// }

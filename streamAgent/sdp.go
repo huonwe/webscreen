@@ -1,4 +1,4 @@
-package webrtcHelper
+package sagent
 
 import (
 	"fmt"
@@ -126,6 +126,7 @@ func CreateMediaEngine(mimeTypes []string) *webrtc.MediaEngine {
 			if err != nil {
 				log.Println("RegisterCodec H264 failed:", err)
 			}
+			log.Println("Registered H264 codec")
 		case webrtc.MimeTypeH265:
 			// 注册 H.265 (视频)
 			err := m.RegisterCodec(webrtc.RTPCodecParameters{

@@ -3,46 +3,44 @@ package scrcpy
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"io"
 	"log"
 	"net"
+	"strconv"
 	"sync"
 	"time"
-	"webcpy/adb"
+	"webcpy/sdriver"
 	"webcpy/sdriver/comm"
 )
 
-// defaultScrcpyOptions := ScrcpyOptions{
-// 	Version:      "3.3.3",
-// 	SCID:         GenerateSCID(),
-// 	MaxFPS:       "60",
-// 	VideoBitRate: "20000000",
-// 	Control:      "true",
-// 	Audio:        "true",
-// 	VideoCodec:   "h264",
-// 	NewDisplay:   "",
-// 	// VideoCodecOptions: "i-frame-interval=1",
-// 	LogLevel: "info",
-// }
+const (
+	SCRCPY_SERVER_LOCAL_PATH  = "./scrcpy-server"
+	SCRCPY_SERVER_ANDROID_DST = "/data/local/tmp/scrcpy-server"
+	SCRCPY_PROXY_PORT_DEFAULT = "27183"
+	SCRCPY_VERSION            = "3.3.3"
+)
 
-type DataAdapter struct {
-	VideoChan   chan WebRTCFrame
-	AudioChan   chan WebRTCFrame
-	ControlChan chan WebRTCControlFrame
+type ScrcpyDriver struct {
+	VideoChan   chan sdriver.AVBox
+	AudioChan   chan sdriver.AVBox
+	ControlChan chan sdriver.ControlEvent
 
 	// LinearBuffer 管理器
 	videoBuffer *comm.LinearBuffer
 	audioBuffer *comm.LinearBuffer
 
-	DeviceName string
-	VideoMeta  ScrcpyVideoMeta
-	AudioMeta  ScrcpyAudioMeta
+	mediaMeta  sdriver.MediaMeta
+	deviceName string
 
 	videoConn   net.Conn
 	audioConn   net.Conn
 	controlConn net.Conn
 
-	adbClient *adb.ADBClient
+	capabilities sdriver.DriverCaps
+
+	adbClient *ADBClient
+	scid      string
 
 	lastIDRRequestTime time.Time
 
@@ -54,39 +52,65 @@ type DataAdapter struct {
 	LastIDRTime   time.Time
 }
 
-// TODO: Adapter和Stream Manager 解耦
-// 一个DataAdapter对应一个scrcpy实例，通过本地端口建立三个连接：视频、音频、控制
-func NewDataAdapter(config map[string]string) (*DataAdapter, error) {
+// 一个ScrcpyDriver对应一个scrcpy实例，通过本地端口建立三个连接：视频、音频、控制
+func New(config sdriver.StreamConfig, deviceID string) (*ScrcpyDriver, error) {
 	var err error
-	da := &DataAdapter{
+	da := &ScrcpyDriver{
 		// adbClient:   adb.NewADBClient(serial),
-		VideoChan:   make(chan WebRTCFrame, 10),
-		AudioChan:   make(chan WebRTCFrame, 10),
-		ControlChan: make(chan WebRTCControlFrame, 10),
+		VideoChan:   make(chan sdriver.AVBox, 10),
+		AudioChan:   make(chan sdriver.AVBox, 10),
+		ControlChan: make(chan sdriver.ControlEvent, 10),
 
-		// 4MB 足够存放几秒的高清视频数据
-		// 当这 4MB 用完后，我们会分配新的，旧的由 GC 自动回收
 		videoBuffer: comm.NewLinearBuffer(0),
 		audioBuffer: comm.NewLinearBuffer(1 * 1024 * 1024), // 1MB 音频缓冲区
+		adbClient:   NewADBClient(deviceID),
 	}
-	err = da.adbClient.Push(config["server_local_path"], config["server_remote_path"])
+	err = da.adbClient.Push(SCRCPY_SERVER_LOCAL_PATH, SCRCPY_SERVER_ANDROID_DST)
 	if err != nil {
 		log.Printf("设置 推送scrcpy-server失败: %v", err)
 		return nil, err
 	}
-	err = da.adbClient.Reverse("localabstract:scrcpy", "tcp:"+config["local_port"])
+	localPort := config.OtherOpts["local_port"]
+	if localPort == "" {
+		localPort = SCRCPY_PROXY_PORT_DEFAULT
+	}
+	// da.adbClient.ReverseRemove("localabstract:scrcpy_*")
+	da.scid = GenerateSCID()
+	socketName := fmt.Sprintf("localabstract:scrcpy_%s", da.scid)
+	err = da.adbClient.Reverse(socketName, "tcp:"+localPort)
 	if err != nil {
 		log.Printf("设置 Reverse 隧道失败: %v", err)
 		return nil, err
 	}
-	// TODO: 使用 ScrcpyOptions 配置参数
-	da.adbClient.StartScrcpyServer(config)
-	listener, err := net.Listen("tcp", ":"+config["local_port"])
+	log.Printf("set up reverse tunnel success: localabstract:scrcpy -> tcp:%s", localPort)
+
+	bitrate := config.Bitrate
+	if bitrate <= 0 {
+		bitrate = 4000000 // 默认 4Mbps
+	}
+
+	options := map[string]string{
+		"CLASSPATH":      SCRCPY_SERVER_ANDROID_DST,
+		"Version":        SCRCPY_VERSION,
+		"scid":           da.scid,
+		"max_size":       config.OtherOpts["max_size"],
+		"max_fps":        config.OtherOpts["max_fps"],
+		"video_bit_rate": strconv.Itoa(bitrate),
+		"control":        config.OtherOpts["control"],
+		"audio":          config.OtherOpts["audio"],
+		"video_codec":    config.VideoCodec,
+		"new_display":    config.OtherOpts["new_display"],
+		"cleanup":        "true",
+		"log_level":      "info",
+	}
+
+	listener, err := net.Listen("tcp", ":"+localPort)
 	if err != nil {
 		log.Printf("监听端口失败: %v", err)
 		return nil, err
 	}
 	defer listener.Close()
+	da.adbClient.StartScrcpyServer(options)
 	conns := make([]net.Conn, 3)
 	for i := 0; i < 3; i++ {
 		conn, err := listener.Accept()
@@ -109,7 +133,7 @@ func NewDataAdapter(config map[string]string) (*DataAdapter, error) {
 				log.Println("Failed to read device metadata:", err)
 				return nil, err
 			}
-			log.Printf("Connected Device: %s", da.DeviceName)
+			log.Printf("Connected Device: %s", da.deviceName)
 
 			da.assignConn(conn)
 		case 1:
@@ -117,8 +141,10 @@ func NewDataAdapter(config map[string]string) (*DataAdapter, error) {
 		case 2:
 			// The third connection is always Control
 			da.controlConn = conn
+			da.capabilities.CanControl = true
+			da.capabilities.CanUHID = true
+			da.capabilities.CanClipboard = true
 			log.Println("Scrcpy Control Connection Established")
-			go da.startControlReader()
 		}
 	}
 	// 甜点值
@@ -128,75 +154,49 @@ func NewDataAdapter(config map[string]string) (*DataAdapter, error) {
 	return da, nil
 }
 
-func (da *DataAdapter) Close() {
-	if da.videoConn != nil {
-		da.videoConn.Close()
-	}
-	if da.audioConn != nil {
-		da.audioConn.Close()
-	}
-	if da.controlConn != nil {
-		da.controlConn.Close()
-	}
-	da.adbClient.ReverseRemove("localabstract:scrcpy")
-	da.adbClient.Stop()
-	// close(da.VideoChan)
-	// close(da.AudioChan)
+func (da *ScrcpyDriver) ShowDeviceInfo() {
+	log.Printf("Device Name: %s", da.deviceName)
+	log.Printf("media Meta: %v", da.mediaMeta)
 }
 
-func (da *DataAdapter) ShowDeviceInfo() {
-	log.Printf("Device Name: %s", da.DeviceName)
-	log.Printf("Video Codec: %s, Width: %d, Height: %d", da.VideoMeta.CodecID, da.VideoMeta.Width, da.VideoMeta.Height)
-	log.Printf("Audio Codec: %s", da.AudioMeta.CodecID)
-}
-
-func (da *DataAdapter) StartConvertVideoFrame() {
-	go da.convertVideoFrame()
-}
-
-func (da *DataAdapter) StartConvertAudioFrame() {
-	go da.convertAudioFrame()
-}
-
-func (da *DataAdapter) startControlReader() {
-	go da.transferControlMsg()
-}
-
-func (da *DataAdapter) assignConn(conn net.Conn) error {
+// Please Ensure the input conn is not Control conn
+func (da *ScrcpyDriver) assignConn(conn net.Conn) error {
 	codecID := readCodecID(conn)
 	switch codecID {
 	case "h264", "h265", "av1 ":
 		da.videoConn = conn
-		da.VideoMeta.CodecID = codecID
+		da.mediaMeta.VideoCodecID = codecID
 		err := da.readVideoMeta(conn)
 		if err != nil {
 			log.Fatalln("Failed to read video metadata:", err)
 			return err
 		}
+		da.capabilities.CanVideo = true
 		log.Println("Scrcpy Video Connection Established")
 	case "aac ", "opus":
 		da.audioConn = conn
-		da.AudioMeta.CodecID = codecID
+		da.mediaMeta.AudioCodecID = codecID
+		da.capabilities.CanAudio = true
 		log.Println("Audio Connection Established")
-	default:
-		da.controlConn = conn
-		log.Println("Scrcpy Control Connection Established")
+		// default:
+		// 	da.controlConn = conn
+		// 	log.Println("Scrcpy Control Connection Established")
 	}
 	return nil
 }
 
-func (da *DataAdapter) readDeviceMeta(conn net.Conn) error {
+func (da *ScrcpyDriver) readDeviceMeta(conn net.Conn) error {
 	// 1. Device Name (64 bytes)
 	nameBuf := make([]byte, 64)
 	_, err := io.ReadFull(conn, nameBuf)
 	if err != nil {
 		return err
 	}
-	da.DeviceName = string(nameBuf)
+	da.deviceName = string(nameBuf)
 	return nil
 }
 
-func (da *DataAdapter) readVideoMeta(conn net.Conn) error {
+func (da *ScrcpyDriver) readVideoMeta(conn net.Conn) error {
 	// Width (4 bytes)
 	// Height (4 bytes)
 	// Codec 已经在外面读取过了，用于确认是哪个通道
@@ -206,13 +206,13 @@ func (da *DataAdapter) readVideoMeta(conn net.Conn) error {
 		return err
 	}
 	// 解析元数据
-	da.VideoMeta.Width = binary.BigEndian.Uint32(metaBuf[0:4])
-	da.VideoMeta.Height = binary.BigEndian.Uint32(metaBuf[4:8])
+	da.mediaMeta.Width = binary.BigEndian.Uint32(metaBuf[0:4])
+	da.mediaMeta.Height = binary.BigEndian.Uint32(metaBuf[4:8])
 
 	return nil
 }
 
-func (da *DataAdapter) updateVideoMetaFromSPS(sps []byte, codec string) {
+func (da *ScrcpyDriver) updateVideoMetaFromSPS(sps []byte, codec string) {
 	if da.LastSPS != nil && bytes.Equal(da.LastSPS, sps) {
 		// log.Println("SPS unchanged, no need to update video meta")
 		return
@@ -233,12 +233,12 @@ func (da *DataAdapter) updateVideoMetaFromSPS(sps []byte, codec string) {
 		log.Println("Failed to parse SPS for video meta update:", err)
 		return
 	}
-	da.VideoMeta.Width = spsInfo.Width
-	da.VideoMeta.Height = spsInfo.Height
-	log.Printf("Updated Video Meta from SPS: Width=%d, Height=%d", da.VideoMeta.Width, da.VideoMeta.Height)
+	da.mediaMeta.Width = spsInfo.Width
+	da.mediaMeta.Height = spsInfo.Height
+	log.Printf("Updated Video Meta from SPS: Width=%d, Height=%d", da.mediaMeta.Width, da.mediaMeta.Height)
 }
 
-// func (da *DataAdapter) cacheFrame(webrtcFrame *WebRTCFrame, frameType string) {
+// func (da *ScrcpyDriver) cacheFrame(webrtcFrame *WebRTCFrame, frameType string) {
 // 	switch frameType {
 // 	case "SPS":
 // 		da.keyFrameMutex.Lock()

@@ -1,16 +1,15 @@
-const jitterBufferTargetMs = 50; // 目标缓冲区延迟 (毫秒)
+const jitterBufferTargetMs = 35; // 目标缓冲区延迟 (毫秒)
 
 // Hardcoded config for testing
 const CONFIG = {
-    device_type: "dummy",
-    device_id: "test_id",
-    device_ip: "localhost",
+    device_type: "android",
+    device_id: "emulator-5554",
+    device_ip: "0",
     device_port: "0",
-
     stream_config: {
         video_codec: "h264",
         audio_codec: "opus",
-        video_bitrate: 2000000,
+        bitrate: 20000000,
         other_opts: {
             file_path: "./test/test.h264",
         }
@@ -79,13 +78,17 @@ async function start() {
             isFirstMessage = false;
             // 第一条消息是 SDP Answer + capabilities
             const message = JSON.parse(event.data);
+            if (message.status !== 'ok') {
+                console.error("Failed to start streaming:", message.message);
+                return;
+            }
             const answerSdp = message.sdp;
             const capabilities = message.capabilities;
             console.log("Received SDP Answer");
             console.log("Driver Capabilities:", capabilities);
 
             // Update UI based on capabilities
-            await updateUIBasedOnCapabilities(capabilities);
+            // await updateUIBasedOnCapabilities(capabilities);
 
             // 6. 设置 Answer
             await pc.setRemoteDescription(new RTCSessionDescription({
@@ -101,7 +104,7 @@ async function start() {
                     console.log('✓ 已启用 WebRTC 低延迟模式 (playoutDelayHint=', receiver.playoutDelayHint, ', jitterBufferTarget=', receiver.jitterBufferTarget, ')');
                 }
             });
-            // setInterval(() => force_sync(pc), 1000);
+            setInterval(() => force_sync(pc), 1000);
             return;
         }
 
@@ -162,9 +165,9 @@ async function force_sync(pc) {
             }
 
             let delay_ms = (currentDelay * 1000).toFixed(2);
-            if (delay_ms > 50) {
+            // if (delay_ms > 50) {
                 console.log(`WebRTC 内部延迟: ${delay_ms} ms`);
-            }
+            // }
 
             const videoEl = document.getElementById('remoteVideo');
             if (!videoEl) return;

@@ -1,7 +1,7 @@
-const TYPE_ROTATE    = 0x04; // rotate event
+const TYPE_ROTATE    = 0x0B; // rotate event
 
 // 这里WebRTC会自动通过RTCP请求关键帧，但我们也可以手动请求
-const TYPE_RKF   = 0xFF; // request key frame
+const TYPE_RKF   = 0x63; // request key frame
 
 
 function createRotatePacket() {

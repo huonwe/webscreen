@@ -6,11 +6,12 @@ import (
 	"iter"
 	"log"
 	"time"
+	"webcpy/sdriver"
 )
 
 // GenerateWebRTCFrameH265 使用 bytes.Index 实现零分配的高性能拆包
-func (da *DataAdapter) GenerateWebRTCFrameH265(header ScrcpyFrameHeader, payload []byte) iter.Seq[WebRTCFrame] {
-	return func(yield func(WebRTCFrame) bool) {
+func (da *ScrcpyDriver) GenerateWebRTCFrameH265(header ScrcpyFrameHeader, payload []byte) iter.Seq[sdriver.AVBox] {
+	return func(yield func(sdriver.AVBox) bool) {
 		// Scrcpy 始终使用 4 字节起始码
 		startCode := []byte{0x00, 0x00, 0x00, 0x01}
 
@@ -88,19 +89,19 @@ func (da *DataAdapter) GenerateWebRTCFrameH265(header ScrcpyFrameHeader, payload
 				da.keyFrameMutex.RUnlock()
 
 				if vps != nil {
-					if !yield(WebRTCFrame{Data: createCopy(vps), Timestamp: int64(header.PTS)}) {
+					if !yield(sdriver.AVBox{Data: createCopy(vps), PTS: time.Duration(header.PTS), IsConfig: true}) {
 						return
 					}
 					log.Printf("(cached VPS) Sending NALU Type: %d, Size: %d", 32, len(vps))
 				}
 				if sps != nil {
-					if !yield(WebRTCFrame{Data: createCopy(sps), Timestamp: int64(header.PTS)}) {
+					if !yield(sdriver.AVBox{Data: createCopy(sps), PTS: time.Duration(header.PTS), IsConfig: true}) {
 						return
 					}
 					log.Printf("(cached SPS) Sending NALU Type: %d, Size: %d", 33, len(sps))
 				}
 				if pps != nil {
-					if !yield(WebRTCFrame{Data: createCopy(pps), Timestamp: int64(header.PTS)}) {
+					if !yield(sdriver.AVBox{Data: createCopy(pps), PTS: time.Duration(header.PTS), IsConfig: true}) {
 						return
 					}
 					log.Printf("(cached PPS) Sending NALU Type: %d, Size: %d", 34, len(pps))
@@ -110,10 +111,10 @@ func (da *DataAdapter) GenerateWebRTCFrameH265(header ScrcpyFrameHeader, payload
 			}
 
 			// 发送当前 NALU (零拷贝，直接引用 LinearBuffer)
-			if !yield(WebRTCFrame{
-				Data:      nal,
-				Timestamp: int64(header.PTS),
-				NotConfig: !isConfig,
+			if !yield(sdriver.AVBox{
+				Data:     nal,
+				PTS:      time.Duration(header.PTS),
+				IsConfig: isConfig,
 			}) {
 				return
 			}
@@ -125,8 +126,8 @@ func (da *DataAdapter) GenerateWebRTCFrameH265(header ScrcpyFrameHeader, payload
 	}
 }
 
-func (da *DataAdapter) GenerateWebRTCFrameH265_debug(header ScrcpyFrameHeader, payload []byte) iter.Seq[WebRTCFrame] {
-	return func(yield func(WebRTCFrame) bool) {
+func (da *ScrcpyDriver) GenerateWebRTCFrameH265_debug(header ScrcpyFrameHeader, payload []byte) iter.Seq[sdriver.AVBox] {
+	return func(yield func(sdriver.AVBox) bool) {
 		startCode := []byte{0x00, 0x00, 0x00, 0x01}
 
 		// 使用 bytes.Split 进行拆包，这是最稳妥的方式
@@ -178,17 +179,17 @@ func (da *DataAdapter) GenerateWebRTCFrameH265_debug(header ScrcpyFrameHeader, p
 				da.keyFrameMutex.RUnlock()
 
 				if vps != nil {
-					if !yield(WebRTCFrame{Data: createCopy(vps), Timestamp: int64(header.PTS)}) {
+					if !yield(sdriver.AVBox{Data: createCopy(vps), PTS: time.Duration(header.PTS), IsConfig: true}) {
 						return
 					}
 				}
 				if sps != nil {
-					if !yield(WebRTCFrame{Data: createCopy(sps), Timestamp: int64(header.PTS)}) {
+					if !yield(sdriver.AVBox{Data: createCopy(sps), PTS: time.Duration(header.PTS), IsConfig: true}) {
 						return
 					}
 				}
 				if pps != nil {
-					if !yield(WebRTCFrame{Data: createCopy(pps), Timestamp: int64(header.PTS)}) {
+					if !yield(sdriver.AVBox{Data: createCopy(pps), PTS: time.Duration(header.PTS), IsConfig: true}) {
 						return
 					}
 				}
@@ -218,10 +219,10 @@ func (da *DataAdapter) GenerateWebRTCFrameH265_debug(header ScrcpyFrameHeader, p
 			// }
 
 			// 发送当前 NALU (Raw NALU)
-			if !yield(WebRTCFrame{
-				Data:      nal,
-				Timestamp: int64(header.PTS),
-				NotConfig: !isConfig,
+			if !yield(sdriver.AVBox{
+				Data:     nal,
+				PTS:      time.Duration(header.PTS),
+				IsConfig: isConfig,
 			}) {
 				return
 			}

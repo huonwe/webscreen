@@ -7,13 +7,15 @@ package sdriver
 // 占位用的结构体
 
 type SDriver interface {
-	GetReceivers() (<-chan AVBox, <-chan AVBox, chan ControlEvent)
+	GetReceivers() (<-chan AVBox, <-chan AVBox, <-chan ControlEvent)
+	SendEvent(event Event) error
+
 	StartStreaming()
 	StopStreaming()
-	SendControl(event ControlEvent) error
-	RequestIDR() error
+
+	RequestIDR()
 	Capabilities() DriverCaps
-	CodecInfo() (videoCodec string, audioCodec string)
+	// CodecInfo() (videoCodec string, audioCodec string)
 	MediaMeta() MediaMeta
-	Stop() error
+	Stop()
 }

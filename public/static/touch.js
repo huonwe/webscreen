@@ -1,4 +1,4 @@
-const TYPE_TOUCH = 0x01; // touch event
+const TYPE_TOUCH = 0x02; // touch event
 // All Big Endian
 // Touch Packet Structure:
 // 偏移,    长度,         类型,       字段名,      说明
@@ -14,6 +14,8 @@ const TOUCH_ACTION_UP = 1;
 const TOUCH_ACTION_MOVE = 2;
 
 const videoElementTouch = document.getElementById('remoteVideo');
+
+console.log("Touch control script loaded.");
 
 // 缓存视频元素的位置和尺寸，避免频繁调用 getBoundingClientRect
 let cachedVideoRect = null;
@@ -128,6 +130,7 @@ function getTouchPressure(touch) {
 let activeMousePointer = null;
 
 videoElementTouch.addEventListener('mousedown', (event) => {
+    // console.log("Mouse down event:", event);
     if (event.button !== 0) return; // Only Left Click
     activeMousePointer = 0; // 使用 pointerId 0 表示鼠标
     const coords = getScreenCoordinates(event.clientX, event.clientY);
@@ -246,6 +249,7 @@ function sendTouchEvent(action, ptrId, x, y, pressure=65535, buttons=1) {
     }
     // console.log(`Sending touch event: action=${action}, ptrId=${ptrId}, x=${x}, y=${y}`);
     const p = createTouchPacket(action, ptrId, x, y, pressure, buttons);
+    // praseTouchEvent(p);
     window.ws.send(p);
 }
 

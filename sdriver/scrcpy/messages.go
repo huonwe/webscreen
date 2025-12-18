@@ -1,26 +1,25 @@
 package scrcpy
 
 // control messages
-const TYPE_INJECT_KEYCODE byte = 0          //输入入键盘
-const TYPE_INJECT_TEXT byte = 1             //输入文本
-const TYPE_INJECT_TOUCH_EVENT byte = 2      //输入触摸事件
-const TYPE_INJECT_SCROLL_EVENT byte = 3     //输入滚动事件
-const TYPE_BACK_OR_SCREEN_ON = 4            //返回或者屏幕开
-const TYPE_EXPAND_NOTIFICATION_PANEL = 5    //展开通知面板
-const TYPE_EXPAND_SETTINGS_PANEL = 6        //展开设置面板
-const TYPE_COLLAPSE_PANELS = 7              //收起面板
-const TYPE_GET_CLIPBOARD = 8                //获取剪贴板
-const TYPE_SET_CLIPBOARD = 9                //设置剪贴板
-const TYPE_SET_DISPLAY_POWER byte = 10      //关闭屏幕
-const TYPE_ROTATE_DEVICE byte = 11          //旋转屏幕
-const TYPE_UHID_CREATE = 12                 //创建uhid
-const TYPE_UHID_INPUT = 13                  //uhid输入
-const TYPE_UHID_DESTROY = 14                //销毁uhid
-const TYPE_OPEN_HARD_KEYBOARD_SETTINGS = 15 //打开硬件键盘设置
-const TYPE_START_APP = 16                   //启动应用
-const TYPE_RESET_VIDEO = 17
-
-const ControlMsgTypeReqIDR = 99
+const TYPE_INJECT_KEYCODE uint8 = 0               //输入入键盘
+const TYPE_INJECT_TEXT uint8 = 1                  //输入文本
+const TYPE_INJECT_TOUCH_EVENT uint8 = 2           //输入触摸事件
+const TYPE_INJECT_SCROLL_EVENT uint8 = 3          //输入滚动事件
+const TYPE_BACK_OR_SCREEN_ON uint8 = 4            //返回或者屏幕开
+const TYPE_EXPAND_NOTIFICATION_PANEL uint8 = 5    //展开通知面板
+const TYPE_EXPAND_SETTINGS_PANEL uint8 = 6        //展开设置面板
+const TYPE_COLLAPSE_PANELS uint8 = 7              //收起面板
+const TYPE_GET_CLIPBOARD uint8 = 8                //获取剪贴板
+const TYPE_SET_CLIPBOARD uint8 = 9                //设置剪贴板
+const TYPE_SET_DISPLAY_POWER uint8 = 10           //关闭屏幕
+const TYPE_ROTATE_DEVICE uint8 = 11               //旋转屏幕
+const TYPE_UHID_CREATE uint8 = 12                 //创建uhid
+const TYPE_UHID_INPUT uint8 = 13                  //uhid输入
+const TYPE_UHID_DESTROY uint8 = 14                //销毁uhid
+const TYPE_OPEN_HARD_KEYBOARD_SETTINGS uint8 = 15 //打开硬件键盘设置
+const TYPE_START_APP uint8 = 16                   //启动应用
+const TYPE_RESET_VIDEO uint8 = 17
+const TYPE_REQUEST_IDR uint8 = 99
 
 const COPY_KEY_NONE = 0
 const COPY_KEY_COPY = 1
@@ -71,54 +70,54 @@ const TYPE_UHID_OUTPUT = 2
 // | **Pressure**   | 2 (uint16)    | 压力值 (0~65535)，通常填 65535 (最大) 或 0 (抬起时)                                             |
 // | **Buttons**    | 4 (int32)     | 按键状态 (通常 0，鼠标点击时才用到)                                                               |
 
-type TouchEvent struct {
-	Type      byte
-	Action    byte
-	PointerID uint64
-	PosX      uint32
-	PosY      uint32
-	Width     uint16
-	Height    uint16
-	Pressure  uint16
-	Buttons   uint32
-}
+// type TouchEvent struct {
+// 	Type      byte
+// 	Action    byte
+// 	PointerID uint64
+// 	PosX      uint32
+// 	PosY      uint32
+// 	Width     uint16
+// 	Height    uint16
+// 	Pressure  uint16
+// 	Buttons   uint32
+// }
 
-type KeyEvent struct {
-	Type    byte
-	Action  byte
-	KeyCode uint32
-}
+// type KeyEvent struct {
+// 	Type    byte
+// 	Action  byte
+// 	KeyCode uint32
+// }
 
-type ScrollEvent struct {
-	Type    byte
-	PosX    uint32
-	PosY    uint32
-	Width   uint16
-	Height  uint16
-	HScroll uint16
-	VScroll uint16
-	Buttons uint32
-}
+// type ScrollEvent struct {
+// 	Type    byte
+// 	PosX    uint32
+// 	PosY    uint32
+// 	Width   uint16
+// 	Height  uint16
+// 	HScroll uint16
+// 	VScroll uint16
+// 	Buttons uint32
+// }
 
-type UHIDCreateEvent struct {
-	Type           byte
-	ID             uint16 // 设备 ID (对应官方的 id 字段)
-	VendorID       uint16
-	ProductID      uint16
-	NameSize       uint8
-	Name           []byte
-	ReportDescSize uint16
-	ReportDesc     []byte
-}
+// type UHIDCreateEvent struct {
+// 	Type           byte
+// 	ID             uint16 // 设备 ID (对应官方的 id 字段)
+// 	VendorID       uint16
+// 	ProductID      uint16
+// 	NameSize       uint8
+// 	Name           []byte
+// 	ReportDescSize uint16
+// 	ReportDesc     []byte
+// }
 
-type UHIDInputEvent struct {
-	Type byte
-	ID   uint16 // 设备 ID (对应官方的 id 字段)
-	Size uint16
-	Data []byte
-}
+// type UHIDInputEvent struct {
+// 	Type byte
+// 	ID   uint16 // 设备 ID (对应官方的 id 字段)
+// 	Size uint16
+// 	Data []byte
+// }
 
-type UHIDDestroyEvent struct {
-	Type byte
-	ID   uint16 // 设备 ID (对应官方的 id 字段)
-}
+// type UHIDDestroyEvent struct {
+// 	Type byte
+// 	ID   uint16 // 设备 ID (对应官方的 id 字段)
+// }

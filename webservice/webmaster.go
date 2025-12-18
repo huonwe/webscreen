@@ -49,6 +49,7 @@ func Default() *WebMaster {
 func (wm *WebMaster) setRouter() {
 	r := gin.Default()
 	r.Static("/static", "./public/static")
+	// r.Static("/", "./public")
 	// redirect to /console temporarily
 	r.GET("/", func(ctx *gin.Context) {
 		ctx.Redirect(302, "/console")

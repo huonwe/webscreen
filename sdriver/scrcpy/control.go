@@ -4,9 +4,10 @@ import (
 	"encoding/binary"
 	"log"
 	"time"
+	"webcpy/sdriver"
 )
 
-func (da *DataAdapter) SendTouchEvent(e TouchEvent) {
+func (da *ScrcpyDriver) SendTouchEvent(e *sdriver.TouchEvent) {
 	if da.controlConn == nil {
 		return
 	}
@@ -15,12 +16,12 @@ func (da *DataAdapter) SendTouchEvent(e TouchEvent) {
 	// 1. 预分配一个固定大小的字节切片 (Scrcpy 协议触摸包固定 28 字节)
 	// 这里的 buf 可以在对象池(sync.Pool)里复用，进一步减少 GC
 	buf := make([]byte, 32)
-	if e.Type != TYPE_INJECT_TOUCH_EVENT {
-		log.Printf("Mismatch Event Type: %d\n", e.Type)
+	if uint8(e.Type()) != TYPE_INJECT_TOUCH_EVENT {
+		log.Printf("Mismatch Event Type: %d\n", e.Type())
 		return
 	}
 	// 2. 使用 Put 系列函数直接填充内存，速度极快
-	buf[0] = e.Type                                    // Type
+	buf[0] = byte(e.Type())                            // Type
 	buf[1] = e.Action                                  // Action
 	binary.BigEndian.PutUint64(buf[2:10], e.PointerID) // PointerID (8 bytes)
 	binary.BigEndian.PutUint32(buf[10:14], e.PosX)     // PosX (4 bytes)
@@ -38,7 +39,7 @@ func (da *DataAdapter) SendTouchEvent(e TouchEvent) {
 	}
 }
 
-func (da *DataAdapter) SendKeyEvent(e KeyEvent) {
+func (da *ScrcpyDriver) SendKeyEvent(e *sdriver.KeyEvent) {
 	if da.controlConn == nil {
 		return
 	}
@@ -63,7 +64,7 @@ func (da *DataAdapter) SendKeyEvent(e KeyEvent) {
 // 	}
 // }
 
-func (da *DataAdapter) RotateDevice() {
+func (da *ScrcpyDriver) RotateDevice() {
 	if da.controlConn == nil {
 		return
 	}
@@ -75,7 +76,7 @@ func (da *DataAdapter) RotateDevice() {
 	}
 }
 
-func (da *DataAdapter) SendScrollEvent(e ScrollEvent) {
+func (da *ScrcpyDriver) SendScrollEvent(e *sdriver.ScrollEvent) {
 	if da.controlConn == nil {
 		return
 	}
@@ -105,7 +106,7 @@ func (da *DataAdapter) SendScrollEvent(e ScrollEvent) {
 	}
 }
 
-func (da *DataAdapter) SendSetClipboardEvent(content string, paste bool) {
+func (da *ScrcpyDriver) SendSetClipboardEvent(content string, paste bool) {
 	if da.controlConn == nil {
 		return
 	}
@@ -138,7 +139,7 @@ func (da *DataAdapter) SendSetClipboardEvent(content string, paste bool) {
 	}
 }
 
-func (da *DataAdapter) SendGetClipboardEvent() {
+func (da *ScrcpyDriver) SendGetClipboardEvent() {
 	if da.controlConn == nil {
 		return
 	}
@@ -156,7 +157,7 @@ func (da *DataAdapter) SendGetClipboardEvent() {
 	}
 }
 
-func (da *DataAdapter) SendUHIDCreateEvent(e UHIDCreateEvent) {
+func (da *ScrcpyDriver) SendUHIDCreateEvent(e *sdriver.UHIDCreateEvent) {
 	if da.controlConn == nil {
 		return
 	}
@@ -171,7 +172,7 @@ func (da *DataAdapter) SendUHIDCreateEvent(e UHIDCreateEvent) {
 	offset := 0
 
 	// 1. Type
-	buf[offset] = e.Type
+	buf[offset] = byte(e.Type())
 	offset++
 
 	// 2. ID
@@ -211,7 +212,7 @@ func (da *DataAdapter) SendUHIDCreateEvent(e UHIDCreateEvent) {
 	}
 }
 
-func (da *DataAdapter) SendUHIDInputEvent(e UHIDInputEvent) {
+func (da *ScrcpyDriver) SendUHIDInputEvent(e *sdriver.UHIDInputEvent) {
 	if da.controlConn == nil {
 		return
 	}
@@ -225,7 +226,7 @@ func (da *DataAdapter) SendUHIDInputEvent(e UHIDInputEvent) {
 	buf := make([]byte, totalSize)
 
 	offset := 0
-	buf[offset] = e.Type
+	buf[offset] = byte(e.Type())
 	offset++
 	binary.BigEndian.PutUint16(buf[offset:], e.ID)
 	offset += 2
@@ -239,7 +240,7 @@ func (da *DataAdapter) SendUHIDInputEvent(e UHIDInputEvent) {
 	}
 }
 
-func (da *DataAdapter) SendUHIDDestroyEvent(e UHIDDestroyEvent) {
+func (da *ScrcpyDriver) SendUHIDDestroyEvent(e *sdriver.UHIDDestroyEvent) {
 	if da.controlConn == nil {
 		return
 	}
@@ -248,7 +249,7 @@ func (da *DataAdapter) SendUHIDDestroyEvent(e UHIDDestroyEvent) {
 	// [2] ID (uint16)
 
 	buf := make([]byte, 3)
-	buf[0] = e.Type
+	buf[0] = byte(e.Type())
 	binary.BigEndian.PutUint16(buf[1:], e.ID)
 
 	_, err := da.controlConn.Write(buf)
@@ -257,7 +258,7 @@ func (da *DataAdapter) SendUHIDDestroyEvent(e UHIDDestroyEvent) {
 	}
 }
 
-func (da *DataAdapter) RequestKeyFrame() error {
+func (da *ScrcpyDriver) KeyFrameRequest() error {
 
 	// return nil
 	if da.controlConn == nil {
@@ -268,7 +269,7 @@ func (da *DataAdapter) RequestKeyFrame() error {
 		log.Println("⏳ KeyFrame request too frequent, use cached")
 		da.keyFrameMutex.RLock()
 
-		isH265 := da.VideoMeta.CodecID == "h265"
+		isH265 := da.mediaMeta.VideoCodecID == "h265"
 		hasSPS := len(da.LastSPS) > 0
 		hasPPS := len(da.LastPPS) > 0
 		hasIDR := len(da.LastIDR) > 0
@@ -293,12 +294,12 @@ func (da *DataAdapter) RequestKeyFrame() error {
 		da.keyFrameMutex.RUnlock()
 
 		go func() {
-			timestamp := time.Now().Unix()
+			timestamp := time.Duration(time.Now().UnixNano() / 1e6) // 毫秒时间戳
 			if isH265 && vpsCopy != nil {
-				da.VideoChan <- WebRTCFrame{Data: vpsCopy, Timestamp: timestamp}
+				da.VideoChan <- sdriver.AVBox{Data: vpsCopy, PTS: timestamp, IsConfig: true}
 			}
-			da.VideoChan <- WebRTCFrame{Data: spsCopy, Timestamp: timestamp}
-			da.VideoChan <- WebRTCFrame{Data: ppsCopy, Timestamp: timestamp}
+			da.VideoChan <- sdriver.AVBox{Data: spsCopy, PTS: timestamp, IsConfig: true}
+			da.VideoChan <- sdriver.AVBox{Data: ppsCopy, PTS: timestamp, IsConfig: true}
 
 			// 为了保证流畅性，即使 IDR 不新鲜也发送
 			// if idrCopy != nil {
@@ -309,7 +310,7 @@ func (da *DataAdapter) RequestKeyFrame() error {
 		return nil
 	}
 	log.Println("⚡ Sending Request KeyFrame (Type 99)...")
-	msg := []byte{ControlMsgTypeReqIDR}
+	msg := []byte{TYPE_REQUEST_IDR}
 	//<-da.VideoChan
 	da.lastIDRRequestTime = time.Now()
 	_, err := da.controlConn.Write(msg)
