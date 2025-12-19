@@ -2,13 +2,7 @@ package sdriver
 
 import "time"
 
-type StreamConfig struct {
-	// DeviceID   string            `json:"device_id"`
-	VideoCodec string            `json:"video_codec"`
-	AudioCodec string            `json:"audio_codec"`
-	Bitrate    int               `json:"bitrate"` // bps
-	OtherOpts  map[string]string `json:"other_opts"`
-}
+// type DriverConfig map[string]string
 
 type AVBox struct {
 	Data       []byte        // H.264/H.265/AV1/.../Opus 裸流数据

@@ -3,6 +3,7 @@ package webservice
 import (
 	"log"
 	"net/http"
+	"strconv"
 	sagent "webcpy/streamAgent"
 
 	"github.com/gin-gonic/gin"
@@ -28,28 +29,29 @@ func (wm *WebMaster) handleScreenWS(c *gin.Context) {
 		log.Println("Failed to upgrade to websocket:", err)
 		return
 	}
-	deviceType := c.Param("device_type")
-	deviceID := c.Param("device_id")
-	deviceIP := c.Param("device_ip")
-	devicePort := c.Param("device_port")
-	config := sagent.ConnectionConfig{}
+	// deviceType := c.Param("device_type")
+	// deviceID := c.Param("device_id")
+	// deviceIP := c.Param("device_ip")
+	// devicePort := c.Param("device_port")
+	config := sagent.AgentConfig{}
 	err = conn.ReadJSON(&config)
 	if err != nil {
 		log.Println("Failed to read connection options:", err)
 		conn.Close()
 		return
 	}
-	if config.DeviceType != deviceType || config.DeviceID != deviceID || config.DeviceIP != deviceIP || config.DevicePort != devicePort {
-		log.Println("Connection options do not match URL parameters")
-		// conn.Close()
-		// return
-	}
+	// if config.DeviceType != deviceType || config.DeviceID != deviceID || config.DeviceIP != deviceIP || config.DevicePort != devicePort {
+	// 	log.Println("Connection options do not match URL parameters")
+	// 	// conn.Close()
+	// 	// return
+	// }
 	// Create a unique session ID
 	sessionID := config.DeviceType + "_" + config.DeviceID + "_" + config.DeviceIP + "_" + config.DevicePort
 	log.Printf("New WebSocket connection for session: %s", sessionID)
 	session := wm.ScreenSessions[sessionID]
 	session.WSConn = conn
 
+	log.Printf("Creating agent with config: %+v", config)
 	agent, err := sagent.NewAgent(config)
 	if err != nil {
 		log.Println("Failed to create agent:", err)
@@ -61,9 +63,12 @@ func (wm *WebMaster) handleScreenWS(c *gin.Context) {
 	wm.ScreenSessions[sessionID] = session
 
 	finalSDP := agent.CreateWebRTCConnection(string(config.SDP))
-	bitrate := config.StreamCfg.Bitrate
-	if bitrate > 0 {
-		finalSDP = sagent.SetSDPBandwidth(finalSDP, bitrate)
+	bitrateInt, err := strconv.Atoi(config.DriverConfig["video_bit_rate"])
+	if err != nil {
+		bitrateInt = 8000000 // default to 8Mbps
+	}
+	if bitrateInt > 0 {
+		finalSDP = sagent.SetSDPBandwidth(finalSDP, bitrateInt)
 	}
 	// finalSDP = webrtcHelper.SetSDPBandwidth(finalSDP, 20_000_000)
 	// conn.WriteMessage(websocket.TextMessage, []byte(finalSDP))

@@ -3,6 +3,7 @@ package scrcpy
 import (
 	"fmt"
 	"log"
+	"time"
 	"webcpy/sdriver"
 )
 
@@ -75,19 +76,19 @@ func (sd *ScrcpyDriver) RequestIDR() {
 
 	if len(vps) > 0 {
 		select {
-		case sd.VideoChan <- sdriver.AVBox{Data: vps, PTS: 0, IsKeyFrame: false, IsConfig: true}:
+		case sd.VideoChan <- sdriver.AVBox{Data: vps, PTS: time.Duration(time.Now().Unix()), IsKeyFrame: false, IsConfig: true}:
 		default:
 		}
 	}
 	if len(sps) > 0 {
 		select {
-		case sd.VideoChan <- sdriver.AVBox{Data: sps, PTS: 0, IsKeyFrame: false, IsConfig: true}:
+		case sd.VideoChan <- sdriver.AVBox{Data: sps, PTS: time.Duration(time.Now().Unix()), IsKeyFrame: false, IsConfig: true}:
 		default:
 		}
 	}
 	if len(pps) > 0 {
 		select {
-		case sd.VideoChan <- sdriver.AVBox{Data: pps, PTS: 0, IsKeyFrame: false, IsConfig: true}:
+		case sd.VideoChan <- sdriver.AVBox{Data: pps, PTS: time.Duration(time.Now().Unix()), IsKeyFrame: false, IsConfig: true}:
 		default:
 		}
 	}
@@ -118,6 +119,6 @@ func (sd *ScrcpyDriver) Stop() {
 	if sd.controlConn != nil {
 		sd.controlConn.Close()
 	}
-	sd.adbClient.ReverseRemove(fmt.Sprintf("localabstract:scrcpy_%s", sd.scid))
+	sd.adbClient.ReverseRemove(fmt.Sprintf("localabstract:scrcpy_%s", sd.socketName))
 	sd.adbClient.Stop()
 }

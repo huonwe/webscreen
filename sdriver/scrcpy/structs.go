@@ -1,25 +1,21 @@
 package scrcpy
 
 type ScrcpyOptions struct {
-	CLASSPATH         string
-	Version           string
-	SCID              string
-	MaxSize           string
-	MaxFPS            string
-	VideoBitRate      string
-	Control           string
-	Audio             string
-	VideoCodec        string
-	VideoCodecOptions string
-	NewDisplay        string
-	LogLevel          string
+	Version      string `json:"version"`
+	MaxSize      string `json:"max_size"`
+	MaxFPS       string `json:"max_fps"`
+	VideoBitRate string `json:"video_bit_rate"`
+
+	VideoCodec        string `json:"video_codec"`
+	VideoCodecOptions string `json:"video_codec_options"`
+	NewDisplay        string `json:"new_display"`
 }
 
-type ConnectOptions struct {
-	DeviceSerial  string
-	ReversePort   int
-	ScrcpyOptions ScrcpyOptions
-}
+// type ConnectOptions struct {
+// 	DeviceSerial  string
+// 	ReversePort   int
+// 	ScrcpyOptions ScrcpyOptions
+// }
 
 type ScrcpyVideoMeta struct {
 	CodecID string

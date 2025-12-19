@@ -14,15 +14,15 @@ func ExecADB(args ...string) error {
 	return cmd.Run()
 }
 
-// GetDevices returns a list of connected devices in the format "serial@status"
-func GetDevices() ([]string, error) {
+// GetDevices returns a list of connected devices
+func GetDevices() ([]AndroidDevice, error) {
 	cmd := exec.Command("adb", "devices")
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, err
 	}
 
-	var devices []string
+	var adbDevices []AndroidDevice
 	lines := strings.Split(string(output), "\n")
 	for _, line := range lines {
 		if strings.TrimSpace(line) == "" || strings.HasPrefix(line, "List of devices attached") {
@@ -32,15 +32,24 @@ func GetDevices() ([]string, error) {
 		if len(parts) >= 2 {
 			switch parts[1] {
 			case "device":
-				devices = append(devices, parts[0]+"@connected")
+				adbDevices = append(adbDevices, AndroidDevice{
+					DeviceID: parts[0],
+					Status:   "connected",
+				})
 			case "offline":
-				devices = append(devices, parts[0]+"@offline")
+				adbDevices = append(adbDevices, AndroidDevice{
+					DeviceID: parts[0],
+					Status:   "offline",
+				})
 			case "unauthorized":
-				devices = append(devices, parts[0]+"@unauthorized")
+				adbDevices = append(adbDevices, AndroidDevice{
+					DeviceID: parts[0],
+					Status:   "unauthorized",
+				})
 			}
 		}
 	}
-	return devices, nil
+	return adbDevices, nil
 }
 
 // ConnectDevice connects to a device via TCP/IP

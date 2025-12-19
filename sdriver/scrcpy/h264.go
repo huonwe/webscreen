@@ -70,7 +70,6 @@ func (da *ScrcpyDriver) GenerateWebRTCFrameH264(header ScrcpyFrameHeader, payloa
 			case 5: // IDR
 				da.keyFrameMutex.Lock()
 				da.LastIDR = createCopy(nal) // 必须拷贝
-				da.LastIDRTime = time.Now()
 				da.keyFrameMutex.Unlock()
 				isConfig = false
 
@@ -78,7 +77,7 @@ func (da *ScrcpyDriver) GenerateWebRTCFrameH264(header ScrcpyFrameHeader, payloa
 				//da.keyFrameMutex.RLock()
 				sps, pps := da.LastSPS, da.LastPPS
 				//da.keyFrameMutex.RUnlock()
-				pts := time.Duration(header.PTS)
+				pts := time.Duration(header.PTS) * time.Microsecond
 				if sps != nil {
 					if !yield(sdriver.AVBox{Data: createCopy(sps), PTS: pts, IsConfig: true}) {
 						return
@@ -94,10 +93,12 @@ func (da *ScrcpyDriver) GenerateWebRTCFrameH264(header ScrcpyFrameHeader, payloa
 			case 1:
 				isConfig = false
 			}
+			pts := time.Duration(header.PTS) * time.Microsecond
+			da.LastPTS = pts
 			// 发送当前 NALU (零拷贝，直接引用 LinearBuffer)
 			if !yield(sdriver.AVBox{
 				Data:     nal,
-				PTS:      time.Duration(header.PTS),
+				PTS:      pts,
 				IsConfig: isConfig,
 			}) {
 				return
@@ -110,54 +111,54 @@ func (da *ScrcpyDriver) GenerateWebRTCFrameH264(header ScrcpyFrameHeader, payloa
 	}
 }
 
-func (da *ScrcpyDriver) GenerateWebRTCFrameH264_v2(header ScrcpyFrameHeader, payload []byte) iter.Seq[sdriver.AVBox] {
-	return func(yield func(sdriver.AVBox) bool) {
-		startCode := []byte{0x00, 0x00, 0x00, 0x01}
-		// 如果是 IDR 帧，先发送缓存的 SPS/PPS
+// func (da *ScrcpyDriver) GenerateWebRTCFrameH264_v2(header ScrcpyFrameHeader, payload []byte) iter.Seq[sdriver.AVBox] {
+// 	return func(yield func(sdriver.AVBox) bool) {
+// 		startCode := []byte{0x00, 0x00, 0x00, 0x01}
+// 		// 如果是 IDR 帧，先发送缓存的 SPS/PPS
 
-		// 核心修复：无条件拆分所有包，解决 SEI+IDR 粘包问题
-		parts := bytes.Split(payload, startCode)
+// 		// 核心修复：无条件拆分所有包，解决 SEI+IDR 粘包问题
+// 		parts := bytes.Split(payload, startCode)
 
-		for _, nal := range parts {
-			if len(nal) == 0 {
-				continue
-			}
+// 		for _, nal := range parts {
+// 			if len(nal) == 0 {
+// 				continue
+// 			}
 
-			nalType := nal[0] & 0x1F
-			// log.Printf("Debug H264_v2: Part %d, Type: %d, Size: %d", i, nalType, len(nal))
+// 			nalType := nal[0] & 0x1F
+// 			// log.Printf("Debug H264_v2: Part %d, Type: %d, Size: %d", i, nalType, len(nal))
 
-			isConfig := true
+// 			isConfig := true
 
-			switch nalType {
-			case 7: // SPS
-				da.updateVideoMetaFromSPS(nal, "h264")
-				da.keyFrameMutex.Lock()
-				da.LastSPS = nal
-				da.keyFrameMutex.Unlock()
-			case 8: // PPS
-				da.keyFrameMutex.Lock()
-				da.LastPPS = nal
-				da.keyFrameMutex.Unlock()
-			case 5: // IDR
-				da.keyFrameMutex.Lock()
-				da.LastIDR = nal
-				da.LastIDRTime = time.Now()
-				da.keyFrameMutex.Unlock()
-				isConfig = false
-			case 6: // SEI
-				continue
-			case 1:
-				isConfig = false
-			}
+// 			switch nalType {
+// 			case 7: // SPS
+// 				da.updateVideoMetaFromSPS(nal, "h264")
+// 				da.keyFrameMutex.Lock()
+// 				da.LastSPS = nal
+// 				da.keyFrameMutex.Unlock()
+// 			case 8: // PPS
+// 				da.keyFrameMutex.Lock()
+// 				da.LastPPS = nal
+// 				da.keyFrameMutex.Unlock()
+// 			case 5: // IDR
+// 				da.keyFrameMutex.Lock()
+// 				da.LastIDR = nal
+// 				da.LastIDRTime = time.Now()
+// 				da.keyFrameMutex.Unlock()
+// 				isConfig = false
+// 			case 6: // SEI
+// 				continue
+// 			case 1:
+// 				isConfig = false
+// 			}
 
-			// 发送当前 NALU (Raw NALU)
-			if !yield(sdriver.AVBox{
-				Data:     nal,
-				PTS:      time.Duration(header.PTS),
-				IsConfig: isConfig,
-			}) {
-				return
-			}
-		}
-	}
-}
+// 			// 发送当前 NALU (Raw NALU)
+// 			if !yield(sdriver.AVBox{
+// 				Data:     nal,
+// 				PTS:      time.Duration(header.PTS),
+// 				IsConfig: isConfig,
+// 			}) {
+// 				return
+// 			}
+// 		}
+// 	}
+// }

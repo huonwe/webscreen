@@ -1,21 +1,49 @@
 const jitterBufferTargetMs = 35; // 目标缓冲区延迟 (毫秒)
 
-// Hardcoded config for testing
-const CONFIG = {
-    device_type: "android",
-    device_id: "emulator-5554",
-    device_ip: "0",
-    device_port: "0",
-    stream_config: {
-        video_codec: "h264",
-        audio_codec: "opus",
-        bitrate: 20000000,
-        other_opts: {
-            file_path: "./test/test.h264",
+// Load CONFIG from sessionStorage if available, otherwise use URL params or defaults
+var CONFIG = (function() {
+    // Try to load from sessionStorage first (set by console.js)
+    const stored = sessionStorage.getItem('webcpy_stream_config');
+    if (stored) {
+        try {
+            const parsed = JSON.parse(stored);
+            // Clear it after reading to avoid stale data
+            sessionStorage.removeItem('webcpy_stream_config');
+            return parsed;
+        } catch (e) {
+            console.warn('Failed to parse stored config:', e);
         }
     }
-
-};
+    
+    // Try to extract from URL path: /screen/:device_type/:device_id/:device_ip/:device_port
+    const pathMatch = window.location.pathname.match(/^\/screen\/([^\/]+)\/([^\/]+)\/([^\/]+)\/([^\/]+)/);
+    if (pathMatch) {
+        return {
+            device_type: decodeURIComponent(pathMatch[1]),
+            device_id: decodeURIComponent(pathMatch[2]),
+            device_ip: decodeURIComponent(pathMatch[3]),
+            device_port: decodeURIComponent(pathMatch[4]),
+            driver_config: {
+                video_codec: "h264",
+                audio_codec: "opus",
+                video_bit_rate: "20000000",
+            }
+        };
+    }
+    
+    // Fallback to hardcoded defaults for testing
+    return {
+        device_type: "android",
+        device_id: "emulator-5554",
+        device_ip: "0",
+        device_port: "0",
+        driver_config: {
+            video_codec: "h264",
+            audio_codec: "opus",
+            video_bit_rate: "20000000"
+        }
+    };
+})();
 
 async function start() {
     console.log("Starting WebRTC connection...");
@@ -69,6 +97,7 @@ async function start() {
             ...CONFIG,
             sdp: pc.localDescription.sdp
         };
+        console.log(CONFIG)
         window.ws.send(JSON.stringify(config));
     };
 
@@ -88,7 +117,7 @@ async function start() {
             console.log("Driver Capabilities:", capabilities);
 
             // Update UI based on capabilities
-            // await updateUIBasedOnCapabilities(capabilities);
+            await updateUIBasedOnCapabilities(capabilities);
 
             // 6. 设置 Answer
             await pc.setRemoteDescription(new RTCSessionDescription({
@@ -164,9 +193,9 @@ async function force_sync(pc) {
                 currentDelay = deltaDelay / deltaCount;
             }
 
-            let delay_ms = (currentDelay * 1000).toFixed(2);
+            let delay_ms = (currentDelay * 5000).toFixed(2);
             // if (delay_ms > 50) {
-                console.log(`WebRTC 内部延迟: ${delay_ms} ms`);
+            //     console.log(`WebRTC 内部延迟: ${delay_ms} ms`);
             // }
 
             const videoEl = document.getElementById('remoteVideo');
@@ -174,9 +203,9 @@ async function force_sync(pc) {
 
             // --- 策略 A: 延迟较低时 (100ms - 500ms)，通过 1.25倍速 偷偷追帧 ---
             if (currentDelay > 0.1 && currentDelay < 0.5) {
-                if (videoEl.playbackRate !== 1.25) {
-                    console.log("轻微延迟，启用 1.25x 倍速追赶");
-                    videoEl.playbackRate = 1.25;
+                if (videoEl.playbackRate !== 1.1) {
+                    console.log("轻微延迟，启用 1.1x 倍速追赶");
+                    videoEl.playbackRate = 1.1;
                 }
             }
             // 延迟恢复正常后，切回 1.0

@@ -77,7 +77,6 @@ func (da *ScrcpyDriver) GenerateWebRTCFrameH265(header ScrcpyFrameHeader, payloa
 			case 19, 20, 21: // IDR (W_RADL, W_LP, CRA)
 				da.keyFrameMutex.Lock()
 				da.LastIDR = createCopy(nal) // 必须拷贝
-				da.LastIDRTime = time.Now()
 				da.keyFrameMutex.Unlock()
 				isConfig = false
 				// log.Fatalln("收到关键帧！！！")
@@ -87,21 +86,21 @@ func (da *ScrcpyDriver) GenerateWebRTCFrameH265(header ScrcpyFrameHeader, payloa
 				da.keyFrameMutex.RLock()
 				vps, sps, pps := da.LastVPS, da.LastSPS, da.LastPPS
 				da.keyFrameMutex.RUnlock()
-
+				pts := time.Duration(header.PTS) * time.Microsecond
 				if vps != nil {
-					if !yield(sdriver.AVBox{Data: createCopy(vps), PTS: time.Duration(header.PTS), IsConfig: true}) {
+					if !yield(sdriver.AVBox{Data: createCopy(vps), PTS: pts, IsConfig: true}) {
 						return
 					}
 					log.Printf("(cached VPS) Sending NALU Type: %d, Size: %d", 32, len(vps))
 				}
 				if sps != nil {
-					if !yield(sdriver.AVBox{Data: createCopy(sps), PTS: time.Duration(header.PTS), IsConfig: true}) {
+					if !yield(sdriver.AVBox{Data: createCopy(sps), PTS: pts, IsConfig: true}) {
 						return
 					}
 					log.Printf("(cached SPS) Sending NALU Type: %d, Size: %d", 33, len(sps))
 				}
 				if pps != nil {
-					if !yield(sdriver.AVBox{Data: createCopy(pps), PTS: time.Duration(header.PTS), IsConfig: true}) {
+					if !yield(sdriver.AVBox{Data: createCopy(pps), PTS: pts, IsConfig: true}) {
 						return
 					}
 					log.Printf("(cached PPS) Sending NALU Type: %d, Size: %d", 34, len(pps))
@@ -110,10 +109,11 @@ func (da *ScrcpyDriver) GenerateWebRTCFrameH265(header ScrcpyFrameHeader, payloa
 				isConfig = false
 			}
 
+			da.LastPTS = time.Duration(header.PTS) * time.Microsecond
 			// 发送当前 NALU (零拷贝，直接引用 LinearBuffer)
 			if !yield(sdriver.AVBox{
 				Data:     nal,
-				PTS:      time.Duration(header.PTS),
+				PTS:      time.Duration(header.PTS) * time.Microsecond,
 				IsConfig: isConfig,
 			}) {
 				return
@@ -169,27 +169,25 @@ func (da *ScrcpyDriver) GenerateWebRTCFrameH265_debug(header ScrcpyFrameHeader, 
 			case 40:
 				isConfig = true
 			case 19, 20, 21: // IDR
-				da.keyFrameMutex.Lock()
 				da.LastIDR = createCopy(nal)
-				da.LastIDRTime = time.Now()
-				da.keyFrameMutex.Unlock()
 
 				da.keyFrameMutex.RLock()
 				vps, sps, pps := da.LastVPS, da.LastSPS, da.LastPPS
 				da.keyFrameMutex.RUnlock()
 
+				pts := time.Duration(header.PTS) * time.Microsecond
 				if vps != nil {
-					if !yield(sdriver.AVBox{Data: createCopy(vps), PTS: time.Duration(header.PTS), IsConfig: true}) {
+					if !yield(sdriver.AVBox{Data: createCopy(vps), PTS: pts, IsConfig: true}) {
 						return
 					}
 				}
 				if sps != nil {
-					if !yield(sdriver.AVBox{Data: createCopy(sps), PTS: time.Duration(header.PTS), IsConfig: true}) {
+					if !yield(sdriver.AVBox{Data: createCopy(sps), PTS: pts, IsConfig: true}) {
 						return
 					}
 				}
 				if pps != nil {
-					if !yield(sdriver.AVBox{Data: createCopy(pps), PTS: time.Duration(header.PTS), IsConfig: true}) {
+					if !yield(sdriver.AVBox{Data: createCopy(pps), PTS: pts, IsConfig: true}) {
 						return
 					}
 				}
@@ -217,11 +215,12 @@ func (da *ScrcpyDriver) GenerateWebRTCFrameH265_debug(header ScrcpyFrameHeader, 
 			// 		}
 			// 	}
 			// }
-
+			pts := time.Duration(header.PTS) * time.Microsecond
+			da.LastPTS = pts
 			// 发送当前 NALU (Raw NALU)
 			if !yield(sdriver.AVBox{
 				Data:     nal,
-				PTS:      time.Duration(header.PTS),
+				PTS:      pts,
 				IsConfig: isConfig,
 			}) {
 				return

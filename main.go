@@ -1,8 +1,22 @@
 package main
 
-import "webcpy/webservice"
+import (
+	"context"
+	"log"
+	"os"
+	"os/signal"
+	"webcpy/webservice"
+)
 
 func main() {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+
 	webMaster := webservice.Default()
-	webMaster.Serve()
+	go webMaster.Serve()
+
+	<-ctx.Done()
+	log.Println("Gracefully closing")
+	webMaster.Close()
+
 }

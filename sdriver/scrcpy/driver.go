@@ -7,7 +7,6 @@ import (
 	"io"
 	"log"
 	"net"
-	"strconv"
 	"sync"
 	"time"
 	"webcpy/sdriver"
@@ -40,7 +39,8 @@ type ScrcpyDriver struct {
 	capabilities sdriver.DriverCaps
 
 	adbClient *ADBClient
-	scid      string
+	// scid      string
+	socketName string
 
 	lastIDRRequestTime time.Time
 
@@ -49,11 +49,11 @@ type ScrcpyDriver struct {
 	LastSPS       []byte
 	LastPPS       []byte
 	LastIDR       []byte
-	LastIDRTime   time.Time
+	LastPTS       time.Duration
 }
 
 // 一个ScrcpyDriver对应一个scrcpy实例，通过本地端口建立三个连接：视频、音频、控制
-func New(config sdriver.StreamConfig, deviceID string) (*ScrcpyDriver, error) {
+func New(config map[string]string, deviceID string) (*ScrcpyDriver, error) {
 	var err error
 	da := &ScrcpyDriver{
 		// adbClient:   adb.NewADBClient(serial),
@@ -64,54 +64,48 @@ func New(config sdriver.StreamConfig, deviceID string) (*ScrcpyDriver, error) {
 		videoBuffer: comm.NewLinearBuffer(0),
 		audioBuffer: comm.NewLinearBuffer(1 * 1024 * 1024), // 1MB 音频缓冲区
 		adbClient:   NewADBClient(deviceID),
+		socketName:  "123",
 	}
 	err = da.adbClient.Push(SCRCPY_SERVER_LOCAL_PATH, SCRCPY_SERVER_ANDROID_DST)
 	if err != nil {
 		log.Printf("设置 推送scrcpy-server失败: %v", err)
 		return nil, err
 	}
-	localPort := config.OtherOpts["local_port"]
-	if localPort == "" {
-		localPort = SCRCPY_PROXY_PORT_DEFAULT
-	}
+
+	localPort := SCRCPY_PROXY_PORT_DEFAULT
 	// da.adbClient.ReverseRemove("localabstract:scrcpy_*")
-	da.scid = GenerateSCID()
-	socketName := fmt.Sprintf("localabstract:scrcpy_%s", da.scid)
-	err = da.adbClient.Reverse(socketName, "tcp:"+localPort)
+	// da.scid = GenerateSCID()
+	da.adbClient.ReverseRemove(fmt.Sprintf("localabstract:scrcpy_%s", da.socketName))
+	err = da.adbClient.Reverse(fmt.Sprintf("localabstract:scrcpy_%s", da.socketName), "tcp:"+localPort)
 	if err != nil {
 		log.Printf("设置 Reverse 隧道失败: %v", err)
 		return nil, err
 	}
-	log.Printf("set up reverse tunnel success: localabstract:scrcpy -> tcp:%s", localPort)
-
-	bitrate := config.Bitrate
-	if bitrate <= 0 {
-		bitrate = 4000000 // 默认 4Mbps
-	}
-
-	options := map[string]string{
-		"CLASSPATH":      SCRCPY_SERVER_ANDROID_DST,
-		"Version":        SCRCPY_VERSION,
-		"scid":           da.scid,
-		"max_size":       config.OtherOpts["max_size"],
-		"max_fps":        config.OtherOpts["max_fps"],
-		"video_bit_rate": strconv.Itoa(bitrate),
-		"control":        config.OtherOpts["control"],
-		"audio":          config.OtherOpts["audio"],
-		"video_codec":    config.VideoCodec,
-		"new_display":    config.OtherOpts["new_display"],
-		"cleanup":        "true",
-		"log_level":      "info",
-	}
-
+	log.Printf("set up reverse tunnel success: localabstract:scrcpy_%s -> tcp:%s", da.socketName, localPort)
 	listener, err := net.Listen("tcp", ":"+localPort)
 	if err != nil {
 		log.Printf("监听端口失败: %v", err)
+		da.adbClient.ReverseRemove(fmt.Sprintf("localabstract:scrcpy_%s", da.socketName))
 		return nil, err
 	}
 	defer listener.Close()
+	log.Printf("driver config: %v", config)
+	options := map[string]string{
+		"CLASSPATH": SCRCPY_SERVER_ANDROID_DST,
+		"Version":   SCRCPY_VERSION,
+		"scid":      da.socketName,
+		// "max_size":       config["max_size"],
+		// "max_fps":        config["max_fps"],
+		// "video_bit_rate": config["video_bit_rate"],
+		// "video_codec":    config["video_codec"],
+		// "new_display":    config["new_display"],
+		// "cleanup":        "true",
+		// "log_level":      "info",
+	}
 	da.adbClient.StartScrcpyServer(options)
+	// log.Println("Scrcpy server started successfully")
 	conns := make([]net.Conn, 3)
+	log.Println("start tcp listening")
 	for i := 0; i < 3; i++ {
 		conn, err := listener.Accept()
 		if err != nil {

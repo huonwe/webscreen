@@ -1,6 +1,8 @@
 package webservice
 
 import (
+	"log"
+	"maps"
 	"sync"
 
 	"github.com/gin-gonic/gin"
@@ -15,10 +17,9 @@ type WebMaster struct {
 
 	ScreenSessions map[string]ScreenSession
 
-	defaultDevice Device
-
 	config              WebMasterConfig
 	router              *gin.Engine
+	devicesConnected    map[string]Device
 	devicesDiscovered   map[string]Device
 	devicesDiscoveredMu sync.RWMutex
 	pauseDiscovery      bool
@@ -77,4 +78,11 @@ func (wm *WebMaster) Serve() {
 		go wm.AndroidDevicesDiscovery()
 	}
 	wm.router.Run(":8081")
+}
+
+func (wm *WebMaster) Close() {
+	for k,v := range maps.All(wm.ScreenSessions){
+		log.Printf("closing session %v", k)
+		v.Close()
+	}
 }

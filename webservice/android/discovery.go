@@ -8,12 +8,6 @@ import (
 	"github.com/grandcat/zeroconf"
 )
 
-type AndroidDevice struct {
-	DeviceID string
-	IP       string
-	Port     int
-}
-
 // FindDevices 使用 mDNS 查找局域网内的 Android 设备
 func FindAndroidDevices() []AndroidDevice {
 	resolver, err := zeroconf.NewResolver(nil)

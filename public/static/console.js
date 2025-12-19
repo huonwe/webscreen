@@ -1,82 +1,108 @@
-const deviceConfigs = {};
+const STORAGE_KEY = 'webcpy_device_configs';
+
 let knownDevices = [];
 let activeConfigSerial = null;
 
-const defaultScrcpyOptions = {
-    MaxFPS: '60',
-    VideoBitRate: '8M',
-    Control: true,
-    audio: true,
-    videoCodec: 'h264',
-    VideoCodecOptions: '',
-    newDisplay: {
-        width: '',
-        height: '',
-        fps: ''
+const defaultStreamConfig = {
+    video_codec: 'h264',
+    audio_codec: 'opus',
+    avsync: false,
+    bitrate: 8000000,
+    driver_config: {
+        max_fps: '60',
+        video_codec_options: '',
+        new_display: ''  // format: "1920x1080/60" or empty
     }
 };
 
-function getDefaultConfig(serial) {
+function getDefaultConfig(device) {
     return {
-        device_serial: serial,
-        proxy_port: '6000',
-        scrcpyOptions: JSON.parse(JSON.stringify(defaultScrcpyOptions))
+        device_type: device.type || 'android',
+        device_id: device.device_id,
+        device_ip: device.ip || '0',
+        device_port: device.port || '0',
+        stream_config: JSON.parse(JSON.stringify(defaultStreamConfig))
     };
 }
 
-function ensureDeviceConfig(serial) {
+// Load configs from localStorage
+function loadDeviceConfigs() {
+    try {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        return stored ? JSON.parse(stored) : {};
+    } catch (e) {
+        console.error('Failed to load device configs from localStorage:', e);
+        return {};
+    }
+}
+
+// Save configs to localStorage
+function saveDeviceConfigs(configs) {
+    try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(configs));
+    } catch (e) {
+        console.error('Failed to save device configs to localStorage:', e);
+    }
+}
+
+// Get all device configs
+let deviceConfigs = loadDeviceConfigs();
+
+function ensureDeviceConfig(device) {
+    const serial = typeof device === 'string' ? device : device.device_id;
     if (!deviceConfigs[serial]) {
-        deviceConfigs[serial] = getDefaultConfig(serial);
+        deviceConfigs[serial] = getDefaultConfig(typeof device === 'string' ? { device_id: device } : device);
+        saveDeviceConfigs(deviceConfigs);
     }
     return deviceConfigs[serial];
 }
 
 function pruneDeviceConfigs(activeDevices) {
+    let changed = false;
     Object.keys(deviceConfigs).forEach(serial => {
         if (!activeDevices.includes(serial)) {
             delete deviceConfigs[serial];
+            changed = true;
         }
     });
+    if (changed) {
+        saveDeviceConfigs(deviceConfigs);
+    }
 }
 
-function formatScrcpySummary(options) {
-    if (!options) {
+function formatStreamSummary(streamConfig) {
+    if (!streamConfig) {
         return '—';
     }
     const parts = [];
-    if (options.MaxFPS) {
-        parts.push(`${options.MaxFPS} fps`);
+    const opts = streamConfig.driver_config || {};
+    
+    if (opts.max_fps) {
+        parts.push(`${opts.max_fps} fps`);
     }
-    if (options.VideoBitRate) {
-        parts.push(options.VideoBitRate);
+    if (streamConfig.bitrate) {
+        parts.push(formatBitrate(streamConfig.bitrate));
     }
-    if (options.videoCodec) {
-        parts.push(options.videoCodec.toUpperCase());
+    if (streamConfig.video_codec) {
+        parts.push(streamConfig.video_codec.toUpperCase());
     }
-    if (options.VideoCodecOptions) {
-        parts.push(options.VideoCodecOptions);
+    if (opts.video_codec_options) {
+        parts.push(opts.video_codec_options);
     }
-    parts.push(`control:${options.Control ? 'on' : 'off'}`);
-    parts.push(`audio:${options.audio ? 'on' : 'off'}`);
 
-    if (options.newDisplay) {
-        const dims = [];
-        if (options.newDisplay.width) {
-            dims.push(options.newDisplay.width);
-        }
-        if (options.newDisplay.height) {
-            dims.push(options.newDisplay.height);
-        }
-        let display = dims.length ? dims.join('x') : '';
-        if (options.newDisplay.fps) {
-            display = display ? `${display}@${options.newDisplay.fps}` : `${options.newDisplay.fps}fps`;
-        }
-        if (display) {
-            parts.push(`display:${display}`);
-        }
+    if (opts.new_display) {
+        parts.push(`display:${opts.new_display}`);
     }
 
     return parts.join(' • ');
+}
+
+function formatBitrate(value) {
+    if (!value) return '';
+    if (value >= 1000000000) return `${(value / 1000000000).toFixed(1)}G`;
+    if (value >= 1000000) return `${(value / 1000000).toFixed(0)}M`;
+    if (value >= 1000) return `${(value / 1000).toFixed(0)}K`;
+    return String(value);
 }
 
 function renderDeviceList() {
@@ -95,19 +121,19 @@ function renderDeviceList() {
     knownDevices.forEach(device => {
         // Handle both string (legacy/fallback) and object formats
         const serial = typeof device === 'string' ? device : device.device_id;
-        const config = ensureDeviceConfig(serial);
+        const config = ensureDeviceConfig(device);
         const tr = document.createElement('tr');
         tr.dataset.serial = serial;
 
         let displayInfo = serial;
-        if (device.ip) {
+        if (device.ip && device.ip !== '0') {
             displayInfo += ` <span style="color: #888; font-size: 0.9em;">(${device.ip}:${device.port})</span>`;
         }
 
         tr.innerHTML = `
             <td>${displayInfo}</td>
-            <td><span class="status-connected">Connected</span></td>
-            <td class="device-summary">${formatScrcpySummary(config.scrcpyOptions)}</td>
+            <td><span class="status-connected">${device.status || 'Connected'}</span></td>
+            <td class="device-summary">${formatStreamSummary(config.stream_config)}</td>
             <td class="device-actions">
                 <button class="btn btn-ghost btn-small" data-action="configure" data-serial="${serial}">Configure</button>
                 <button class="btn btn-secondary btn-small" data-action="start" data-serial="${serial}">Start Stream</button>
@@ -119,16 +145,16 @@ function renderDeviceList() {
 
 async function fetchDevices() {
     try {
-        const response = await fetch('/api/devices');
+        const response = await fetch('/api/device/list');
         const data = await response.json();
         console.log('Fetched devices:', data);
-        // API returns array directly: [{type, device_id, ip, port}, ...]
-        const devices = Array.isArray(data) ? data : [];
+        // API returns: { devices: [{type, device_id, ip, port, status}, ...] }
+        const devices = Array.isArray(data.devices) ? data.devices : [];
         knownDevices = devices;
 
         const serials = devices.map(d => d.device_id);
         pruneDeviceConfigs(serials);
-        serials.forEach(ensureDeviceConfig);
+        devices.forEach(d => ensureDeviceConfig(d));
 
         renderDeviceList();
     } catch (error) {
@@ -147,10 +173,10 @@ async function connectDevice() {
     }
 
     try {
-        const response = await fetch('/api/connect', {
+        const response = await fetch('/api/device/connect', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ip, port })
+            body: JSON.stringify({ device_type: 'android', ip, port })
         });
         const data = await response.json();
         
@@ -178,10 +204,10 @@ async function pairDevice() {
     }
 
     try {
-        const response = await fetch('/api/pair', {
+        const response = await fetch('/api/device/pair', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ip, port, code })
+            body: JSON.stringify({ device_type: 'android', ip, port, code })
         });
         const data = await response.json();
         
@@ -223,20 +249,19 @@ window.onclick = function(event) {
 }
 
 function showConfigModal(serial) {
-    const config = ensureDeviceConfig(serial);
+    // Find the device object from knownDevices
+    const device = knownDevices.find(d => d.device_id === serial) || { device_id: serial };
+    const config = ensureDeviceConfig(device);
     activeConfigSerial = serial;
 
+    const opts = config.stream_config.driver_config || {};
+
     document.getElementById('configModalTitle').textContent = `Configure ${serial}`;
-    document.getElementById('configProxyPort').value = config.proxy_port || '6000';
-    document.getElementById('configMaxFPS').value = config.scrcpyOptions.MaxFPS || '';
-    document.getElementById('configVideoBitrate').value = config.scrcpyOptions.VideoBitRate || '';
-    document.getElementById('configVideoCodec').value = config.scrcpyOptions.videoCodec || 'h264';
-    document.getElementById('configVideoCodecOptions').value = config.scrcpyOptions.VideoCodecOptions || '';
-    document.getElementById('configControl').checked = Boolean(config.scrcpyOptions.Control);
-    document.getElementById('configAudio').checked = Boolean(config.scrcpyOptions.audio);
-    document.getElementById('configDisplayWidth').value = config.scrcpyOptions.newDisplay.width || '';
-    document.getElementById('configDisplayHeight').value = config.scrcpyOptions.newDisplay.height || '';
-    document.getElementById('configDisplayFPS').value = config.scrcpyOptions.newDisplay.fps || '';
+    document.getElementById('configMaxFPS').value = opts.max_fps || '';
+    document.getElementById('configVideoBitrate').value = formatBitrate(config.stream_config.bitrate) || '';
+    document.getElementById('configVideoCodec').value = config.stream_config.video_codec || 'h264';
+    document.getElementById('configVideoCodecOptions').value = opts.video_codec_options || '';
+    document.getElementById('configNewDisplay').value = opts.new_display || '';
 
     document.getElementById('configModal').style.display = 'flex';
 }
@@ -246,66 +271,76 @@ function saveDeviceConfig() {
         return;
     }
 
-    const config = ensureDeviceConfig(activeConfigSerial);
+    // Find the device object from knownDevices
+    const device = knownDevices.find(d => d.device_id === activeConfigSerial) || { device_id: activeConfigSerial };
+    const config = ensureDeviceConfig(device);
 
-    const proxyPortInput = document.getElementById('configProxyPort').value.trim();
-    config.proxy_port = proxyPortInput || '6000';
+    // Ensure driver_config exists
+    if (!config.stream_config.driver_config) {
+        config.stream_config.driver_config = {};
+    }
+    const opts = config.stream_config.driver_config;
 
-    config.scrcpyOptions.MaxFPS = document.getElementById('configMaxFPS').value.trim() || '';
-    config.scrcpyOptions.VideoBitRate = document.getElementById('configVideoBitrate').value.trim() || '';
-    config.scrcpyOptions.videoCodec = document.getElementById('configVideoCodec').value;
-    config.scrcpyOptions.VideoCodecOptions = document.getElementById('configVideoCodecOptions').value.trim();
-    config.scrcpyOptions.Control = document.getElementById('configControl').checked;
-    config.scrcpyOptions.audio = document.getElementById('configAudio').checked;
-    config.scrcpyOptions.newDisplay.width = document.getElementById('configDisplayWidth').value.trim();
-    config.scrcpyOptions.newDisplay.height = document.getElementById('configDisplayHeight').value.trim();
-    config.scrcpyOptions.newDisplay.fps = document.getElementById('configDisplayFPS').value.trim();
+    opts.max_fps = document.getElementById('configMaxFPS').value.trim() || '';
+    config.stream_config.bitrate = parseBitrate(document.getElementById('configVideoBitrate').value.trim());
+    config.stream_config.video_codec = document.getElementById('configVideoCodec').value;
+    opts.video_codec_options = document.getElementById('configVideoCodecOptions').value.trim();
+    opts.new_display = document.getElementById('configNewDisplay').value.trim();
+
+    // Save to localStorage
+    saveDeviceConfigs(deviceConfigs);
 
     renderDeviceList();
     closeModal('configModal');
 }
 
-function buildStartPayload(serial) {
-    const config = ensureDeviceConfig(serial);
-    return {
-        device_serial: config.device_serial || serial,
-        proxy_port: config.proxy_port || '6000',
-        scrcpyOptions: {
-            MaxFPS: config.scrcpyOptions.MaxFPS,
-            VideoBitRate: config.scrcpyOptions.VideoBitRate,
-            Control: Boolean(config.scrcpyOptions.Control),
-            audio: Boolean(config.scrcpyOptions.audio),
-            videoCodec: config.scrcpyOptions.videoCodec,
-            VideoCodecOptions: config.scrcpyOptions.VideoCodecOptions,
-            newDisplay: {
-                height: config.scrcpyOptions.newDisplay.height,
-                width: config.scrcpyOptions.newDisplay.width,
-                fps: config.scrcpyOptions.newDisplay.fps
-            }
-        }
-    };
+// Parse bitrate string like "8M" to number
+function parseBitrate(str) {
+    if (!str) return 8000000;
+    const match = str.match(/^(\d+(?:\.\d+)?)\s*([KMG])?$/i);
+    if (!match) return 8000000;
+    let value = parseFloat(match[1]);
+    const unit = (match[2] || '').toUpperCase();
+    if (unit === 'K') value *= 1000;
+    else if (unit === 'M') value *= 1000000;
+    else if (unit === 'G') value *= 1000000000;
+    return Math.round(value);
 }
 
-async function startStream(serial) {
-    const payload = buildStartPayload(serial);
-    console.log('Starting stream with payload:', payload);
-    try {
-        const response = await fetch('/api/start_stream', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        const data = await response.json();
-        
-        if (response.ok) {
-            window.location.href = '/';
-        } else {
-            alert('Failed to start stream: ' + data.error);
-        }
-    } catch (error) {
-        console.error('Error starting stream:', error);
-        alert('Error starting stream');
+function startStream(serial) {
+    // Find the device object from knownDevices
+    const device = knownDevices.find(d => d.device_id === serial);
+    if (!device) {
+        alert('Device not found: ' + serial);
+        return;
     }
+
+    const config = ensureDeviceConfig(device);
+    
+    // Build the CONFIG object that connect.js expects
+    const streamConfig = {
+        device_type: config.device_type || 'android',
+        device_id: config.device_id || serial,
+        device_ip: config.device_ip || '0',
+        device_port: config.device_port || '0',
+        stream_config: {
+            video_codec: config.stream_config.video_codec || 'h264',
+            audio_codec: config.stream_config.audio_codec || 'opus',
+            bitrate: config.stream_config.bitrate || 8000000,
+            driver_config: config.stream_config.driver_config || {}
+        }
+    };
+
+    // Store CONFIG in sessionStorage so connect.js can access it
+    sessionStorage.setItem('webcpy_stream_config', JSON.stringify(streamConfig));
+
+    // Redirect to the screen page
+    const deviceType = encodeURIComponent(streamConfig.device_type);
+    const deviceId = encodeURIComponent(streamConfig.device_id);
+    const deviceIp = encodeURIComponent(streamConfig.device_ip);
+    const devicePort = encodeURIComponent(streamConfig.device_port);
+    
+    window.location.href = `/screen/${deviceType}/${deviceId}/${deviceIp}/${devicePort}`;
 }
 
 // Initial load

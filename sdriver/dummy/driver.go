@@ -37,7 +37,7 @@ type DummyDriver struct {
 
 // New creates a dummy driver to stream from a local H.264 file.
 // fps defines the nominal frame rate used to compute timestamps for VCL NALs.
-func New(c sdriver.StreamConfig) (*DummyDriver, error) {
+func New(c map[string]string) (*DummyDriver, error) {
 	d := &DummyDriver{
 		// filePath:  c.OtherOpts["file"],
 		// fps:       c.OtherOpts["fps"],
@@ -46,11 +46,7 @@ func New(c sdriver.StreamConfig) (*DummyDriver, error) {
 		audioCh:   make(chan sdriver.AVBox, 1),
 		controlCh: make(chan sdriver.ControlEvent, 1),
 	}
-	if c.OtherOpts != nil {
-		if v, ok := c.OtherOpts["file_path"]; ok {
-			d.filePath = v
-		}
-	}
+	d.filePath = c["file_path"]
 	if d.filePath == "" {
 		return nil, errors.New("dummy: file path is empty")
 	}

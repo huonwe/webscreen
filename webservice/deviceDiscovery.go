@@ -17,14 +17,8 @@ func (wm *WebMaster) AndroidDevicesDiscovery() {
 		wm.devicesDiscoveredMu.Lock()
 
 		for _, d := range androidDevices {
-			device := Device{
-				Type:     "android",
-				DeviceID: d.DeviceID,
-				IP:       d.IP,
-				Port:     d.Port,
-			}
-			id := fmt.Sprintf("%s:%s:%d", device.Type, device.DeviceID, device.Port)
-			wm.devicesDiscovered[id] = device
+			id := fmt.Sprintf("%s:%s:%d", d.GetType(), d.GetDeviceID(), d.GetPort())
+			wm.devicesDiscovered[id] = d
 		}
 		// log.Printf("Discovered Android device: %+v\n", androidDevices)
 

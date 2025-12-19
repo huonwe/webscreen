@@ -85,9 +85,11 @@ func (c *ADBClient) StartScrcpyServer(options map[string]string) {
 	cmdStr := toScrcpyCommand(options)
 	log.Printf("cmdStr: %s", cmdStr)
 	go func() {
+		time.Sleep(time.Second * 1)
 		err := c.Shell(cmdStr)
 		if err != nil {
 			log.Printf("Failed to start scrcpy server: %v", err)
+			//c.ReverseRemove("localabstract:scrcpy_123")
 		}
 	}()
 }

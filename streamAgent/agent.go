@@ -12,16 +12,16 @@ import (
 
 	"github.com/pion/rtcp"
 	"github.com/pion/webrtc/v4"
-	"github.com/pion/webrtc/v4/pkg/media"
 )
 
 type Agent struct {
 	sync.RWMutex
 	VideoTrack *webrtc.TrackLocalStaticSample
 	AudioTrack *webrtc.TrackLocalStaticSample
+
 	driver     sdriver.SDriver
 	driverCaps sdriver.DriverCaps
-	config     ConnectionConfig
+	config     AgentConfig
 	// 用来接收前端的 RTCP 请求
 	rtpSenderVideo *webrtc.RTPSender
 	rtpSenderAudio *webrtc.RTPSender
@@ -33,6 +33,7 @@ type Agent struct {
 	// 用于音视频推流的 PTS 记录
 	lastVideoPTS time.Duration
 	lastAudioPTS time.Duration
+	baseTime     time.Time
 }
 
 // ========================
@@ -40,14 +41,15 @@ type Agent struct {
 // 同时处理来自客户端的控制命令并传递给 sdriver
 // ========================
 // 创建视频轨和音频轨，并初始化 Agent. 可以选择是否开启音视频同步.
-func NewAgent(config ConnectionConfig) (*Agent, error) {
+func NewAgent(config AgentConfig) (*Agent, error) {
 	sa := &Agent{
-		config: config,
+		config:   config,
+		baseTime: time.Now(),
 	}
 	switch config.DeviceType {
 	case DEVICE_TYPE_DUMMY:
 		// 初始化 Dummy Driver
-		dummyDriver, err := dummy.New(config.StreamCfg)
+		dummyDriver, err := dummy.New(config.DriverConfig)
 		if err != nil {
 			log.Printf("Failed to initialize dummy driver: %v", err)
 			return nil, err
@@ -55,7 +57,7 @@ func NewAgent(config ConnectionConfig) (*Agent, error) {
 		sa.driver = dummyDriver
 	case DEVICE_TYPE_ANDROID:
 		// 初始化 Android Driver
-		androidDriver, err := scrcpy.New(config.StreamCfg, config.DeviceID)
+		androidDriver, err := scrcpy.New(config.DriverConfig, config.DeviceID)
 		if err != nil {
 			log.Printf("Failed to initialize Android driver: %v", err)
 			return nil, err
@@ -187,82 +189,6 @@ func (sa *Agent) PauseStreaming() {
 
 func (sa *Agent) ResumeStreaming() {
 
-}
-
-func (sa *Agent) StreamingVideo() {
-	// Default frame duration (e.g. 30fps) if delta is invalid
-	var baseTime time.Time
-
-	for vBox := range sa.videoCh {
-		// Initialize baseTime on first packet
-		if baseTime.IsZero() {
-			baseTime = time.Now()
-		}
-
-		var duration time.Duration
-		if !vBox.IsConfig {
-			if sa.lastVideoPTS == 0 {
-				duration = time.Millisecond * 16
-			} else {
-				delta := vBox.PTS - sa.lastVideoPTS
-				if delta <= 0 {
-					duration = time.Millisecond * 16
-				} else {
-					duration = delta
-					sa.lastVideoPTS = vBox.PTS
-				}
-			}
-		} else {
-			// Config 帧 (VPS/SPS/PPS) 不需要持续时间
-			duration = 1 * time.Microsecond
-		}
-
-		// Use logical timestamp based on PTS instead of wall clock time
-		// timestamp := baseTime.Add(vBox.PTS)
-		// timestamp := time.Now().Unix() // 毫秒时间戳
-		sample := media.Sample{
-			Data:     vBox.Data,
-			Duration: duration,
-			// Timestamp: timestamp,
-		}
-		sa.VideoTrack.WriteSample(sample)
-	}
-}
-
-func (sa *Agent) StreamingAudio() {
-	for aBox := range sa.audioCh {
-		var duration time.Duration
-
-		// 1. 获取当前 PTS
-		currentPTS := aBox.PTS
-
-		// 2. 计算差值 (Duration)
-		if sa.lastAudioPTS == 0 {
-			// 第一帧：音频通常可以给一个标准值作为初始猜测
-			// Opus 常见是 20ms
-			duration = 20 * time.Millisecond
-		} else {
-			delta := currentPTS - sa.lastAudioPTS
-			if delta <= 0 {
-				// 音频的时间戳通常非常规律，如果出现 <=0，说明乱序严重
-				// 给个极小值，或者直接丢弃这一帧（音频对乱序很敏感）
-				duration = time.Microsecond
-			} else {
-				duration = delta
-				// 3. 更新上一帧时间
-				sa.lastAudioPTS = currentPTS
-			}
-		}
-
-		// 4. 构造 Sample
-		sample := media.Sample{
-			Data:     aBox.Data,
-			Duration: duration, // ✅ 让 Pion 根据真实的间隔来打 RTP 时间戳
-			// Timestamp: time.Now(), // 可选，不需要用 UnixMicro 强转 PTS
-		}
-
-		sa.AudioTrack.WriteSample(sample)
-	}
 }
 
 func (sa *Agent) SendEvent(raw []byte) error {
