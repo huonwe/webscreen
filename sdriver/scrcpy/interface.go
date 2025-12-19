@@ -119,6 +119,7 @@ func (sd *ScrcpyDriver) Stop() {
 	if sd.controlConn != nil {
 		sd.controlConn.Close()
 	}
-	sd.adbClient.ReverseRemove(fmt.Sprintf("localabstract:scrcpy_%s", sd.socketName))
+	sd.adbClient.ReverseRemove(fmt.Sprintf("localabstract:scrcpy_%s", sd.scid))
 	sd.adbClient.Stop()
+	sd.cancel()
 }
