@@ -1,5 +1,3 @@
-var MANNUAL_ROTATE = false
-
 function homeButton() {
     // KEYCODE_HOME = 3
     const KEYCODE_HOME = 3;

@@ -334,13 +334,8 @@ function startStream(serial) {
     // Store CONFIG in sessionStorage so connect.js can access it
     sessionStorage.setItem('webscreen_stream_config', JSON.stringify(streamConfig));
 
-    // Redirect to the screen page
-    const deviceType = encodeURIComponent(streamConfig.device_type);
-    const deviceId = encodeURIComponent(streamConfig.device_id);
-    const deviceIp = encodeURIComponent(streamConfig.device_ip);
-    const devicePort = encodeURIComponent(streamConfig.device_port);
     
-    window.location.href = `/screen/${deviceType}/${deviceId}/${deviceIp}/${devicePort}`;
+    window.location.href = `/screen/display`;
 }
 
 // Initial load

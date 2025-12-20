@@ -57,8 +57,8 @@ func (wm *WebMaster) setRouter() {
 	})
 	screen := r.Group("/screen")
 	{
-		screen.GET("/:device_type/:device_id/:device_ip/:device_port", handleScreen)
-		screen.GET("/:device_type/:device_id/:device_ip/:device_port/ws", wm.handleScreenWS)
+		screen.GET("/display", handleScreen)
+		screen.GET("/ws", wm.handleScreenWS)
 	}
 	r.GET("/console", handleConsole)
 	api := r.Group("/api")
@@ -81,7 +81,7 @@ func (wm *WebMaster) Serve() {
 }
 
 func (wm *WebMaster) Close() {
-	for k,v := range maps.All(wm.ScreenSessions){
+	for k, v := range maps.All(wm.ScreenSessions) {
 		log.Printf("closing session %v", k)
 		v.Close()
 	}
