@@ -14,9 +14,9 @@ jobs:
     name: Build (${{ matrix.goos }}/${{ matrix.goarch }})
     runs-on: ubuntu-latest
     strategy:
-      # 矩阵配置：定义 2x2 = 4 种组合
+      # 矩阵配置：定义 3x2 = 6 种组合 (linux, windows, darwin) x (amd64, arm64)
       matrix:
-        goos: [linux, windows]
+        goos: [linux, windows, darwin]
         goarch: [amd64, arm64]
     
     steps:

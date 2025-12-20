@@ -46,12 +46,20 @@ func GetADBPath() (string, error) {
 
 func downloadADB() error {
 	var url string
+	// Construct download URL based on OS and architecture
+	// Note: arm64 support for Linux depends on Google providing arm64 builds
 	switch runtime.GOOS {
 	case "windows":
 		url = "https://dl.google.com/android/repository/platform-tools-latest-windows.zip"
 	case "linux":
-		url = "https://dl.google.com/android/repository/platform-tools-latest-linux.zip"
+		if runtime.GOARCH == "arm64" {
+			// For arm64 Linux, use the Linux build (if available)
+			url = "https://dl.google.com/android/repository/platform-tools-latest-linux.zip"
+		} else {
+			url = "https://dl.google.com/android/repository/platform-tools-latest-linux.zip"
+		}
 	case "darwin":
+		// macOS amd64 and arm64 (Apple Silicon) both use the darwin build
 		url = "https://dl.google.com/android/repository/platform-tools-latest-darwin.zip"
 	default:
 		return fmt.Errorf("unsupported OS: %s", runtime.GOOS)
