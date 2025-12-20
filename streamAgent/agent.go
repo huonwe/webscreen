@@ -177,7 +177,7 @@ func (sa *Agent) Capabilities() sdriver.DriverCaps {
 }
 
 func (sa *Agent) StartStreaming() {
-	sa.driver.StartStreaming()
+	sa.driver.Start()
 	go sa.StreamingVideo()
 	go sa.StreamingAudio()
 	go sa.HandleRTCP()

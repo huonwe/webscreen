@@ -25,14 +25,14 @@ func (sd *ScrcpyDriver) GetReceivers() (<-chan sdriver.AVBox, <-chan sdriver.AVB
 	return sd.VideoChan, sd.AudioChan, sd.ControlChan
 }
 
-func (sd *ScrcpyDriver) StartStreaming() {
-	log.Println("ScrcpyDriver: StartStreaming called")
+func (sd *ScrcpyDriver) Start() {
+	log.Println("ScrcpyDriver: Start called")
 	go sd.convertVideoFrame()
 	go sd.convertAudioFrame()
 	go sd.transferControlMsg()
 }
 
-func (sd *ScrcpyDriver) StopStreaming() {
+func (sd *ScrcpyDriver) Pause() {
 	// sd.stopVideoReader()
 }
 

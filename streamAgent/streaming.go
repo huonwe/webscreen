@@ -8,16 +8,13 @@ import (
 
 func (sa *Agent) StreamingVideo() {
 	// 默认帧间隔 (比如 60fps = 16.6ms)
-	// 用于当 PTS 计算出现异常时的兜底
+	// 用于当 PTS 计算出现异常时的默认值
 	const defaultDuration = 16 * time.Millisecond
 
 	// 用于记录第一帧的 PTS，用于归一化
 	var firstPTS time.Duration = -1
 
 	for vBox := range sa.videoCh {
-		// ---------------------------------------------------------
-		// 1. PTS 归一化 (Normalize)
-		// ---------------------------------------------------------
 		// 如果是第一帧，记录下它的 PTS 作为起点
 		if firstPTS == -1 {
 			firstPTS = vBox.PTS
@@ -27,16 +24,9 @@ func (sa *Agent) StreamingVideo() {
 		// 这样可以确保 ptsOffset 从 0 开始增长
 		ptsOffset := vBox.PTS - firstPTS
 
-		// ---------------------------------------------------------
-		// 2. 计算绝对时间戳 (Timestamp)
-		// ---------------------------------------------------------
-		// 这是 WebRTC 用于音画同步的关键。
 		// Timestamp = Agent启动时间 + 视频流逝的时间
 		timestamp := sa.baseTime.Add(ptsOffset)
 
-		// ---------------------------------------------------------
-		// 3. 计算持续时间 (Duration)
-		// ---------------------------------------------------------
 		var duration time.Duration
 
 		if vBox.IsConfig {
@@ -51,30 +41,18 @@ func (sa *Agent) StreamingVideo() {
 				delta := vBox.PTS - sa.lastVideoPTS
 
 				if delta <= 0 {
-					// 异常情况：PTS 没有增加 (可能是重复帧或乱序)
-					// 使用默认值防止时间戳停滞
 					duration = defaultDuration
 				} else {
 					duration = delta
 				}
 			}
-			// 【重要】无论如何都要更新 lastVideoPTS，为下一帧做准备
-			// 除非是 Config 帧，否则只要是图像数据都应该推进 lastPTS
 			sa.lastVideoPTS = vBox.PTS
 		}
-		// 检测过大的 duration，避免极端情况影响播放
-		// if duration >= 50*time.Millisecond {
-		// 	log.Printf("Warning: Large video frame duration detected: %v", duration)
-		// 	duration = 50 * time.Millisecond
-		// }
 
-		// ---------------------------------------------------------
-		// 4. 写入 Sample
-		// ---------------------------------------------------------
 		sample := media.Sample{
 			Data:      vBox.Data,
 			Duration:  duration,
-			Timestamp: timestamp, // 必填：绝对逻辑时间
+			Timestamp: timestamp,
 		}
 
 		// 错误处理是必要的，防止 Track 关闭后 panic
@@ -139,7 +117,7 @@ func (sa *Agent) StreamingAudio() {
 		sample := media.Sample{
 			Data:      aBox.Data,
 			Duration:  duration,
-			Timestamp: timestamp, // 必填：用于音画同步
+			Timestamp: timestamp,
 		}
 
 		if err := sa.AudioTrack.WriteSample(sample); err != nil {

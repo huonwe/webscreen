@@ -1,17 +1,11 @@
 package sdriver
 
-// ========================
-// 定义接口 (你的抽象层)
-// ========================
-
-// 占位用的结构体
-
 type SDriver interface {
 	GetReceivers() (<-chan AVBox, <-chan AVBox, <-chan Event)
 	SendEvent(event Event) error
 
-	StartStreaming()
-	StopStreaming()
+	Start()
+	Pause()
 
 	RequestIDR()
 	Capabilities() DriverCaps

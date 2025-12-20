@@ -63,7 +63,7 @@ func (d *DummyDriver) GetReceivers() (<-chan sdriver.AVBox, <-chan sdriver.AVBox
 }
 
 // StartStream starts reading the H.264 file and produces AVBox packets.
-func (d *DummyDriver) StartStreaming() {
+func (d *DummyDriver) Start() {
 	d.mu.Lock()
 	if d.running {
 		d.mu.Unlock()
@@ -80,8 +80,8 @@ func (d *DummyDriver) StartStreaming() {
 	go d.loop()
 }
 
-func (d *DummyDriver) StopStreaming() {
-	log.Println("DummyDriver: StopStreaming called")
+func (d *DummyDriver) Pause() {
+	log.Println("DummyDriver: Pause called")
 	d.Stop()
 }
 
