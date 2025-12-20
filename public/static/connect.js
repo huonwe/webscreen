@@ -260,11 +260,11 @@ async function updateUIBasedOnCapabilities(caps) {
     if (caps.can_control) {
         // Load control scripts
         try {
-            await loadScript('/static/controlMessages.js');
-            await loadScript('/static/buttons.js');
-            await loadScript('/static/keyboard.js');
-            await loadScript('/static/touch.js');
-            await loadScript('/static/scroll.js');
+            await loadScript('/static/capabilities/controlMessages.js');
+            await loadScript('/static/capabilities/buttons.js');
+            await loadScript('/static/capabilities/keyboard.js');
+            await loadScript('/static/capabilities/touch.js');
+            await loadScript('/static/capabilities/scroll.js');
             show('.feature-control');
             console.log("Control scripts loaded");
         } catch (e) {
@@ -274,7 +274,7 @@ async function updateUIBasedOnCapabilities(caps) {
         if (caps.can_clipboard) {
             try {
                 // Add timestamp to force cache busting
-                await loadScript('/static/clipboard.js');
+                await loadScript('/static/capabilities/clipboard.js');
                 show('.feature-clipboard');
             } catch (e) {
                 console.error("Failed to load clipboard script", e);
@@ -283,9 +283,9 @@ async function updateUIBasedOnCapabilities(caps) {
         // Handle UHID
         if (caps.can_uhid) {
             try {
-                await loadScript('/static/uhid_mouse.js');
-                await loadScript('/static/uhid_keyboard.js');
-                await loadScript('/static/uhid_gamepad.js');
+                await loadScript('/static/capabilities/uhid_mouse.js');
+                await loadScript('/static/capabilities/uhid_keyboard.js');
+                await loadScript('/static/capabilities/uhid_gamepad.js');
                 show('.feature-uhid');
                 console.log("UHID scripts loaded");
             } catch (e) {
