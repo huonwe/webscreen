@@ -35,7 +35,7 @@ jobs:
         CGO_ENABLED: 0 # 通常交叉编译建议关闭 CGO，除非必须用
       run: |
         # 1. 确定二进制文件名
-        BINARY_NAME="myapp-${{ matrix.goos }}-${{ matrix.goarch }}"
+        BINARY_NAME="webscreen-${{ matrix.goos }}-${{ matrix.goarch }}"
         
         # 2. 如果是 Windows，添加 .exe 后缀
         if [ "${{ matrix.goos }}" = "windows" ]; then
