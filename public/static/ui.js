@@ -3,7 +3,7 @@
  * @param {string} message 消息文本
  * @param {number} duration 持续时间(ms)
  */
-function showToast(message, duration = 3000) {
+function showToast(message, duration = 500) {
     let toast = document.getElementById('webscreen-toast');
     
     if (!toast) {

@@ -145,7 +145,7 @@ async function start() {
                     break;
                 case 'error':
                     console.error("Error from server:", message);
-                    showToast(i18n.t('error_from_server', {msg: message.message}), 5000);
+                    showToast(i18n.t('error_from_server', {msg: message.message}), 500);
                     break;
                 default:
                     console.warn("Unknown message status:", message.status);

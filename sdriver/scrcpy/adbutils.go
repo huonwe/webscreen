@@ -8,10 +8,15 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"webscreen/utils"
 )
 
 func ExecADB(args ...string) error {
-	cmd := exec.Command("adb", args...)
+	adbPath, err := utils.GetADBPath()
+	if err != nil {
+		return err
+	}
+	cmd := exec.Command(adbPath, args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
@@ -60,7 +65,11 @@ func toScrcpyCommand(options map[string]string) string {
 
 // GetConnectedDevices returns a list of connected device serials/IPs
 func GetConnectedDevices() ([]string, error) {
-	cmd := exec.Command("adb", "devices")
+	adbPath, err := utils.GetADBPath()
+	if err != nil {
+		return nil, err
+	}
+	cmd := exec.Command(adbPath, "devices")
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, err
@@ -82,7 +91,11 @@ func GetConnectedDevices() ([]string, error) {
 
 // ConnectDevice connects to a device via TCP/IP
 func ConnectDevice(address string) error {
-	cmd := exec.Command("adb", "connect", address)
+	adbPath, err := utils.GetADBPath()
+	if err != nil {
+		return err
+	}
+	cmd := exec.Command(adbPath, "connect", address)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("adb connect failed: %v, output: %s", err, string(output))
@@ -95,7 +108,11 @@ func ConnectDevice(address string) error {
 
 // PairDevice pairs with a device using a pairing code
 func PairDevice(address, code string) error {
-	cmd := exec.Command("adb", "pair", address, code)
+	adbPath, err := utils.GetADBPath()
+	if err != nil {
+		return err
+	}
+	cmd := exec.Command(adbPath, "pair", address, code)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("adb pair failed: %v, output: %s", err, string(output))
