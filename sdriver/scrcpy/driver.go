@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	SCRCPY_SERVER_LOCAL_PATH  = "./scrcpy-server"
+	SCRCPY_SERVER_LOCAL_PATH  = "./bin/scrcpy-server-v3.3.3-modified"
 	SCRCPY_SERVER_ANDROID_DST = "/data/local/tmp/scrcpy-server"
 	SCRCPY_PROXY_PORT_DEFAULT = "27183"
 	SCRCPY_VERSION            = "3.3.3"
