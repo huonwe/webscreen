@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -13,7 +14,7 @@ import (
 )
 
 // GetADBPath returns the path to the ADB executable.
-// It checks the current directory, then the system PATH using 'which' command.
+// It checks the current directory, then the system PATH.
 // If not found, it downloads ADB from Google's repository.
 func GetADBPath() (string, error) {
 	exeName := "adb"
@@ -28,16 +29,13 @@ func GetADBPath() (string, error) {
 			return localPath, nil
 		}
 	}
+	log.Println(err)
 
-	// 2. Check PATH using 'which' command (more compatible, especially for Termux)
-	cmd := exec.Command("which", "adb")
-	output, err := cmd.Output()
-	if err == nil {
-		path := strings.TrimSpace(string(output))
-		if path != "" {
-			return path, nil
-		}
+	// 2. Check PATH
+	if path, err := exec.LookPath("adb"); err == nil {
+		return path, nil
 	}
+	log.Println(err)
 
 	// 3. Download
 	fmt.Println("ADB not found. Downloading...")
@@ -51,20 +49,12 @@ func GetADBPath() (string, error) {
 
 func downloadADB() error {
 	var url string
-	// Construct download URL based on OS and architecture
-	// Note: arm64 support for Linux depends on Google providing arm64 builds
 	switch runtime.GOOS {
 	case "windows":
 		url = "https://dl.google.com/android/repository/platform-tools-latest-windows.zip"
 	case "linux":
-		if runtime.GOARCH == "arm64" {
-			// For arm64 Linux, use the Linux build (if available)
-			url = "https://dl.google.com/android/repository/platform-tools-latest-linux.zip"
-		} else {
-			url = "https://dl.google.com/android/repository/platform-tools-latest-linux.zip"
-		}
+		url = "https://dl.google.com/android/repository/platform-tools-latest-linux.zip"
 	case "darwin":
-		// macOS amd64 and arm64 (Apple Silicon) both use the darwin build
 		url = "https://dl.google.com/android/repository/platform-tools-latest-darwin.zip"
 	default:
 		return fmt.Errorf("unsupported OS: %s", runtime.GOOS)
