@@ -75,7 +75,7 @@ func (wm *WebMaster) setRouter() {
 		api.GET("/device/list", wm.handleListDevices)
 		api.POST("/device/connect", wm.handleConnectDevice)
 		api.POST("/device/pair", wm.handlePairDevice)
-		api.POST("/device/discovery", wm.handleListDevicesDiscoveried)
+		// api.POST("/device/discovery", wm.handleListDevicesDiscoveried)
 		api.POST("/device/select", wm.handleSelectDevice)
 	}
 
@@ -83,10 +83,10 @@ func (wm *WebMaster) setRouter() {
 }
 
 func (wm *WebMaster) Serve() {
-	if wm.config.EnableAndroidDiscover {
-		go wm.AndroidDevicesDiscovery()
-	}
-	wm.router.Run(":8081")
+	// if wm.config.EnableAndroidDiscover {
+	// 	go wm.AndroidDevicesDiscovery()
+	// }
+	wm.router.Run(":8079")
 }
 
 func (wm *WebMaster) Close() {
