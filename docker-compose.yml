@@ -1,0 +1,22 @@
+services:
+  webscreen:
+    build: .
+    container_name: webscreen-service
+    # Webscreen 默认监听 8079 端口
+    ports:
+      - "8079:8079"
+    # 必须开启特权模式，以便容器内的 adb 能够识别和操作 USB 设备
+    privileged: true
+    # 挂载宿主机的 USB 总线，使容器内的 android-tools 可以访问安卓设备
+    volumes:
+      - /dev/bus/usb:/dev/bus/usb
+    environment:
+      - GIN_MODE=release # 生产模式运行 Gin 框架
+    # 确保服务异常或系统重启时自动恢复
+    restart: unless-stopped
+    # 增加日志限制，防止 scrcpy-server 的大量输出撑爆磁盘
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
