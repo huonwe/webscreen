@@ -6,6 +6,7 @@ on:
     # 只有当 push 的标签以 'v' 开头时（例如 v1.0.0），才触发 Release 流程
     tags:
       - "v*"
+      - "dev*"
   pull_request:
     branches: [ "main" ]
 
