@@ -59,7 +59,8 @@ jobs:
     needs: build # 必须等所有 build 任务都成功才执行
     # 仅在 Tag 推送时运行此步骤
     if: startsWith(github.ref, 'refs/tags/')
-    
+    permissions:
+      contents: write
     steps:
     - name: Download All Artifacts
       uses: actions/download-artifact@v4
