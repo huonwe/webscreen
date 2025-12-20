@@ -28,7 +28,7 @@ type Agent struct {
 	// chan
 	videoCh   <-chan sdriver.AVBox
 	audioCh   <-chan sdriver.AVBox
-	controlCh <-chan sdriver.ControlEvent
+	controlCh <-chan sdriver.Event
 
 	// 用于音视频推流的 PTS 记录
 	lastVideoPTS time.Duration
@@ -145,7 +145,7 @@ func (sa *Agent) HandleRTCP() {
 					continue
 				}
 				lastRTCPTime = now
-				log.Println("收到 PLI 请求 (Keyframe Request)")
+				log.Println("IDR requested via RTCP PLI")
 				sa.driver.RequestIDR()
 			}
 		}
@@ -197,6 +197,7 @@ func (sa *Agent) SendEvent(raw []byte) error {
 	}
 	event, err := sa.parseEvent(raw)
 	if err != nil {
+		log.Printf("[agent] Failed to parse control event: %v", err)
 		return err
 	}
 	// log.Printf("Parsed control event: %+v", event)
@@ -206,7 +207,7 @@ func (sa *Agent) SendEvent(raw []byte) error {
 func generateStreamID() string {
 	b := make([]byte, 8)
 	if _, err := rand.Read(b); err != nil {
-		return "scrcpy-stream"
+		return "webscreen-stream"
 	}
-	return fmt.Sprintf("scrcpy-%x", b)
+	return fmt.Sprintf("webscreen-%x", b)
 }

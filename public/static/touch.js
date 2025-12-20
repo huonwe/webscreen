@@ -15,7 +15,7 @@ const TOUCH_ACTION_MOVE = 2;
 
 const videoElementTouch = document.getElementById('remoteVideo');
 
-console.log("Touch control script loaded.");
+// console.log("Touch control script loaded.");
 
 // 缓存视频元素的位置和尺寸，避免频繁调用 getBoundingClientRect
 let cachedVideoRect = null;

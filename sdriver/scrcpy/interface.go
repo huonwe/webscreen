@@ -21,7 +21,7 @@ import (
 // 	Stop()
 // }
 
-func (sd *ScrcpyDriver) GetReceivers() (<-chan sdriver.AVBox, <-chan sdriver.AVBox, <-chan sdriver.ControlEvent) {
+func (sd *ScrcpyDriver) GetReceivers() (<-chan sdriver.AVBox, <-chan sdriver.AVBox, <-chan sdriver.Event) {
 	return sd.VideoChan, sd.AudioChan, sd.ControlChan
 }
 
@@ -46,6 +46,11 @@ func (sd *ScrcpyDriver) SendEvent(event sdriver.Event) error {
 		sd.SendScrollEvent(e)
 	case *sdriver.RotateEvent:
 		sd.RotateDevice()
+	case *sdriver.GetClipboardEvent:
+		log.Printf("[ScrcpyDriver] SendEvent: GetClipboardEvent")
+		sd.SendGetClipboardEvent(e)
+	case *sdriver.SetClipboardEvent:
+		sd.SendSetClipboardEvent(e)
 	case *sdriver.UHIDCreateEvent:
 		sd.SendUHIDCreateEvent(e)
 	case *sdriver.UHIDInputEvent:
@@ -56,7 +61,7 @@ func (sd *ScrcpyDriver) SendEvent(event sdriver.Event) error {
 		sd.KeyFrameRequest()
 	default:
 		// Fallback for IDR if passed as a different struct with same Type
-		if event.Type() == sdriver.ControlMsgTypeReqIDR {
+		if event.Type() == sdriver.EVENT_TYPE_REQ_IDR {
 			sd.KeyFrameRequest()
 			return nil
 		}

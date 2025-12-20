@@ -29,7 +29,7 @@ type DummyDriver struct {
 
 	videoCh   chan sdriver.AVBox
 	audioCh   chan sdriver.AVBox
-	controlCh chan sdriver.ControlEvent
+	controlCh chan sdriver.Event
 
 	lastSPS []byte
 	lastPPS []byte
@@ -44,7 +44,7 @@ func New(c map[string]string) (*DummyDriver, error) {
 		stopCh:    make(chan struct{}),
 		videoCh:   make(chan sdriver.AVBox, 64),
 		audioCh:   make(chan sdriver.AVBox, 1),
-		controlCh: make(chan sdriver.ControlEvent, 1),
+		controlCh: make(chan sdriver.Event, 1),
 	}
 	d.filePath = c["file_path"]
 	if d.filePath == "" {
@@ -58,7 +58,7 @@ func New(c map[string]string) (*DummyDriver, error) {
 }
 
 // GetReceiver returns the channels for video, audio, and control events.
-func (d *DummyDriver) GetReceivers() (<-chan sdriver.AVBox, <-chan sdriver.AVBox, <-chan sdriver.ControlEvent) {
+func (d *DummyDriver) GetReceivers() (<-chan sdriver.AVBox, <-chan sdriver.AVBox, <-chan sdriver.Event) {
 	return d.videoCh, d.audioCh, d.controlCh
 }
 

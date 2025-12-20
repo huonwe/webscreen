@@ -5,7 +5,6 @@ import (
 	"io"
 	"log"
 	"webcpy/sdriver"
-	"webcpy/sdriver/comm"
 )
 
 func (da *ScrcpyDriver) convertVideoFrame() {
@@ -29,16 +28,6 @@ func (da *ScrcpyDriver) convertVideoFrame() {
 
 		// 从 LinearBuffer 获取内存
 		payloadBuf := da.videoBuffer.Get(frameSize)
-		if payloadBuf == nil {
-			// 当前 Buffer 满了，分配一个新的 (旧的会被 GC，只要 WebRTC 发送完)
-			// log.Println("Video LinearBuffer full, allocating new chunk")
-			da.videoBuffer = comm.NewLinearBuffer(0)
-			payloadBuf = da.videoBuffer.Get(frameSize)
-			// 极端情况：单帧超过 4MB (几乎不可能)，直接分配独立内存
-			if payloadBuf == nil {
-				payloadBuf = make([]byte, frameSize)
-			}
-		}
 
 		if _, err := io.ReadFull(da.videoConn, payloadBuf); err != nil {
 			log.Println("Failed to read video frame payload:", err)
@@ -81,14 +70,6 @@ func (da *ScrcpyDriver) convertAudioFrame() {
 		// log.Printf("Audio Frame Timestamp: %v, Size: %v isConfig: %v\n", frame.Header.PTS, frame.Header.Size, frame.Header.IsConfig)
 		frameSize := int(frame.Header.Size)
 		payloadBuf := da.audioBuffer.Get(frameSize)
-		if payloadBuf == nil {
-			// log.Println("Audio LinearBuffer full, allocating new chunk")
-			da.audioBuffer = comm.NewLinearBuffer(1 * 1024 * 1024)
-			payloadBuf = da.audioBuffer.Get(frameSize)
-			if payloadBuf == nil {
-				payloadBuf = make([]byte, frameSize)
-			}
-		}
 
 		// read frame payload
 		_, _ = io.ReadFull(da.audioConn, payloadBuf)
@@ -124,8 +105,8 @@ func (da *ScrcpyDriver) transferControlMsg() {
 				log.Println("Control connection read content error:", err)
 				return
 			}
-			da.ControlChan <- sdriver.ControlEvent{
-				Data: append([]byte{17}, content...),
+			da.ControlChan <- sdriver.ReceiveClipboardEvent{
+				Content: content,
 			}
 		default:
 			// Skip unknown message

@@ -6,6 +6,11 @@ type Event interface {
 	Type() EventType
 }
 
+type SampleEvent interface {
+	Event
+	GetContent() []byte
+}
+
 const (
 	// Basic Events
 	EVENT_TYPE_KEY    EventType = 0x00
@@ -13,20 +18,22 @@ const (
 	EVENT_TYPE_TOUCH  EventType = 0x02
 	EVENT_TYPE_SCROLL EventType = 0x03
 
-	// Clipboard Events
-	EVENT_TYPE_SET_CLIPBOARD EventType = 0x08
-	EVENT_TYPE_GET_CLIPBOARD EventType = 0x09
+	// Clipboard Events Agent -> Driver
+	EVENT_TYPE_GET_CLIPBOARD EventType = 0x08
+	EVENT_TYPE_SET_CLIPBOARD EventType = 0x09
+	// Clipboard Events Driver -> Agent -> Web
+	EVENT_TYPE_RECEIVE_CLIPBOARD EventType = 0x17
 
 	// Command
-	EVENT_DISPLAY_OFF EventType = 0x0A
-	EVENT_TYPE_ROTATE EventType = 0x0B
+	EVENT_TYPE_DISPLAY_OFF EventType = 0x0A
+	EVENT_TYPE_ROTATE      EventType = 0x0B
 
 	// UHID Events
 	EVENT_TYPE_UHID_CREATE  EventType = 0x0C
 	EVENT_TYPE_UHID_INPUT   EventType = 0x0D
 	EVENT_TYPE_UHID_DESTROY EventType = 0x0E
 
-	ControlMsgTypeReqIDR EventType = 0x63
+	EVENT_TYPE_REQ_IDR EventType = 0x63
 )
 
 // 鼠标动作枚举
@@ -40,6 +47,12 @@ const (
 	BUTTON_PRIMARY   uint32 = 1 << 0
 	BUTTON_SECONDARY uint32 = 1 << 1
 	BUTTON_TERTIARY  uint32 = 1 << 2
+)
+
+const (
+	COPY_KEY_NONE uint8 = 0
+	COPY_KEY_COPY uint8 = 1
+	COPY_KEY_CUT  uint8 = 2
 )
 
 type TouchEvent struct {
@@ -122,5 +135,35 @@ func (e UHIDDestroyEvent) Type() EventType {
 type ReqIDREvent struct{}
 
 func (e ReqIDREvent) Type() EventType {
-	return ControlMsgTypeReqIDR
+	return EVENT_TYPE_REQ_IDR
+}
+
+type GetClipboardEvent struct {
+	CopyKey uint8 // 是否模拟复制按键
+}
+
+func (e GetClipboardEvent) Type() EventType {
+	return EVENT_TYPE_GET_CLIPBOARD
+}
+
+type SetClipboardEvent struct {
+	Sequence uint64 // 序列号
+	Paste    bool   // 是否模拟粘贴
+	Content  []byte // 剪贴板文本内容
+}
+
+func (e SetClipboardEvent) Type() EventType {
+	return EVENT_TYPE_SET_CLIPBOARD
+}
+
+type ReceiveClipboardEvent struct {
+	Content []byte // 剪贴板文本内容
+}
+
+func (e ReceiveClipboardEvent) Type() EventType {
+	return EVENT_TYPE_RECEIVE_CLIPBOARD
+}
+
+func (e ReceiveClipboardEvent) GetContent() []byte {
+	return e.Content
 }

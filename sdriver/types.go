@@ -11,13 +11,6 @@ type AVBox struct {
 	IsConfig   bool          // 是否配置帧 (如果是配置帧, duration 应该为 0)
 }
 
-// ControlEvent represents an input event to be sent to the device.
-// Everything that need send to the device. Touch, Key, Clipboard, etc.
-type ControlEvent struct {
-	Type uint8
-	Data []byte
-}
-
 type MediaMeta struct {
 	VideoCodecID string `json:"video_codec_id"`
 	Width        uint32 `json:"width"`

@@ -106,12 +106,12 @@ func (da *ScrcpyDriver) SendScrollEvent(e *sdriver.ScrollEvent) {
 	}
 }
 
-func (da *ScrcpyDriver) SendSetClipboardEvent(content string, paste bool) {
+func (da *ScrcpyDriver) SendSetClipboardEvent(e *sdriver.SetClipboardEvent) {
 	if da.controlConn == nil {
 		return
 	}
 
-	data := []byte(content)
+	data := e.Content
 	length := len(data)
 
 	// Structure:
@@ -123,9 +123,9 @@ func (da *ScrcpyDriver) SendSetClipboardEvent(content string, paste bool) {
 
 	buf := make([]byte, 1+8+1+4+length)
 
-	buf[0] = TYPE_SET_CLIPBOARD
-	binary.BigEndian.PutUint64(buf[1:9], 0) // Sequence, can be 0
-	if paste {
+	buf[0] = byte(e.Type())
+	binary.BigEndian.PutUint64(buf[1:9], e.Sequence) // Sequence
+	if e.Paste {
 		buf[9] = 1
 	} else {
 		buf[9] = 0
@@ -139,7 +139,7 @@ func (da *ScrcpyDriver) SendSetClipboardEvent(content string, paste bool) {
 	}
 }
 
-func (da *ScrcpyDriver) SendGetClipboardEvent() {
+func (da *ScrcpyDriver) SendGetClipboardEvent(e *sdriver.GetClipboardEvent) {
 	if da.controlConn == nil {
 		return
 	}
@@ -148,8 +148,8 @@ func (da *ScrcpyDriver) SendGetClipboardEvent() {
 	// Type (1)
 	// CopyKey (1)
 	buf := make([]byte, 2)
-	buf[0] = TYPE_GET_CLIPBOARD
-	buf[1] = COPY_KEY_COPY
+	buf[0] = byte(e.Type())
+	buf[1] = e.CopyKey
 
 	_, err := da.controlConn.Write(buf)
 	if err != nil {

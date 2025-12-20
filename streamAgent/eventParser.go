@@ -3,6 +3,7 @@ package sagent
 import (
 	"encoding/binary"
 	"fmt"
+	"log"
 	"webcpy/sdriver"
 )
 
@@ -30,7 +31,11 @@ func (a *Agent) parseEvent(raw []byte) (sdriver.Event, error) {
 		return a.parseUHIDInputEvent(raw)
 	case sdriver.EVENT_TYPE_UHID_DESTROY:
 		return a.parseUHIDDestroyEvent(raw)
-	case sdriver.ControlMsgTypeReqIDR:
+	case sdriver.EVENT_TYPE_GET_CLIPBOARD:
+		return a.parseGetClipboardEvent(raw)
+	case sdriver.EVENT_TYPE_SET_CLIPBOARD:
+		return a.parseSetClipboardEvent(raw)
+	case sdriver.EVENT_TYPE_REQ_IDR:
 		return a.parseReqIDREvent(raw)
 	default:
 		return nil, fmt.Errorf("unknown event type: %d", eventType)
@@ -148,6 +153,39 @@ func (a *Agent) parseUHIDDestroyEvent(raw []byte) (*sdriver.UHIDDestroyEvent, er
 
 	e := &sdriver.UHIDDestroyEvent{
 		ID: binary.BigEndian.Uint16(raw[1:3]),
+	}
+	return e, nil
+}
+
+func (a *Agent) parseGetClipboardEvent(raw []byte) (*sdriver.GetClipboardEvent, error) {
+	// WS Packet: [Type 1]
+	log.Printf("Parsing GetClipboardEvent, raw length: %d", len(raw))
+	CopyKey := raw[1]
+	e := &sdriver.GetClipboardEvent{
+		CopyKey: CopyKey, // 默认不模拟复制按键
+	}
+	return e, nil
+}
+
+func (a *Agent) parseSetClipboardEvent(raw []byte) (*sdriver.SetClipboardEvent, error) {
+	// WS Packet: [Type 1][Sequence 8][Paste 1][TextLen 4][Text N]
+	const minHeaderSize = 14 // 1 + 8 + 1 + 4
+	if len(raw) < minHeaderSize {
+		return nil, fmt.Errorf("invalid set clipboard message length: %d, expected at least %d", len(raw), minHeaderSize)
+	}
+
+	sequence := binary.BigEndian.Uint64(raw[1:9])
+	paste := raw[9] != 0
+	textLen := binary.BigEndian.Uint32(raw[10:14])
+
+	if len(raw) < minHeaderSize+int(textLen) {
+		return nil, fmt.Errorf("invalid set clipboard message length (text): expected %d, got %d", minHeaderSize+textLen, len(raw))
+	}
+
+	e := &sdriver.SetClipboardEvent{
+		Sequence: sequence,
+		Paste:    paste,
+		Content:  raw[14 : 14+textLen],
 	}
 	return e, nil
 }

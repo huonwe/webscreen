@@ -24,7 +24,7 @@ const (
 type ScrcpyDriver struct {
 	VideoChan   chan sdriver.AVBox
 	AudioChan   chan sdriver.AVBox
-	ControlChan chan sdriver.ControlEvent
+	ControlChan chan sdriver.Event
 
 	// LinearBuffer 管理器
 	videoBuffer *comm.LinearBuffer
@@ -61,7 +61,7 @@ func New(config map[string]string, deviceID string) (*ScrcpyDriver, error) {
 	da := &ScrcpyDriver{
 		VideoChan:   make(chan sdriver.AVBox, 10),
 		AudioChan:   make(chan sdriver.AVBox, 10),
-		ControlChan: make(chan sdriver.ControlEvent, 10),
+		ControlChan: make(chan sdriver.Event, 10),
 
 		videoBuffer: comm.NewLinearBuffer(0),
 		audioBuffer: comm.NewLinearBuffer(1 * 1024 * 1024), // 1MB 音频缓冲区
@@ -73,27 +73,27 @@ func New(config map[string]string, deviceID string) (*ScrcpyDriver, error) {
 
 	err = da.adbClient.PushScrcpyServer(SCRCPY_SERVER_LOCAL_PATH, SCRCPY_SERVER_ANDROID_DST)
 	if err != nil {
-		log.Printf("设置 推送scrcpy-server失败: %v", err)
+		log.Printf("[scrcpy] 设置 推送scrcpy-server失败: %v", err)
 		return nil, err
 	}
 
 	localPort := SCRCPY_PROXY_PORT_DEFAULT
 	listener, err := net.Listen("tcp", ":"+localPort)
 	if err != nil {
-		log.Printf("监听端口失败: %v", err)
+		log.Printf("[scrcpy] 监听端口失败: %v", err)
 		da.adbClient.ReverseRemove(fmt.Sprintf("localabstract:scrcpy_%s", da.scid))
 		return nil, err
 	}
 	da.adbClient.ReverseRemove(fmt.Sprintf("localabstract:scrcpy_%s", da.scid))
 	err = da.adbClient.Reverse(fmt.Sprintf("localabstract:scrcpy_%s", da.scid), "tcp:"+localPort)
 	if err != nil {
-		log.Printf("设置 Reverse 隧道失败: %v", err)
+		log.Printf("[scrcpy] 设置 Reverse 隧道失败: %v", err)
 		listener.Close()
 		return nil, err
 	}
-	log.Printf("set up reverse tunnel success: localabstract:scrcpy_%s -> tcp:%s", da.scid, localPort)
+	log.Printf("[scrcpy] set up reverse tunnel success: localabstract:scrcpy_%s -> tcp:%s", da.scid, localPort)
 
-	log.Printf("driver config: %v", config)
+	log.Printf("[scrcpy] driver config: %v", config)
 	options := map[string]string{
 		"CLASSPATH":      SCRCPY_SERVER_ANDROID_DST,
 		"Version":        SCRCPY_VERSION,
@@ -110,11 +110,19 @@ func New(config map[string]string, deviceID string) (*ScrcpyDriver, error) {
 	// log.Println("Scrcpy server started successfully")
 	conns := make([]net.Conn, 3)
 	log.Println("start tcp listening")
+
+	// 设置一个总的超时时间，如果在这个时间内没有建立所有连接，就认为失败
+	// scrcpy-server 启动失败通常会很快退出，或者根本连不上
+	timeout := time.Second * 5
+	listener.(*net.TCPListener).SetDeadline(time.Now().Add(timeout))
+
 	for i := 0; i < 3; i++ {
 		conn, err := listener.Accept()
 		if err != nil {
-			log.Printf("Accept 失败: %v", err)
-			return nil, err
+			log.Printf("[scrcpy] Accept 失败 (可能是 scrcpy-server 启动失败): %v", err)
+			listener.Close()
+			da.adbClient.ReverseRemove(fmt.Sprintf("localabstract:scrcpy_%s", da.scid))
+			return nil, fmt.Errorf("failed to accept connection from scrcpy-server: %v", err)
 		}
 		log.Println("Accept Connection", i)
 		conns[i] = conn
@@ -132,7 +140,7 @@ func New(config map[string]string, deviceID string) (*ScrcpyDriver, error) {
 				log.Println("Failed to read device metadata:", err)
 				return nil, err
 			}
-			log.Printf("Connected Device: %s", da.deviceName)
+			log.Printf("[scrcpy] Connected Device: %s", da.deviceName)
 
 			da.assignConn(conn)
 		case 1:
@@ -154,8 +162,8 @@ func New(config map[string]string, deviceID string) (*ScrcpyDriver, error) {
 }
 
 func (da *ScrcpyDriver) ShowDeviceInfo() {
-	log.Printf("Device Name: %s", da.deviceName)
-	log.Printf("media Meta: %v", da.mediaMeta)
+	log.Printf("[scrcpy] Device Name: %s", da.deviceName)
+	log.Printf("[scrcpy] media Meta: %v", da.mediaMeta)
 }
 
 // Please Ensure the input conn is not Control conn
@@ -234,7 +242,7 @@ func (da *ScrcpyDriver) updateVideoMetaFromSPS(sps []byte, codec string) {
 	}
 	da.mediaMeta.Width = spsInfo.Width
 	da.mediaMeta.Height = spsInfo.Height
-	log.Printf("Updated Video Meta from SPS: Width=%d, Height=%d", da.mediaMeta.Width, da.mediaMeta.Height)
+	log.Printf("[scrcpy] Updated Video Meta from SPS: Width=%d, Height=%d", da.mediaMeta.Width, da.mediaMeta.Height)
 }
 
 // func (da *ScrcpyDriver) cacheFrame(webrtcFrame *WebRTCFrame, frameType string) {
@@ -284,6 +292,6 @@ func createCopy(src []byte) []byte {
 }
 
 func ShowFrameHeaderInfo(header ScrcpyFrameHeader) {
-	log.Printf("Frame Header - PTS: %d, Size: %d, IsConfig: %v, IsKeyFrame: %v",
+	log.Printf("[scrcpy] Frame Header - PTS: %d, Size: %d, IsConfig: %v, IsKeyFrame: %v",
 		header.PTS, header.Size, header.IsConfig, header.IsKeyFrame)
 }

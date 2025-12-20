@@ -7,7 +7,7 @@ package sdriver
 // 占位用的结构体
 
 type SDriver interface {
-	GetReceivers() (<-chan AVBox, <-chan AVBox, <-chan ControlEvent)
+	GetReceivers() (<-chan AVBox, <-chan AVBox, <-chan Event)
 	SendEvent(event Event) error
 
 	StartStreaming()

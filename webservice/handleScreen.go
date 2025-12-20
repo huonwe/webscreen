@@ -37,6 +37,7 @@ func (wm *WebMaster) handleScreenWS(c *gin.Context) {
 	err = conn.ReadJSON(&config)
 	if err != nil {
 		log.Println("Failed to read connection options:", err)
+		conn.WriteJSON(map[string]interface{}{"status": "error", "message": err.Error(), "stage": "webrtc_init"})
 		conn.Close()
 		return
 	}
@@ -47,21 +48,21 @@ func (wm *WebMaster) handleScreenWS(c *gin.Context) {
 	// }
 	// Create a unique session ID
 	sessionID := config.DeviceType + "_" + config.DeviceID + "_" + config.DeviceIP + "_" + config.DevicePort
+	if _, exists := wm.ScreenSessions[sessionID]; exists {
+		wm.removeScreenSession(sessionID)
+	}
 	log.Printf("New WebSocket connection for session: %s", sessionID)
 	session := wm.ScreenSessions[sessionID]
 	session.WSConn = conn
-
-	log.Printf("Creating agent with config: %+v", config)
 	agent, err := sagent.NewAgent(config)
 	if err != nil {
 		log.Println("Failed to create agent:", err)
-		conn.WriteJSON(map[string]interface{}{"status": "error", "message": err.Error()})
+		conn.WriteJSON(map[string]interface{}{"status": "error", "message": err.Error(), "stage": "webrtc_init"})
 		conn.Close()
 		return
 	}
 	session.Agent = agent
 	wm.ScreenSessions[sessionID] = session
-
 	finalSDP := agent.CreateWebRTCConnection(string(config.SDP))
 	bitrateInt, err := strconv.Atoi(config.DriverConfig["video_bit_rate"])
 	if err != nil {
@@ -74,8 +75,9 @@ func (wm *WebMaster) handleScreenWS(c *gin.Context) {
 	// conn.WriteMessage(websocket.TextMessage, []byte(finalSDP))
 	capabilities := agent.Capabilities()
 	log.Printf("Driver Capabilities: %+v", capabilities)
-	conn.WriteJSON(map[string]interface{}{"capabilities": capabilities, "sdp": finalSDP, "status": "ok"})
+	conn.WriteJSON(map[string]interface{}{"status": "ok", "capabilities": capabilities, "sdp": finalSDP, "stage": "webrtc_init"})
 	go wm.listenScreenWS(conn, agent, sessionID)
+	go wm.listenEventFeedback(agent, conn)
 
 	agent.StartStreaming()
 }
@@ -105,6 +107,22 @@ func (wm *WebMaster) listenScreenWS(wsConn *websocket.Conn, agent *sagent.Agent,
 	wm.removeScreenSession(sessionID)
 }
 
+func (wm *WebMaster) listenEventFeedback(agent *sagent.Agent, wsConn *websocket.Conn) {
+	agent.EventFeedback(func(msg []byte) bool {
+		err := wsConn.WriteMessage(websocket.BinaryMessage, msg)
+		if err != nil {
+			log.Println("Failed to send event feedback via WebSocket:", err)
+			return false
+		}
+		return true
+	})
+}
+
 func (wm *WebMaster) removeScreenSession(sessionID string) {
+	log.Printf("Removing screen session: %s", sessionID)
+	if session, exists := wm.ScreenSessions[sessionID]; exists {
+		session.WSConn.Close()
+		session.Agent.Close()
+	}
 	delete(wm.ScreenSessions, sessionID)
 }

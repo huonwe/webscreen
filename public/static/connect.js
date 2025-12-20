@@ -1,7 +1,7 @@
 const jitterBufferTargetMs = 35; // 目标缓冲区延迟 (毫秒)
 
 // Load CONFIG from sessionStorage if available, otherwise use URL params or defaults
-var CONFIG = (function() {
+var CONFIG = (function () {
     // Try to load from sessionStorage first (set by console.js)
     const stored = sessionStorage.getItem('webcpy_stream_config');
     if (stored) {
@@ -14,7 +14,7 @@ var CONFIG = (function() {
             console.warn('Failed to parse stored config:', e);
         }
     }
-    
+
     // Try to extract from URL path: /screen/:device_type/:device_id/:device_ip/:device_port
     const pathMatch = window.location.pathname.match(/^\/screen\/([^\/]+)\/([^\/]+)\/([^\/]+)\/([^\/]+)/);
     if (pathMatch) {
@@ -32,7 +32,7 @@ var CONFIG = (function() {
             }
         };
     }
-    
+
     // Fallback to hardcoded defaults for testing
     return {
         device_type: "android",
@@ -87,7 +87,7 @@ async function start() {
     // 5. 建立 WebSocket 连接
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     // Construct URL matching the hardcoded config to satisfy backend check
-    const wsUrl = `${protocol}//${window.location.host}/screen/${CONFIG.device_type}/${CONFIG.device_id}/${CONFIG.device_ip}/${CONFIG.device_port}/ws`;
+    const wsUrl = `${protocol}//${window.location.host}/screen/ws`;
 
     window.ws = new WebSocket(wsUrl);
     window.ws.binaryType = "arraybuffer";
@@ -99,65 +99,73 @@ async function start() {
             ...CONFIG,
             sdp: pc.localDescription.sdp
         };
-        console.log(CONFIG)
+        // console.log(CONFIG)
         window.ws.send(JSON.stringify(config));
     };
-
-    let isFirstMessage = true;
     window.ws.onmessage = async (event) => {
-        if (isFirstMessage) {
-            isFirstMessage = false;
-            // 第一条消息是 SDP Answer + capabilities
+        if (typeof event.data === 'string') {
             const message = JSON.parse(event.data);
-            if (message.status !== 'ok') {
-                console.error("Failed to start streaming:", message.message);
-                return;
-            }
-            const answerSdp = message.sdp;
-            const capabilities = message.capabilities;
-            console.log("Received SDP Answer");
-            console.log("Driver Capabilities:", capabilities);
+            console.log("Received message status:", message.status);
+            switch (message.status) {
+                case 'ok':
+                    switch (message.stage) {
+                        case 'webrtc_init':
+                            const answerSdp = message.sdp;
+                            const capabilities = message.capabilities;
+                            console.log("Received SDP Answer");
+                            console.log("Driver Capabilities:", capabilities);
 
-            // Update UI based on capabilities
-            await updateUIBasedOnCapabilities(capabilities);
+                            // Update UI based on capabilities
+                            await updateUIBasedOnCapabilities(capabilities);
 
-            // 6. 设置 Answer
-            await pc.setRemoteDescription(new RTCSessionDescription({
-                type: 'answer',
-                sdp: answerSdp
-            }));
+                            // 6. 设置 Answer
+                            await pc.setRemoteDescription(new RTCSessionDescription({
+                                type: 'answer',
+                                sdp: answerSdp
+                            }));
 
-            pc.getReceivers().forEach(receiver => {
-                if (receiver.track.kind === 'video') {
-                    if (receiver.jitterBufferTarget !== undefined) {
-                        receiver.jitterBufferTarget = jitterBufferTargetMs;
+                            pc.getReceivers().forEach(receiver => {
+                                if (receiver.track.kind === 'video') {
+                                    if (receiver.jitterBufferTarget !== undefined) {
+                                        receiver.jitterBufferTarget = jitterBufferTargetMs;
+                                    }
+                                    console.log('✓ (playoutDelayHint=', receiver.playoutDelayHint, ', jitterBufferTarget=', receiver.jitterBufferTarget, ')');
+                                }
+                            });
+                            setInterval(() => force_sync(pc), 1000);
+                            break;
+                        default:
+                            break;
                     }
-                    console.log('✓ 已启用 WebRTC 低延迟模式 (playoutDelayHint=', receiver.playoutDelayHint, ', jitterBufferTarget=', receiver.jitterBufferTarget, ')');
-                }
-            });
-            setInterval(() => force_sync(pc), 1000);
-            return;
-        }
-
-        if (event.data instanceof ArrayBuffer) {
-            const view = new Uint8Array(event.data);
-            if (view[0] === 17) { // WS_TYPE_CLIPBOARD_DATA
-                const decoder = new TextDecoder();
-                const text = decoder.decode(view.slice(1));
-                // console.log("Clipboard from device:", text);
-                // Copy to browser clipboard
-                try {
-                    navigator.clipboard.writeText(text).catch(err => {
-                        console.error('Failed to write to clipboard:', err);
-                    });
-                } catch (e) {
-                    console.error('Clipboard API not available:', e);
-                    console.log("HTTPS is required for clipboard access.");
-                }
-
+                    break;
+                case 'error':
+                    console.error("Error from server:", message);
+                    showToast("Error from server: " + message.message, 5000);
+                    break;
+                default:
+                    console.warn("Unknown message status:", message.status);
             }
         } else {
-            console.log('Received message from server:', event.data);
+            const view = new Uint8Array(event.data);
+            console.log("bin type:", view[0])
+            switch (view[0]) {
+                case 0x17: // TYPE_CLIPBOARD_DATA
+                    const decoder = new TextDecoder();
+                    const text = decoder.decode(view.slice(1));
+                    console.log("Clipboard from device:", text);
+                    // Copy to browser clipboard
+                    try {
+                        navigator.clipboard.writeText(text).catch(err => {
+                            console.error('Failed to write to clipboard:', err);
+                        });
+                    } catch (e) {
+                        console.error('Clipboard API not available:', e);
+                        console.log("HTTPS is required for clipboard access.");
+                    }
+                    break;
+                default:
+                    console.warn("Unknown binary message type:", view[0]);
+            }
         }
     };
 }
@@ -195,7 +203,7 @@ async function force_sync(pc) {
                 currentDelay = deltaDelay / deltaCount;
             }
 
-            let delay_ms = (currentDelay * 5000).toFixed(2);
+            // let delay_ms = (currentDelay * 5000).toFixed(2);
             // if (delay_ms > 50) {
             //     console.log(`WebRTC 内部延迟: ${delay_ms} ms`);
             // }
@@ -219,22 +227,6 @@ async function force_sync(pc) {
     });
 };
 
-function setClipboard(text) {
-    if (!window.ws || window.ws.readyState !== WebSocket.OPEN) return;
-    const encoder = new TextEncoder();
-    const data = encoder.encode(text);
-    const packet = new Uint8Array(1 + data.length);
-    packet[0] = 15; // WS_TYPE_SET_CLIPBOARD
-    packet.set(data, 1);
-    window.ws.send(packet);
-}
-
-function getClipboard() {
-    if (!window.ws || window.ws.readyState !== WebSocket.OPEN) return;
-    const packet = new Uint8Array(1);
-    packet[0] = 16; // WS_TYPE_GET_CLIPBOARD
-    window.ws.send(packet);
-}
 
 function loadScript(src) {
     return new Promise((resolve, reject) => {
@@ -261,7 +253,6 @@ async function updateUIBasedOnCapabilities(caps) {
 
     // Handle Control
     if (caps.can_control) {
-        show('.feature-control');
         // Load control scripts
         try {
             await loadScript('/static/controlMessages.js');
@@ -269,21 +260,28 @@ async function updateUIBasedOnCapabilities(caps) {
             await loadScript('/static/keyboard.js');
             await loadScript('/static/touch.js');
             await loadScript('/static/scroll.js');
+            show('.feature-control');
             console.log("Control scripts loaded");
         } catch (e) {
             console.error("Failed to load control scripts", e);
         }
         // Handle Clipboard
         if (caps.can_clipboard) {
-            show('.feature-clipboard');
+            try {
+                // Add timestamp to force cache busting
+                await loadScript('/static/clipboard.js');
+                show('.feature-clipboard');
+            } catch (e) {
+                console.error("Failed to load clipboard script", e);
+            }
         }
         // Handle UHID
         if (caps.can_uhid) {
-            show('.feature-uhid');
             try {
                 await loadScript('/static/uhid_mouse.js');
                 await loadScript('/static/uhid_keyboard.js');
                 await loadScript('/static/uhid_gamepad.js');
+                show('.feature-uhid');
                 console.log("UHID scripts loaded");
             } catch (e) {
                 console.error("Failed to load UHID scripts", e);

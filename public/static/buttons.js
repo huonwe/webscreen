@@ -1,3 +1,5 @@
+var MANNUAL_ROTATE = false
+
 function homeButton() {
     // KEYCODE_HOME = 3
     const KEYCODE_HOME = 3;
@@ -64,6 +66,7 @@ function menuButton() {
 function rotateButton() {
     let p = createRotatePacket();
     sendButtonEvent(p);
+    MANNUAL_ROTATE = true;
 }
 
 function sendButtonEvent(packet) {

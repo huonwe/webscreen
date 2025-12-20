@@ -7,8 +7,9 @@ import (
 )
 
 type ScreenSession struct {
-	WSConn *websocket.Conn
-	Agent  *agent.Agent
+	SessionID string
+	WSConn    *websocket.Conn
+	Agent     *agent.Agent
 }
 
 func (sc *ScreenSession) Close() {
