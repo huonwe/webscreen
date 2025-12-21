@@ -82,11 +82,11 @@ func (wm *WebMaster) setRouter() {
 	wm.router = r
 }
 
-func (wm *WebMaster) Serve() {
+func (wm *WebMaster) Serve(port string) {
 	// if wm.config.EnableAndroidDiscover {
 	// 	go wm.AndroidDevicesDiscovery()
 	// }
-	wm.router.Run(":8079")
+	wm.router.Run(":" + port)
 }
 
 func (wm *WebMaster) Close() {
