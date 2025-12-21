@@ -8,6 +8,7 @@ services:
       - /dev/bus/usb:/dev/bus/usb
     environment:
       - GIN_MODE=release
+      - PORT=8079
     restart: unless-stopped
     logging:
       driver: "json-file"

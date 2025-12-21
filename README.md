@@ -40,6 +40,7 @@ You can also use docker:
 docker run -d \
   --name webscreen \
   --network host \
+  -e PORT=8079 \
   dukihiroi/webscreen:latest
 ```
 
