@@ -1,4 +1,4 @@
-const jitterBufferTargetMs = 35; // 目标缓冲区延迟 (毫秒)
+const jitterBufferTargetMs = 35; // 0 is a cake
 
 // Load CONFIG from sessionStorage if available, otherwise use URL params or defaults
 var CONFIG = (function () {
@@ -55,17 +55,15 @@ async function start() {
     console.log("Starting WebRTC connection...");
     const pc = new RTCPeerConnection();
 
-    // 1. 监听远端流
+    // 1. Listen for remote tracks
     pc.ontrack = function (event) {
         if (event.track.kind === 'video') {
             const el = document.getElementById('remoteVideo');
             el.srcObject = event.streams[0];
 
-            // 监听视频尺寸变化
             el.addEventListener('loadedmetadata', triggerCheck);
             el.addEventListener('resize', triggerCheck);
         } else if (event.track.kind === 'audio') {
-            // 音频单独用一个 audio 标签播放，彻底解耦同步
             const audioEl = document.createElement('audio');
             audioEl.srcObject = event.streams[0];
             audioEl.autoplay = true;
@@ -73,22 +71,21 @@ async function start() {
         }
     };
 
-    // 2. 添加一个仅接收的 Transceiver (重要)
-    // 告诉浏览器："我想要接收视频，但我不需要发视频给你"
+    // 2. Add a recvonly Transceiver
     pc.addTransceiver('video', { direction: 'recvonly' });
     pc.addTransceiver('audio', { direction: 'recvonly' });
 
-    // 3. 创建 Offer
+    // 3. Create Offer
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
 
-    // 4. 等待 ICE
+    // 4. Wait ICE
     await new Promise(resolve => {
         if (pc.iceGatheringState === 'complete') resolve();
         else pc.onicecandidate = e => { if (!e.candidate) resolve(); }
     });
 
-    // 5. 建立 WebSocket 连接
+    // 5. Establish WebSocket connection
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     // Construct URL matching the hardcoded config to satisfy backend check
     const wsUrl = `${protocol}//${window.location.host}/screen/ws`;
@@ -123,7 +120,7 @@ async function start() {
                             // Update UI based on capabilities
                             await updateUIBasedOnCapabilities(capabilities);
 
-                            // 6. 设置 Answer
+                            // 设置 Answer
                             await pc.setRemoteDescription(new RTCSessionDescription({
                                 type: 'answer',
                                 sdp: answerSdp
@@ -152,7 +149,6 @@ async function start() {
             }
         } else {
             const view = new Uint8Array(event.data);
-            console.log("bin type:", view[0])
             switch (view[0]) {
                 case 0x17: // TYPE_CLIPBOARD_DATA
                     const decoder = new TextDecoder();
@@ -210,22 +206,21 @@ async function force_sync(pc) {
 
             // let delay_ms = (currentDelay * 5000).toFixed(2);
             // if (delay_ms > 50) {
-            //     console.log(`WebRTC 内部延迟: ${delay_ms} ms`);
+            //     console.log(`WebRTC Internal Delay: ${delay_ms} ms`);
             // }
 
             const videoEl = document.getElementById('remoteVideo');
             if (!videoEl) return;
 
-            // --- 策略 A: 延迟较低时 (100ms - 500ms)，通过 1.25倍速 偷偷追帧 ---
             if (currentDelay > 0.1 && currentDelay < 0.5) {
                 if (videoEl.playbackRate !== 1.1) {
-                    console.log("轻微延迟，启用 1.1x 倍速追赶");
+                    // console.log("轻微延迟，启用 1.1x 倍速追赶");
                     videoEl.playbackRate = 1.1;
                 }
             }
             // 延迟恢复正常后，切回 1.0
             else if (currentDelay <= 0.1 && videoEl.playbackRate !== 1.0) {
-                console.log("延迟恢复正常，切回 1.0x");
+                // console.log("延迟恢复正常，切回 1.0x");
                 videoEl.playbackRate = 1.0;
             }
         }

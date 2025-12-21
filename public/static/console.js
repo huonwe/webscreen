@@ -20,11 +20,6 @@ const defaultStreamConfig = {
     }
 };
 
-// Mock data for demo purposes if API fails
-// const MOCK_DEVICES = [
-//     { device_id: 'R58M45Y7', type: 'android', status: 'device', ip: '192.168.1.105', port: '5555' },
-//     { device_id: 'Pixel_7_Pro', type: 'android', status: 'device', ip: '192.168.1.102', port: '5555' }
-// ];
 
 // --- Config Management ---
 
@@ -167,7 +162,7 @@ async function fetchDevices() {
     grid.innerHTML = `
                 <div class="col-span-full flex flex-col items-center justify-center py-20 text-gray-500">
                     <div class="spinner mb-4"></div>
-                    <p>正在扫描设备...</p>
+                    <p>${i18n.t('scanning_devices')}</p>
                 </div>
             `;
 
@@ -194,7 +189,7 @@ async function fetchDevices() {
             knownDevices = MOCK_DEVICES;
             knownDevices.forEach(d => ensureDeviceConfig(d));
             renderDeviceList();
-            showToast(i18n.t('demo_mode'), 'info');
+            showToast(i18n.t('call_api_failed'), 'info');
         }, 800);
     }
 }
@@ -224,9 +219,8 @@ async function connectDevice() {
             throw new Error(data.error || i18n.t('connection_failed'));
         }
     } catch (error) {
-        // Mock success for demo
         console.error(error);
-        showToast(i18n.t('api_failed_demo'), 'error');
+        showToast(i18n.t('call_api_failed'), 'error');
     }
 }
 
