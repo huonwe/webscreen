@@ -3,7 +3,6 @@ name: Build and Release
 on:
   push:
     branches: [ "main" ]
-    # 只有当 push 的标签以 'v' 开头时（例如 v1.0.0），才触发 Release 流程
     tags:
       - "v*"
       - "dev*"
@@ -15,7 +14,6 @@ jobs:
     name: Build (${{ matrix.goos }}/${{ matrix.goarch }})
     runs-on: ubuntu-latest
     strategy:
-      # 矩阵配置：定义 3x2 = 6 种组合 (linux, windows, darwin) x (amd64, arm64)
       matrix:
         goos: [linux, windows, darwin]
         goarch: [amd64, arm64]
@@ -30,10 +28,9 @@ jobs:
 
     - name: Build Binary
       env:
-        # 使用矩阵变量设置 Go 交叉编译环境
         GOOS: ${{ matrix.goos }}
         GOARCH: ${{ matrix.goarch }}
-        CGO_ENABLED: 0 # 通常交叉编译建议关闭 CGO，除非必须用
+        CGO_ENABLED: 0
       run: |
         # 1. 确定二进制文件名
         BINARY_NAME="webscreen-${{ matrix.goos }}-${{ matrix.goarch }}"
@@ -84,12 +81,18 @@ jobs:
   docker:
     name: Build and Push Docker Image
     runs-on: ubuntu-latest
-    # 仅在 main 分支推送或推送标签时触发
+    needs: build
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
-    
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./dist
+          merge-multiple: true
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -107,12 +110,10 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          # 替换为你的 Docker Hub 仓库名
           images: ${{ secrets.DOCKERHUB_USERNAME }}/webscreen
           tags: |
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
             type=semver,pattern={{version}}
-            type=sha
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
@@ -122,3 +123,5 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # build-args: |
+          #   TARGETARCH=${{ matrix.platform }}
