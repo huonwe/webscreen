@@ -32,12 +32,6 @@ type ScrcpyFrameHeader struct {
 	PTS        uint64
 	Size       uint32
 }
-
-type ScrcpyFrame struct {
-	Header  ScrcpyFrameHeader
-	Payload []byte
-}
-
 type OpusHead struct {
 	Magic      [8]byte
 	Version    byte

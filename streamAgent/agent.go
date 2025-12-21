@@ -43,8 +43,7 @@ type Agent struct {
 // 创建视频轨和音频轨，并初始化 Agent. 可以选择是否开启音视频同步.
 func NewAgent(config AgentConfig) (*Agent, error) {
 	sa := &Agent{
-		config:   config,
-		baseTime: time.Now(),
+		config: config,
 	}
 	switch config.DeviceType {
 	case DEVICE_TYPE_DUMMY:
@@ -178,6 +177,7 @@ func (sa *Agent) Capabilities() sdriver.DriverCaps {
 
 func (sa *Agent) StartStreaming() {
 	sa.driver.Start()
+	sa.baseTime = time.Now()
 	go sa.StreamingVideo()
 	go sa.StreamingAudio()
 	go sa.HandleRTCP()
