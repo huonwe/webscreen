@@ -51,4 +51,3 @@ After you start streaming, you might need to manually make the scene a little ch
 
 Please notice that the ports in `pair` and `connect` are different.
 ![sample](doc/assets/wireless_debugging.png)
-

@@ -26,10 +26,12 @@ WORKDIR /app
 # 从构建阶段拷贝编译好的程序
 COPY --from=builder /app/webscreen .
 
+ENV PORT=8079
+
 # 暴露 Web 服务端口 (在 webservice/webmaster.go 中定义为 8079)
 EXPOSE 8079
 
 # 启动程序
 # 提示：在容器内运行 adb 时，通常需要通过环境变量或链接挂载宿主机的 adb server，
 # 或者在容器内启动一个新的 adb server。
-ENTRYPOINT ["./webscreen"]
+ENTRYPOINT ["./webscreen", "-port", "${PORT}"]
