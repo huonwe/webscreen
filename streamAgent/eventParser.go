@@ -3,7 +3,6 @@ package sagent
 import (
 	"encoding/binary"
 	"fmt"
-	"log"
 	"webscreen/sdriver"
 )
 
@@ -159,7 +158,7 @@ func (a *Agent) parseUHIDDestroyEvent(raw []byte) (*sdriver.UHIDDestroyEvent, er
 
 func (a *Agent) parseGetClipboardEvent(raw []byte) (*sdriver.GetClipboardEvent, error) {
 	// WS Packet: [Type 1]
-	log.Printf("Parsing GetClipboardEvent, raw length: %d", len(raw))
+	// log.Printf("Parsing GetClipboardEvent, raw length: %d", len(raw))
 	CopyKey := raw[1]
 	e := &sdriver.GetClipboardEvent{
 		CopyKey: CopyKey, // 默认不模拟复制按键
