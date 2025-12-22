@@ -3,6 +3,7 @@ package scrcpy
 import (
 	"fmt"
 	"log"
+	"time"
 	"webscreen/sdriver"
 )
 
@@ -32,7 +33,6 @@ func (sd *ScrcpyDriver) SendEvent(event sdriver.Event) error {
 	case *sdriver.RotateEvent:
 		sd.RotateDevice()
 	case *sdriver.GetClipboardEvent:
-		log.Printf("[ScrcpyDriver] SendEvent: GetClipboardEvent")
 		sd.SendGetClipboardEvent(e)
 	case *sdriver.SetClipboardEvent:
 		sd.SendSetClipboardEvent(e)
@@ -42,14 +42,9 @@ func (sd *ScrcpyDriver) SendEvent(event sdriver.Event) error {
 		sd.SendUHIDInputEvent(e)
 	case *sdriver.UHIDDestroyEvent:
 		sd.SendUHIDDestroyEvent(e)
-	case *sdriver.ReqIDREvent:
+	case *sdriver.IDRReqEvent:
 		sd.KeyFrameRequest()
 	default:
-		// Fallback for IDR if passed as a different struct with same Type
-		if event.Type() == sdriver.EVENT_TYPE_REQ_IDR {
-			sd.KeyFrameRequest()
-			return nil
-		}
 		log.Printf("ScrcpyDriver: Unhandled event type: %T", event)
 	}
 
@@ -57,31 +52,31 @@ func (sd *ScrcpyDriver) SendEvent(event sdriver.Event) error {
 }
 
 func (sd *ScrcpyDriver) RequestIDR(firstFrame bool) {
-	if len(sd.LastVPS) > 0 {
-		select {
-		case sd.VideoChan <- sdriver.AVBox{Data: createCopy(sd.LastVPS), PTS: sd.LastPTS, IsKeyFrame: false, IsConfig: true}:
-		default:
-		}
+	if len(sd.LastSPS) == 0 && len(sd.LastPPS) == 0 && len(sd.LastVPS) == 0 && len(sd.LastIDR) == 0 {
+		sd.KeyFrameRequest()
+		return
 	}
-	if len(sd.LastSPS) > 0 {
-		select {
-		case sd.VideoChan <- sdriver.AVBox{Data: createCopy(sd.LastSPS), PTS: sd.LastPTS, IsKeyFrame: false, IsConfig: true}:
-		default:
+
+	if firstFrame {
+		sd.keyFrameMutex.RLock()
+		cachedSPS := createCopy(sd.LastSPS)
+		cachedPPS := createCopy(sd.LastPPS)
+		cachedVPS := createCopy(sd.LastVPS)
+		cachedIDR := createCopy(sd.LastIDR)
+		sd.keyFrameMutex.RUnlock()
+		log.Println("⚡ Sending cached IDR and parameter sets for first frame")
+		if len(sd.LastVPS) > 0 {
+			sd.VideoChan <- sdriver.AVBox{Data: cachedVPS, PTS: sd.LastPTS, IsKeyFrame: false, IsConfig: true}
 		}
+		sd.VideoChan <- sdriver.AVBox{Data: cachedSPS, PTS: sd.LastPTS, IsKeyFrame: false, IsConfig: true}
+		sd.VideoChan <- sdriver.AVBox{Data: cachedPPS, PTS: sd.LastPTS, IsKeyFrame: false, IsConfig: true}
+		sd.VideoChan <- sdriver.AVBox{Data: cachedIDR, PTS: sd.LastPTS, IsKeyFrame: true, IsConfig: false}
 	}
-	if len(sd.LastPPS) > 0 {
-		select {
-		case sd.VideoChan <- sdriver.AVBox{Data: createCopy(sd.LastPPS), PTS: sd.LastPTS, IsKeyFrame: false, IsConfig: true}:
-		default:
-		}
+
+	if time.Since(sd.lastIDRRequestTime) > 2*time.Second {
+		log.Println("⚡ Requesting new KeyFrame from device...")
+		sd.KeyFrameRequest()
 	}
-	if len(sd.LastIDR) > 0 && firstFrame {
-		select {
-		case sd.VideoChan <- sdriver.AVBox{Data: createCopy(sd.LastIDR), PTS: sd.LastPTS, IsKeyFrame: true, IsConfig: false}:
-		default:
-		}
-	}
-	sd.KeyFrameRequest()
 }
 
 func (sd *ScrcpyDriver) Capabilities() sdriver.DriverCaps {

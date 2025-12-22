@@ -259,52 +259,8 @@ func (da *ScrcpyDriver) SendUHIDDestroyEvent(e *sdriver.UHIDDestroyEvent) {
 }
 
 func (da *ScrcpyDriver) KeyFrameRequest() error {
-
 	// return nil
 	if da.controlConn == nil {
-		return nil
-	}
-	// log.Printf("Last Request KeyFrame time: %v Last IDR time: %v", da.lastIDRRequestTime, da.LastPTS)
-	if time.Since(da.lastIDRRequestTime) < 1*time.Second {
-		log.Println("⏳ KeyFrame request too frequent, use cached")
-		da.keyFrameMutex.RLock()
-
-		isH265 := da.mediaMeta.VideoCodecID == "h265"
-		hasSPS := len(da.LastSPS) > 0
-		hasPPS := len(da.LastPPS) > 0
-		hasIDR := len(da.LastIDR) > 0
-		hasVPS := len(da.LastVPS) > 0
-
-		if !hasSPS || !hasPPS || !hasIDR || (isH265 && !hasVPS) {
-			da.keyFrameMutex.RUnlock()
-			log.Println("⚠️ Cached keyframe data incomplete, skipping...")
-			return nil
-		}
-
-		var vpsCopy, spsCopy, ppsCopy, idrCopy []byte
-		if isH265 {
-			vpsCopy = createCopy(da.LastVPS)
-		}
-		spsCopy = createCopy(da.LastSPS)
-		ppsCopy = createCopy(da.LastPPS)
-		idrCopy = createCopy(da.LastIDR)
-		// Check freshness of IDR
-		// idrFresh := time.Since(da.LastIDRTime) < 500*time.Millisecond
-
-		da.keyFrameMutex.RUnlock()
-
-		go func() {
-			if isH265 && vpsCopy != nil {
-				da.VideoChan <- sdriver.AVBox{Data: vpsCopy, PTS: da.LastPTS, IsConfig: true}
-			}
-			da.VideoChan <- sdriver.AVBox{Data: spsCopy, PTS: da.LastPTS, IsConfig: true}
-			da.VideoChan <- sdriver.AVBox{Data: ppsCopy, PTS: da.LastPTS, IsConfig: true}
-			// 为了保证流畅性，即使 IDR 不新鲜也发送
-			// if idrCopy != nil {
-			da.VideoChan <- sdriver.AVBox{Data: idrCopy, PTS: da.LastPTS, IsConfig: false}
-			// 	log.Println("✅ Sent cached keyframe data")
-			// }
-		}()
 		return nil
 	}
 	log.Println("⚡ Sending Request KeyFrame (Type 99)...")

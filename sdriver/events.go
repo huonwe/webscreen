@@ -132,9 +132,9 @@ func (e UHIDDestroyEvent) Type() EventType {
 	return EVENT_TYPE_UHID_DESTROY
 }
 
-type ReqIDREvent struct{}
+type IDRReqEvent struct{}
 
-func (e ReqIDREvent) Type() EventType {
+func (e IDRReqEvent) Type() EventType {
 	return EVENT_TYPE_REQ_IDR
 }
 
