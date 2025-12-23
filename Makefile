@@ -17,7 +17,7 @@ endif
 # 1. Capturer 输出路径 (必须固定！为了配合 go:embed)
 # 无论是在本地还是 CI，它都必须生成到源代码树的这个位置
 CAPTURER_DIR := sdriver/xvfb/bin
-CAPTURER_BIN := capturer_xvfb$(EXE)
+CAPTURER_BIN := capturer_xvfb
 CAPTURER_OUT := $(CAPTURER_DIR)/$(CAPTURER_BIN)
 
 # 2. Main 程序输出路径 (可变)
