@@ -214,7 +214,7 @@ function sendControlPacket(action, dx, dy, buttons, wheel) {
     
     virtualMouse.x += dx;
     virtualMouse.y += dy;
-    console.log(`Send: Act=${action}, x=${virtualMouse.x}, y=${virtualMouse.y}, Btn=${buttons}`);
+    // console.log(`Send: Act=${action}, x=${virtualMouse.x}, y=${virtualMouse.y}, Btn=${buttons}`);
     const packet = createMousePacket(action, virtualMouse.x, virtualMouse.y, buttons, 0, wheel);
     window.ws.send(packet);
 }

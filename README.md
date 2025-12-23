@@ -2,15 +2,8 @@
 
 ## ℹ️ About
 
-Webscreen is a self-hosted screen streaming web application for Android devices, based on WebRTC and [scrcpy](https://github.com/Genymobile/scrcpy).
-
+Webscreen is a self-hosted screen streaming web application for Android and Linux devices, based on WebRTC.
 ![screenshot](doc/assets/screenshot.png)
-
-It supports:
-- Video, Audio, Control
-- UHID Devices (Mouse, Keyboard, Gamepad)
-- Clipboard Sync
-- Maybe more...
 
 It can run on:
 - Android Termux
@@ -19,6 +12,18 @@ It can run on:
 - MacOS
 
 at both `amd64` and `arm64`
+
+
+
+Android supports ([scrcpy](https://github.com/Genymobile/scrcpy)):
+- Video, Audio, Control
+- UHID Devices (Mouse, Keyboard, Gamepad)
+- Clipboard Sync
+- Maybe more...
+
+
+Linux supports (xvfb):
+- Video, Control
 
 ## Prerequisites
 For device side, please refer to [scrcpy](https://github.com/Genymobile/scrcpy/blob/master/README.md#prerequisites)
@@ -50,5 +55,4 @@ You might need to pair Android device first. `Pair device with pairing code` is 
 
 After you start streaming, you might need to manually make the scene a little changed, to get the screen. You can simply click volume button to make it.
 
-Please notice that the ports in `pair` and `connect` are different.
-![sample](doc/assets/wireless_debugging.png)
+Please notice that the ports in `pair` and `connect` are different. See details [here](https://developer.android.com/studio/debug/dev-options#enable)

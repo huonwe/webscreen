@@ -27,6 +27,8 @@ func main() {
 	frameRate := flag.String("framerate", "60", "frame rate for capturing")
 	codec := flag.String("codec", "h264", "video codec: h264 or hevc")
 	flag.Parse()
+	log.Printf("Starting Xvfb capturer with resolution %s, bitrate %s, framerate %s, codec %s\n", *resolution, *bitRate, *frameRate, *codec)
+
 	// 启动 Xvfb 虚拟显示器
 	_width, _height := strings.Split(*resolution, "x")[0], strings.Split(*resolution, "x")[1]
 	// 定义清理函数：用于杀死 Xvfb 进程

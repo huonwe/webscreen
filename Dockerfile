@@ -1,6 +1,6 @@
 FROM alpine:latest
 
-RUN apk add --no-cache android-tools
+RUN apk add --no-cache android-tools xvfb
 
 WORKDIR /app
 

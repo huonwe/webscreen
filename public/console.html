@@ -142,50 +142,95 @@
             </div>
             
             <div class="space-y-6">
-                <!-- Video Section -->
-                <div class="bg-[#2a2b2c] p-4 rounded-2xl space-y-4">
-                    <div class="flex items-center gap-2 text-[var(--md-sys-color-primary)] mb-2">
-                        <span class="material-symbols-rounded text-lg">videocam</span>
-                        <span class="text-sm font-bold uppercase tracking-wider" data-i18n="video">Video</span>
-                    </div>
-                    
-                    <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-xs font-medium text-gray-400 mb-1 ml-1" data-i18n="max_fps">最大 FPS</label>
-                            <input type="number" id="configMaxFPS" class="md-input w-full px-3 py-2 rounded-lg text-white text-sm" placeholder="60">
+                <!-- Android Settings -->
+                <div id="androidSettings" class="space-y-6">
+                    <!-- Video Section -->
+                    <div class="bg-[#2a2b2c] p-4 rounded-2xl space-y-4">
+                        <div class="flex items-center gap-2 text-[var(--md-sys-color-primary)] mb-2">
+                            <span class="material-symbols-rounded text-lg">videocam</span>
+                            <span class="text-sm font-bold uppercase tracking-wider" data-i18n="video">Video</span>
                         </div>
-                        <div>
-                            <label class="block text-xs font-medium text-gray-400 mb-1 ml-1" data-i18n="bitrate">比特率 (Mbps)</label>
-                            <input type="text" id="configVideoBitrate" class="md-input w-full px-3 py-2 rounded-lg text-white text-sm" placeholder="8M">
+                        
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-400 mb-1 ml-1" data-i18n="max_fps">最大 FPS</label>
+                                <input type="number" id="configMaxFPS" class="md-input w-full px-3 py-2 rounded-lg text-white text-sm" placeholder="60">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-400 mb-1 ml-1" data-i18n="bitrate">比特率 (Mbps)</label>
+                                <input type="text" id="configVideoBitrate" class="md-input w-full px-3 py-2 rounded-lg text-white text-sm" placeholder="8M">
+                            </div>
                         </div>
-                    </div>
-                    
-                    <div>
-                        <label class="block text-xs font-medium text-gray-400 mb-1 ml-1" data-i18n="video_codec">视频编码</label>
-                        <select id="configVideoCodec" class="md-input w-full px-3 py-2 rounded-lg text-white text-sm appearance-none bg-[url('data:image/svg+xml;base64,PHN2ZyBmaWxsPSIjZmZmIiBoZWlnaHQ9IjI0IiB2aWV3Qm94PSIwIDAgMjQgMjQiIHdpZHRoPSIyNCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBkPSJNNyAxMGw1IDUgNS01eiIvPjwvc3ZnPg==')] bg-no-repeat bg-right">
-                            <option value="h264" data-i18n="h264_recommended">H.264 (推荐)</option>
-                            <!-- <option value="h265">H.265 (高效)</option> -->
-                            <!-- <option value="av1">AV1 (实验性)</option> -->
-                        </select>
+                        
+                        <div>
+                            <label class="block text-xs font-medium text-gray-400 mb-1 ml-1" data-i18n="video_codec">视频编码</label>
+                            <select id="configVideoCodec" class="md-input w-full px-3 py-2 rounded-lg text-white text-sm appearance-none bg-[url('data:image/svg+xml;base64,PHN2ZyBmaWxsPSIjZmZmIiBoZWlnaHQ9IjI0IiB2aWV3Qm94PSIwIDAgMjQgMjQiIHdpZHRoPSIyNCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBkPSJNNyAxMGw1IDUgNS01eiIvPjwvc3ZnPg==')] bg-no-repeat bg-right">
+                                <option value="h264" data-i18n="h264_recommended">H.264 (推荐)</option>
+                                <!-- <option value="h265">H.265 (高效)</option> -->
+                                <!-- <option value="av1">AV1 (实验性)</option> -->
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-medium text-gray-400 mb-1 ml-1" data-i18n="video_codec_options">video_codec_options</label>
+                            <input type="text" id="configVideoCodecOptions" class="md-input w-full px-3 py-2 rounded-lg text-white text-sm" placeholder="例如: i-frame-interval=10" data-i18n="codec_options_placeholder">
+                        </div>
                     </div>
 
-                    <div>
-                        <label class="block text-xs font-medium text-gray-400 mb-1 ml-1" data-i18n="video_codec_options">video_codec_options</label>
-                        <input type="text" id="configVideoCodecOptions" class="md-input w-full px-3 py-2 rounded-lg text-white text-sm" placeholder="例如: i-frame-interval=10" data-i18n="codec_options_placeholder">
+                    <!-- Display Section -->
+                    <div class="bg-[#2a2b2c] p-4 rounded-2xl space-y-4">
+                        <div class="flex items-center gap-2 text-[var(--md-sys-color-primary)] mb-2">
+                            <span class="material-symbols-rounded text-lg">aspect_ratio</span>
+                            <span class="text-sm font-bold uppercase tracking-wider" data-i18n="display">Display</span>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-xs font-medium text-gray-400 mb-1 ml-1" data-i18n="new_display">New Display</label>
+                            <input type="text" id="configNewDisplay" class="md-input w-full px-3 py-2 rounded-lg text-white text-sm" placeholder="1920x1080/60">
+                            <p class="text-[10px] text-gray-500 mt-1 ml-1" data-i18n="leave_empty_disable">留空以禁用此选项</p>
+                        </div>
                     </div>
                 </div>
 
-                <!-- Display Section -->
-                <div class="bg-[#2a2b2c] p-4 rounded-2xl space-y-4">
-                    <div class="flex items-center gap-2 text-[var(--md-sys-color-primary)] mb-2">
-                        <span class="material-symbols-rounded text-lg">aspect_ratio</span>
-                        <span class="text-sm font-bold uppercase tracking-wider" data-i18n="display">Display</span>
-                    </div>
-                    
-                    <div>
-                        <label class="block text-xs font-medium text-gray-400 mb-1 ml-1" data-i18n="new_display">New Display</label>
-                        <input type="text" id="configNewDisplay" class="md-input w-full px-3 py-2 rounded-lg text-white text-sm" placeholder="1920x1080/60">
-                        <p class="text-[10px] text-gray-500 mt-1 ml-1" data-i18n="leave_empty_disable">留空以禁用此选项</p>
+                <!-- Xvfb Settings -->
+                <div id="xvfbSettings" class="space-y-6 hidden">
+                    <div class="bg-[#2a2b2c] p-4 rounded-2xl space-y-4">
+                        <div class="flex items-center gap-2 text-[var(--md-sys-color-primary)] mb-2">
+                            <span class="material-symbols-rounded text-lg">settings_system_daydream</span>
+                            <span class="text-sm font-bold uppercase tracking-wider">Xvfb Config</span>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-medium text-gray-400 mb-1 ml-1">SSH IP</label>
+                            <input type="text" id="xvfbIp" class="md-input w-full px-3 py-2 rounded-lg text-white text-sm" placeholder="Localhost doesn't need to be filled">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-400 mb-1 ml-1">SSH User</label>
+                            <input type="text" id="xvfbUser" class="md-input w-full px-3 py-2 rounded-lg text-white text-sm" placeholder="Localhost doesn't need to be filled">
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-400 mb-1 ml-1">Resolution</label>
+                                <input type="text" id="xvfbResolution" class="md-input w-full px-3 py-2 rounded-lg text-white text-sm" placeholder="1920x1080">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-400 mb-1 ml-1">Frame Rate</label>
+                                <input type="number" id="xvfbFrameRate" class="md-input w-full px-3 py-2 rounded-lg text-white text-sm" placeholder="60">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-400 mb-1 ml-1">Bitrate (bps)</label>
+                                <input type="text" id="xvfbBitRate" class="md-input w-full px-3 py-2 rounded-lg text-white text-sm" placeholder="20000000">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-400 mb-1 ml-1">Codec</label>
+                                <select id="xvfbCodec" class="md-input w-full px-3 py-2 rounded-lg text-white text-sm appearance-none bg-[url('data:image/svg+xml;base64,PHN2ZyBmaWxsPSIjZmZmIiBoZWlnaHQ9IjI0IiB2aWV3Qm94PSIwIDAgMjQgMjQiIHdpZHRoPSIyNCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBkPSJNNyAxMGw1IDUgNS01eiIvPjwvc3ZnPg==')] bg-no-repeat bg-right">
+                                    <option value="h264">H.264</option>
+                                    <option value="h265">H.265</option>
+                                </select>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

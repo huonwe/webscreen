@@ -3,31 +3,6 @@ const jitterBufferTargetMs = 35; // 0 is a cake
 // Load CONFIG from sessionStorage if available, otherwise use URL params or defaults
 var CONFIG = (function () {
     // Try to load from sessionStorage first (set by console.js)
-    // If url is /screen?test=true, return the specific test config
-    if (window.location.search.includes('test=true')) {
-        return {
-            device_type: "x11",
-            device_id: "localhost",
-            device_ip: "0",
-            device_port: "0",
-            av_sync: false,
-            driver_config: {
-                ip : "",
-                user: "",
-                password: "",
-                resolution: "1920x1080",
-                frameRate: "60",
-                bitRate: "20000000",
-                codec: "h264",
-                
-                max_fps: "60",
-                video_codec: "h264",
-                audio_codec: "opus",
-                video_bit_rate: "20000000",
-            }
-        };
-    }
-
     const stored = sessionStorage.getItem('webscreen_device_configs');
     console.log("Stored config:", stored);
     if (stored) {
@@ -126,7 +101,7 @@ async function start() {
             ...CONFIG,
             sdp: pc.localDescription.sdp
         };
-        // console.log(CONFIG)
+        console.log(CONFIG.driver_config)
         window.ws.send(JSON.stringify(config));
     };
     window.ws.onmessage = async (event) => {

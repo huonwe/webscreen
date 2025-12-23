@@ -42,7 +42,9 @@ jobs:
 
         # 3. 执行构建 (-o 指定输出路径)
         echo "Building $BINARY_NAME..."
-        go build -v -o "dist/$BINARY_NAME" .
+        mkdir -p dist
+        make ci DIST_DIR=dist SUFFIX="-${{ matrix.goos }}-${{ matrix.goarch }}"
+        # go build -v -o "dist/$BINARY_NAME" .
 
     - name: Upload Build Artifacts
       uses: actions/upload-artifact@v4

@@ -9,7 +9,7 @@ import (
 	"webscreen/sdriver"
 	"webscreen/sdriver/dummy"
 	"webscreen/sdriver/scrcpy"
-	linuxX11Driver "webscreen/sdriver/x11"
+	linuxXvfbDriver "webscreen/sdriver/xvfb"
 
 	"github.com/pion/rtcp"
 	"github.com/pion/webrtc/v4"
@@ -63,9 +63,9 @@ func NewAgent(config AgentConfig) (*Agent, error) {
 			return nil, err
 		}
 		sa.driver = androidDriver
-	case DEVICE_TYPE_X11:
+	case DEVICE_TYPE_XVFB:
 		// 初始化 Linux Driver
-		linuxDriver, err := linuxX11Driver.New(config.DriverConfig)
+		linuxDriver, err := linuxXvfbDriver.New(config.DriverConfig)
 		if err != nil {
 			log.Printf("Failed to initialize Linux driver: %v", err)
 			return nil, err

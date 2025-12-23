@@ -2,6 +2,7 @@ package webservice
 
 import (
 	"webscreen/webservice/android"
+	"webscreen/webservice/xvfb"
 
 	"github.com/gin-gonic/gin"
 )
@@ -27,6 +28,16 @@ func (wm *WebMaster) handleListDevices(c *gin.Context) {
 	var devicesInfo []DeviceInfo
 	devices, err := android.GetDevices()
 	for _, d := range devices {
+		devicesInfo = append(devicesInfo, DeviceInfo{
+			Type:     d.GetType(),
+			DeviceID: d.GetDeviceID(),
+			IP:       d.GetIP(),
+			Port:     d.GetPort(),
+			Status:   d.GetStatus(),
+		})
+	}
+	xvfbDevices, err := xvfb.GetDevices()
+	for _, d := range xvfbDevices {
 		devicesInfo = append(devicesInfo, DeviceInfo{
 			Type:     d.GetType(),
 			DeviceID: d.GetDeviceID(),

@@ -1,4 +1,4 @@
-package linuxX11Driver
+package linuxXvfbDriver
 
 import (
 	"bytes"

@@ -1,4 +1,4 @@
-package linuxX11Driver
+package linuxXvfbDriver
 
 import (
 	"embed"
@@ -59,8 +59,8 @@ func New(cfg map[string]string) (*LinuxDriver, error) {
 		log.Printf("[x11] 写入本地文件失败: %v", err)
 		return nil, err
 	}
-	if d.ip == "" && d.user == "" {
-		d.ip = "127.0.0.1"
+	if d.ip == "127.0.0.1" || d.ip == "localhost" || d.ip == "" {
+		d.ip = "localhost"
 		LocalStartXvfb("27184", d.resolution, d.bitRate, d.frameRate, d.codec)
 	} else {
 		PushAndStartXvfb(d.user, d.ip, "27184", d.resolution, d.bitRate, d.frameRate, d.codec)
