@@ -40,7 +40,7 @@ go build -ldflags "-checklinkname=0"
 # for Debian
 apt install adb
 # if you want to stream xvfb display
-apt install xvfb ffmpeg
+apt install xvfb ffmpeg xfce4
 # then you can directly use pre-built binary
 ```
 for client side, you only need a web browser.
