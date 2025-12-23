@@ -59,6 +59,7 @@ docker run -d \
   --name webscreen \
   --network host \
   -e PORT=8079 \
+  -e PIN=123456
   dukihiroi/webscreen:latest
 ```
 

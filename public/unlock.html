@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>安全锁定</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/static/i18n.js"></script>
+    <script src="/static/ui.js"></script>
+    <style>
+        /* 禁止移动端双击缩放 */
+        * {
+            touch-action: manipulation;
+        }
+
+        /* 隐藏数字输入框的箭头 */
+        input::-webkit-outer-spin-button,
+        input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        /* 震动动画 */
+        @keyframes shake {
+
+            0%,
+            100% {
+                transform: translateX(0);
+            }
+
+            20% {
+                transform: translateX(-10px);
+            }
+
+            40% {
+                transform: translateX(10px);
+            }
+
+            60% {
+                transform: translateX(-10px);
+            }
+
+            80% {
+                transform: translateX(10px);
+            }
+        }
+
+        .animate-shake {
+            animation: shake 0.4s cubic-bezier(.36, .07, .19, .97) both;
+        }
+
+        /* 按键点击态 */
+        .key-btn:active {
+            background-color: rgba(255, 255, 255, 0.2);
+        }
+
+        /* 平滑过渡 */
+        .pin-dot {
+            transition: all 0.2s ease;
+        }
+
+        /* 隐藏主界面，解锁后显示 */
+        #main-app {
+            display: none;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+
+        #lock-screen {
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+    </style>
+</head>
+
+<body
+    class="bg-gray-900 text-white h-screen w-screen overflow-hidden font-sans selection:bg-blue-500 selection:text-white">
+
+    <!-- 锁定界面 -->
+    <div id="lock-screen"
+        class="fixed inset-0 z-50 flex flex-col items-center justify-between py-12 px-6 backdrop-blur-xl bg-gray-900/95">
+
+        <!-- 顶部状态栏 -->
+        <div class="flex flex-col items-center space-y-6 mt-8 w-full">
+            <div class="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mb-2 shadow-lg">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-blue-400" fill="none" viewBox="0 0 24 24"
+                    stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+            </div>
+
+            <div class="text-center">
+                <h1 class="text-xl font-medium tracking-wide">输入访问密码</h1>
+                <p id="status-text" class="text-sm text-gray-400 mt-2 h-5">请输入 6 位 PIN 码</p>
+            </div>
+
+            <!-- PIN 码圆点显示 -->
+            <div id="pin-display" class="flex space-x-4 mt-4">
+                <div class="pin-dot w-3 h-3 rounded-full border border-gray-500"></div>
+                <div class="pin-dot w-3 h-3 rounded-full border border-gray-500"></div>
+                <div class="pin-dot w-3 h-3 rounded-full border border-gray-500"></div>
+                <div class="pin-dot w-3 h-3 rounded-full border border-gray-500"></div>
+                <div class="pin-dot w-3 h-3 rounded-full border border-gray-500"></div>
+                <div class="pin-dot w-3 h-3 rounded-full border border-gray-500"></div>
+            </div>
+        </div>
+
+        <!-- 封禁倒计时遮罩 (默认隐藏) -->
+        <div id="block-overlay"
+            class="hidden absolute inset-0 z-10 bg-gray-900/90 flex flex-col items-center justify-center backdrop-blur-sm">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-red-500 mb-4" fill="none" viewBox="0 0 24 24"
+                stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <h2 class="text-xl font-bold text-white mb-2">已暂时锁定</h2>
+            <p class="text-gray-400 text-center px-8">多次尝试失败，请在 <span id="countdown"
+                    class="text-blue-400 font-mono text-lg">60</span> 秒后重试</p>
+        </div>
+
+        <!-- 数字键盘 -->
+        <div class="w-full max-w-xs mb-8">
+            <div class="grid grid-cols-3 gap-y-6 gap-x-8">
+                <!-- 1-9 -->
+                <button
+                    class="key-btn w-16 h-16 rounded-full bg-gray-800/50 flex items-center justify-center text-2xl font-light hover:bg-gray-700 transition mx-auto"
+                    onclick="addPin(1)">1</button>
+                <button
+                    class="key-btn w-16 h-16 rounded-full bg-gray-800/50 flex items-center justify-center text-2xl font-light hover:bg-gray-700 transition mx-auto"
+                    onclick="addPin(2)">2</button>
+                <button
+                    class="key-btn w-16 h-16 rounded-full bg-gray-800/50 flex items-center justify-center text-2xl font-light hover:bg-gray-700 transition mx-auto"
+                    onclick="addPin(3)">3</button>
+                <button
+                    class="key-btn w-16 h-16 rounded-full bg-gray-800/50 flex items-center justify-center text-2xl font-light hover:bg-gray-700 transition mx-auto"
+                    onclick="addPin(4)">4</button>
+                <button
+                    class="key-btn w-16 h-16 rounded-full bg-gray-800/50 flex items-center justify-center text-2xl font-light hover:bg-gray-700 transition mx-auto"
+                    onclick="addPin(5)">5</button>
+                <button
+                    class="key-btn w-16 h-16 rounded-full bg-gray-800/50 flex items-center justify-center text-2xl font-light hover:bg-gray-700 transition mx-auto"
+                    onclick="addPin(6)">6</button>
+                <button
+                    class="key-btn w-16 h-16 rounded-full bg-gray-800/50 flex items-center justify-center text-2xl font-light hover:bg-gray-700 transition mx-auto"
+                    onclick="addPin(7)">7</button>
+                <button
+                    class="key-btn w-16 h-16 rounded-full bg-gray-800/50 flex items-center justify-center text-2xl font-light hover:bg-gray-700 transition mx-auto"
+                    onclick="addPin(8)">8</button>
+                <button
+                    class="key-btn w-16 h-16 rounded-full bg-gray-800/50 flex items-center justify-center text-2xl font-light hover:bg-gray-700 transition mx-auto"
+                    onclick="addPin(9)">9</button>
+
+                <!-- 空位 -->
+                <div class="w-16 h-16 mx-auto"></div>
+
+                <!-- 0 -->
+                <button
+                    class="key-btn w-16 h-16 rounded-full bg-gray-800/50 flex items-center justify-center text-2xl font-light hover:bg-gray-700 transition mx-auto"
+                    onclick="addPin(0)">0</button>
+
+                <!-- Delete -->
+                <button
+                    class="w-16 h-16 rounded-full flex items-center justify-center text-xl text-gray-400 active:text-white transition mx-auto"
+                    onclick="deletePin()">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24"
+                        stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                            d="M12 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M3 12l6.414 6.414a2 2 0 001.414.586H19a2 2 0 002-2V7a2 2 0 00-2-2h-8.172a2 2 0 00-1.414.586L3 12z" />
+                    </svg>
+                </button>
+            </div>
+
+            <div class="text-center mt-8">
+                <button onclick="alert('请联系管理员重置')" class="text-sm text-gray-500 hover:text-gray-300">忘记密码?</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 主程序内容 (解锁后显示) -->
+    <div id="main-app" class="h-full w-full bg-gray-100 text-gray-900 flex flex-col items-center justify-center p-8">
+        <div class="bg-white p-8 rounded-2xl shadow-xl text-center max-w-md w-full">
+            <div class="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-green-500" fill="none" viewBox="0 0 24 24"
+                    stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                </svg>
+            </div>
+            <h1 class="text-2xl font-bold mb-2">解锁成功</h1>
+            <p class="text-gray-500 mb-6">欢迎进入 Webscreen 管理控制台</p>
+        </div>
+    </div>
+
+    <script>
+        // 配置
+        const PIN_LENGTH = 6;
+        const API_URL = '/api/unlock';
+
+        // 状态
+        let currentPin = "";
+        let isProcessing = false;
+        let isBlocked = false;
+
+        // DOM 元素
+        const dots = document.querySelectorAll('.pin-dot');
+        const statusText = document.getElementById('status-text');
+        const pinDisplay = document.getElementById('pin-display');
+        const blockOverlay = document.getElementById('block-overlay');
+        const countdownEl = document.getElementById('countdown');
+
+        // 输入数字
+        function addPin(num) {
+            if (isProcessing || isBlocked) return;
+            if (currentPin.length < PIN_LENGTH) {
+                currentPin += num;
+                updateDots();
+
+                // 震动反馈 (如果设备支持)
+                if (navigator.vibrate) navigator.vibrate(10);
+
+                if (currentPin.length === PIN_LENGTH) {
+                    submitPin();
+                }
+            }
+        }
+
+        // 删除数字
+        function deletePin() {
+            if (isProcessing || isBlocked) return;
+            if (currentPin.length > 0) {
+                currentPin = currentPin.slice(0, -1);
+                updateDots();
+                // 恢复默认提示
+                if (currentPin.length === 0) {
+                    setStatus("请输入 6 位 PIN 码", false);
+                }
+            }
+        }
+
+        // 更新圆点状态
+        function updateDots() {
+            dots.forEach((dot, index) => {
+                if (index < currentPin.length) {
+                    dot.classList.add('bg-white', 'border-white');
+                    dot.classList.remove('border-gray-500');
+                } else {
+                    dot.classList.remove('bg-white', 'border-white');
+                    dot.classList.add('border-gray-500');
+                }
+            });
+        }
+
+        // 设置状态文字
+        function setStatus(text, isError = false) {
+            statusText.textContent = text;
+            if (isError) {
+                statusText.classList.add('text-red-400');
+                statusText.classList.remove('text-gray-400');
+            } else {
+                statusText.classList.remove('text-red-400');
+                statusText.classList.add('text-gray-400');
+            }
+        }
+
+        // 提交 PIN 码
+        async function submitPin() {
+            isProcessing = true;
+            setStatus("正在验证...");
+
+            try {
+                let data;
+
+                // === 真实 API 请求 ===
+                // 注意：后端接受 { pin: uint }，JS里传数字类型
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pin: currentPin })
+                });
+                data = await response.json();
+
+                handleResponse(data);
+
+            } catch (error) {
+                console.error(error);
+                setStatus("网络错误，请重试", true);
+                shakeScreen();
+                currentPin = "";
+                updateDots();
+                isProcessing = false;
+            }
+        }
+
+        // 处理后端响应
+        function handleResponse(data) {
+            switch (data.result) {
+                case "success":
+                    localStorage.setItem("token", data.token);
+                    unlockWeb();
+                    break;
+                case "failed":
+                    currentPin = "";
+                    updateDots();
+                    shakeScreen();
+                    // 判断是否封禁 (leftTime == 0 且 result == failed 通常意味着次数耗尽或封禁中)
+                    // 这里的逻辑可以根据你具体的业务需求调整
+                    // 假设 leftTime 是剩余尝试次数，如果为 0 则封禁
+                    if (data.leftTries <= 0) {
+                        let lockUntil = new Date(data.lockUntil)
+                        let now = new Date()
+                        let diffSeconds = Math.ceil((lockUntil - now) / 1000)
+                        startBlockCountdown(diffSeconds);
+                        setStatus("已锁定", true);
+                    } else {
+                        setStatus(`密码错误，还剩 ${data.leftTries} 次尝试`, true);
+                        isProcessing = false;
+                    }
+                    break;
+                case "error":
+                    updateDots();
+                    shakeScreen();
+                    showToast(data.message);
+                    break;
+            }
+        }
+
+        // 界面解锁动画
+        function unlockWeb() {
+            setStatus("验证成功", false);
+            const lockScreen = document.getElementById('lock-screen');
+            const mainApp = document.getElementById('main-app');
+
+            // 锁屏上滑消失
+            lockScreen.style.transform = "translateY(-100%)";
+            lockScreen.style.opacity = "0";
+
+            // 主界面淡入
+            mainApp.style.display = "flex";
+            // 稍微延迟一下让 display 生效后再改 opacity 以触发 transition
+            setTimeout(() => {
+                mainApp.style.opacity = "1";
+            }, 50);
+
+            // 销毁锁屏 (可选，或者保留用于重新锁定)
+            setTimeout(() => {
+                lockScreen.style.display = "none";
+            }, 500);
+            setTimeout(() => {
+                window.location.replace('/console')
+            }, 600);
+
+        }
+
+        // 错误震动特效
+        function shakeScreen() {
+            pinDisplay.classList.add('animate-shake');
+            if (navigator.vibrate) navigator.vibrate([50, 50, 50]);
+
+            setTimeout(() => {
+                pinDisplay.classList.remove('animate-shake');
+            }, 400);
+        }
+
+        // 开启封禁倒计时
+        function startBlockCountdown(seconds) {
+            isBlocked = true;
+            isProcessing = false; // 虽然Blocked了，但要把Processing解开以便显示遮罩
+            blockOverlay.classList.remove('hidden');
+
+            let remaining = seconds;
+            countdownEl.textContent = remaining;
+
+            const timer = setInterval(() => {
+                remaining--;
+                countdownEl.textContent = remaining;
+
+                if (remaining <= 0) {
+                    clearInterval(timer);
+                    isBlocked = false;
+                    blockOverlay.classList.add('hidden');
+                    setStatus("请重新输入 PIN 码", false);
+                }
+            }, 1000);
+        }
+
+        // 监听键盘事件 (方便 PC 端测试)
+        document.addEventListener('keydown', (e) => {
+            if (isBlocked) return;
+            if (e.key >= '0' && e.key <= '9') {
+                addPin(parseInt(e.key));
+            } else if (e.key === 'Backspace' || e.key === 'Delete') {
+                deletePin();
+            }
+        });
+
+    </script>
+</body>
+
+</html>

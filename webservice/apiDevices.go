@@ -7,20 +7,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func (wm *WebMaster) handleSelectDevice(c *gin.Context) {
-	var req struct {
-		DeviceType string `json:"device_type"`
-		DeviceID   string `json:"device_id"`
-		DeviceIP   string `json:"device_ip"`
-		DevicePort int    `json:"device_port"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"error": "Invalid request"})
-		return
-	}
-	c.JSON(200, gin.H{"status": "default device set"})
-}
-
 func (wm *WebMaster) handleListDevices(c *gin.Context) {
 	wm.devicesDiscoveredMu.RLock()
 	defer wm.devicesDiscoveredMu.RUnlock()
