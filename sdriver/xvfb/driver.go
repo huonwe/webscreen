@@ -51,16 +51,16 @@ func New(cfg map[string]string) (*LinuxDriver, error) {
 	}
 	data, err := capturerXvfbData.ReadFile("bin/capturer_xvfb")
 	if err != nil {
-		log.Printf("[x11] 读取 capturer_xvfb 失败: %v", err)
+		log.Printf("[xvfb] 读取 capturer_xvfb 失败: %v", err)
 		return nil, err
 	}
-	err = os.WriteFile("./capturer_xvfb", data, 0755)
+	err = os.WriteFile("/tmp/capturer_xvfb", data, 0755)
 	if err != nil {
-		log.Printf("[x11] 写入本地文件失败: %v", err)
-		return nil, err
+		log.Printf("[xvfb] 写入本地文件失败, 但会继续: %v", err)
+		// return nil, err
 	}
 	if d.ip == "127.0.0.1" || d.ip == "localhost" || d.ip == "" {
-		d.ip = "localhost"
+		d.ip = "127.0.0.1"
 		LocalStartXvfb("27184", d.resolution, d.bitRate, d.frameRate, d.codec)
 	} else {
 		PushAndStartXvfb(d.user, d.ip, "27184", d.resolution, d.bitRate, d.frameRate, d.codec)
