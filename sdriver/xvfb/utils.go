@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"os"
 )
 
 func (da *LinuxDriver) readVideoMeta(conn net.Conn) error {
@@ -30,4 +31,12 @@ func readHeader(buf []byte, header *Header) error {
 	header.PTS = binary.BigEndian.Uint64(buf[0:8])
 	header.Size = binary.BigEndian.Uint32(buf[8:12])
 	return nil
+}
+
+func GetTMPDir() string {
+	tmpDir := os.Getenv("TMPDIR")
+	if tmpDir == "" {
+		tmpDir = "/tmp"
+	}
+	return tmpDir
 }

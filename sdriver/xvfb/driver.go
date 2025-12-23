@@ -54,7 +54,7 @@ func New(cfg map[string]string) (*LinuxDriver, error) {
 		log.Printf("[xvfb] 读取 capturer_xvfb 失败: %v", err)
 		return nil, err
 	}
-	err = os.WriteFile("/tmp/capturer_xvfb", data, 0755)
+	err = os.WriteFile("capturer_xvfb", data, 0755)
 	if err != nil {
 		log.Printf("[xvfb] 写入本地文件失败, 但会继续: %v", err)
 		// return nil, err
