@@ -30,7 +30,7 @@ var CONFIG = (function () {
                 max_fps: "60",
                 video_codec: "h264",
                 audio_codec: "opus",
-                video_bit_rate: "20000000",
+                video_bit_rate: "8000000",
 
                 // new_display: "1920x1080/60",
             }
@@ -46,7 +46,7 @@ var CONFIG = (function () {
         driver_config: {
             video_codec: "h264",
             audio_codec: "opus",
-            video_bit_rate: "20000000"
+            video_bit_rate: "8000000"
         }
     };
 })();

@@ -31,7 +31,7 @@ const defaultXvfbConfig = {
         user: "",
         resolution: "1920x1080",
         frameRate: "60",
-        bitRate: "20000000",
+        bitRate: "8000000",
         codec: "h264",
     }
 };
