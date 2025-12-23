@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"time"
 )
 
@@ -59,9 +60,15 @@ func (s *XvfbSession) CleanUp() {
 		s.Cmd.Kill()
 		s.Cmd.Wait() // 等待进程彻底结束
 	}
+	tmpDir := os.Getenv("TMPDIR")
+	if tmpDir == "" {
+		tmpDir = "/tmp"
+	}
+	socketFile := filepath.Join(tmpDir, ".X11-unix", fmt.Sprintf("X%d", s.Display))
+	lockFile := filepath.Join(tmpDir, fmt.Sprintf(".X%d-lock", s.Display))
 	// 清理锁文件（防止下次启动报错），虽然 Xvfb 正常退出会自动清理，但为了保险
-	os.Remove(fmt.Sprintf("/tmp/.X11-unix/X%d", s.Display))
-	os.Remove(fmt.Sprintf("/tmp/.X%d-lock", s.Display))
+	os.Remove(socketFile)
+	os.Remove(lockFile)
 	log.Println("清理完成，程序退出。")
 }
 
@@ -87,10 +94,14 @@ func (s *XvfbSession) RunXfce4Session() {
 
 func (s *XvfbSession) waitLaunchFinished() error {
 	// 等待 Xvfb 的 Socket 文件生成，最多等 5 秒
-	socketPath := "/tmp/.X11-unix/X" + fmt.Sprintf("%d", s.Display) // 拼接出 /tmp/.X11-unix/X99
+	tmpDir := os.Getenv("TMPDIR")
+	if tmpDir == "" {
+		tmpDir = "/tmp"
+	}
+	socketFile := filepath.Join(tmpDir, ".X11-unix", fmt.Sprintf("X%d", s.Display))
 	xvfbReady := false
 	for i := 0; i < 50; i++ { // 50 * 100ms = 5秒
-		if _, err := os.Stat(socketPath); err == nil {
+		if _, err := os.Stat(socketFile); err == nil {
 			xvfbReady = true
 			break
 		}
@@ -98,7 +109,7 @@ func (s *XvfbSession) waitLaunchFinished() error {
 	}
 
 	if !xvfbReady {
-		return fmt.Errorf("Xvfb Timeout! Socket file not found: %s", socketPath)
+		return fmt.Errorf("Xvfb Timeout! Socket file not found: %s", socketFile)
 	}
 	return nil
 }
