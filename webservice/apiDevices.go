@@ -1,5 +1,3 @@
-//go:build architecture
-
 package webservice
 
 import (
