@@ -48,7 +48,7 @@ for client side, you only need a web browser.
 Additionally, a [modified scrcpy-server](https://github.com/huonwe/scrcpy-0x63) is used.
 
 ## Usage
-Download the latest [release](https://github.com/huonwe/webscreen/releases), execute the program. The default port is `8079`, but you can specifiy it by `-port 8080`. PIN is also needed. A example command: `./webscreen -port 8080 -PIN 555555`
+Download the latest [release](https://github.com/huonwe/webscreen/releases), execute the program. The default port is `8079`, but you can specifiy it by `-port 8080`. 6-digtal PIN is also needed. A example command: `./webscreen -port 8080 -PIN 555555`
 Then open your favorite browser and visit `<your ip>:<your port>`
 
 Or you can build by yourself. Normally, you can build simply by `go build`. But if you want to build by yourself on `Termux`, you need to run `go build -ldflags "-checklinkname=0"`.
