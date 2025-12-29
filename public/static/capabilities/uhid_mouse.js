@@ -190,29 +190,6 @@ videoElementMouse.addEventListener('wheel', (event) => {
     scheduleMouseSend();
 }, { passive: false });
 
-// 指针锁定 API (Pointer Lock) - 用于更好的鼠标控制
-function requestPointerLock() {
-    if (!uhidMouseEnabled) return;
-
-    const requestMethod = videoElementMouse.requestPointerLock ||
-        videoElementMouse.mozRequestPointerLock ||
-        videoElementMouse.webkitRequestPointerLock;
-
-    if (requestMethod) {
-        requestMethod.call(videoElementMouse);
-    }
-}
-
-function exitPointerLock() {
-    const exitMethod = document.exitPointerLock ||
-        document.mozExitPointerLock ||
-        document.webkitExitPointerLock;
-
-    if (exitMethod) {
-        exitMethod.call(document);
-    }
-}
-
 
 // 监听指针锁定状态变化
 document.addEventListener('pointerlockchange', () => {

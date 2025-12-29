@@ -1,4 +1,4 @@
-// 【重要】动作常量定义 (必须与 Go 后端 InputController 保持一致)
+// 动作常量定义 (必须与 Go 后端 InputController 保持一致)
 // Go端: 0=Move, 1=Down, 2=Up
 const TYPE_MOUSE = 0x01;
 const MOUSE_ACTION_MOVE = 0;
@@ -25,12 +25,8 @@ let mouseButtonsMask = 0; // Bitmask: 1=Left, 2=Right, 4=Middle
 let pendingMovement = { x: 0, y: 0, wheelY: 0 };
 // let rafScheduled = false;
 
-// 获取视频元素
-const videoElementMouse = document.getElementById('remoteVideo');
-
-
 function initRemoteControl() {
-    if (!videoElementMouse) {
+    if (!remoteVideo) {
         console.error(`Video element not found.`);
         return;
     }
@@ -40,7 +36,7 @@ function initRemoteControl() {
     window.mouseControlInitialized = true;
 
     // 1. 点击视频区域请求锁定鼠标
-    videoElementMouse.addEventListener('mousedown', (e) => {
+    remoteVideo.addEventListener('mousedown', (e) => {
         if (!isPointerLocked) {
             console.log("Requesting pointer lock...");
             requestPointerLock();
@@ -69,36 +65,21 @@ function initRemoteControl() {
     console.log("Remote control initialized.");
 }
 
-function requestPointerLock() {
-    const requestMethod = videoElementMouse.requestPointerLock ||
-        videoElementMouse.mozRequestPointerLock ||
-        videoElementMouse.webkitRequestPointerLock;
-    if (requestMethod) {
-        requestMethod.call(videoElementMouse);
-    }
-}
 
 function handlePointerLockChange() {
     const lockedElement = document.pointerLockElement ||
         document.mozPointerLockElement ||
         document.webkitPointerLockElement;
 
-    if (lockedElement === videoElementMouse) {
+    if (lockedElement === remoteVideo) {
         isPointerLocked = true;
         console.log(">> Mouse LOCKED <<");
     } else {
         isPointerLocked = false;
         console.log(">> Mouse UNLOCKED <<");
-        resetMouseState();
     }
 }
 
-function resetMouseState() {
-    mouseButtonsMask = 0;
-    pendingMovement = { x: 0, y: 0, wheelY: 0 };
-    // 发送 Move 事件归零
-    sendControlPacket(MOUSE_ACTION_MOVE, 0, 0, 0, 0);
-}
 
 function handleMouseMove(e) {
     if (!isPointerLocked) return;
@@ -165,14 +146,14 @@ function scheduleSend(actionType) {
     // 如果是 RAF 调度，我们需要保存最后一次的 actionType 吗？
     // 简化起见，移动和滚动统一走 RAF，点击直接发
     // 这里传入 actionType 主要是为了区分是否是移动
-    flushPendingEvents(MOUSE_ACTION_MOVE);
+    // flushPendingEvents(MOUSE_ACTION_MOVE);
     // if (rafScheduled) return;
-    // rafScheduled = true;
+    rafScheduled = true;
 
-    // requestAnimationFrame(() => {
-    //     rafScheduled = false;
-    //     flushPendingEvents(MOUSE_ACTION_MOVE);
-    // });
+    requestAnimationFrame(() => {
+        rafScheduled = false;
+        flushPendingEvents(MOUSE_ACTION_MOVE);
+    });
 }
 
 /**
@@ -215,13 +196,13 @@ function sendControlPacket(action, dx, dy, buttons, wheel) {
 
     virtualMouse.x += dx;
     virtualMouse.y += dy;
-    virtualMouse.x = Math.min(virtualMouse.x, videoElementMouse.videoWidth ? videoElementMouse.videoWidth : virtualMouse.x);
-    virtualMouse.y = Math.min(virtualMouse.y, videoElementMouse.videoHeight ? videoElementMouse.videoHeight : virtualMouse.y);
+    virtualMouse.x = Math.min(virtualMouse.x, remoteVideo.videoWidth ? remoteVideo.videoWidth : virtualMouse.x);
+    virtualMouse.y = Math.min(virtualMouse.y, remoteVideo.videoHeight ? remoteVideo.videoHeight : virtualMouse.y);
     virtualMouse.x = Math.max(virtualMouse.x, 0);
     virtualMouse.y = Math.max(virtualMouse.y, 0);
 
     // console.log(`Send: Act=${action}, x=${virtualMouse.x}, y=${virtualMouse.y}, Btn=${buttons}`);
-    const packet = createMousePacket(action, virtualMouse.x, virtualMouse.y, buttons, 0, wheel);
+    const packet = createMousePacket(action, virtualMouse.x, virtualMouse.y, buttons, 0, -wheel);
     window.ws.send(packet);
 }
 

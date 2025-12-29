@@ -13,59 +13,6 @@ const TOUCH_ACTION_DOWN = 0;
 const TOUCH_ACTION_UP = 1;
 const TOUCH_ACTION_MOVE = 2;
 
-const videoElementTouch = document.getElementById('remoteVideo');
-
-// console.log("Touch control script loaded.");
-
-// 缓存视频元素的位置和尺寸，避免频繁调用 getBoundingClientRect
-let cachedVideoRect = null;
-let cachedContentRect = { left: 0, top: 0, width: 0, height: 0 };
-
-// 更新缓存的视频尺寸和位置
-function updateVideoCache() {
-    if (videoElementTouch.videoWidth && videoElementTouch.videoHeight) {
-        cachedVideoRect = videoElementTouch.getBoundingClientRect();
-        
-        const elWidth = cachedVideoRect.width;
-        const elHeight = cachedVideoRect.height;
-        const vidWidth = videoElementTouch.videoWidth;
-        const vidHeight = videoElementTouch.videoHeight;
-        
-        if (elWidth === 0 || elHeight === 0) return false;
-
-        const vidRatio = vidWidth / vidHeight;
-        const elRatio = elWidth / elHeight;
-
-        let drawWidth, drawHeight, startX, startY;
-
-        if (elRatio > vidRatio) {
-            // 元素比视频宽 (Pillarbox: 左右黑边)
-            drawHeight = elHeight;
-            drawWidth = drawHeight * vidRatio;
-            startY = 0;
-            startX = (elWidth - drawWidth) / 2;
-        } else {
-            // 元素比视频高 (Letterbox: 上下黑边)
-            drawWidth = elWidth;
-            drawHeight = drawWidth / vidRatio;
-            startX = 0;
-            startY = (elHeight - drawHeight) / 2;
-        }
-        
-        cachedContentRect = {
-            left: startX,
-            top: startY,
-            width: drawWidth,
-            height: drawHeight
-        };
-        return true;
-    }
-    return false;
-}
-
-// 监听视频尺寸变化
-videoElementTouch.addEventListener('loadedmetadata', updateVideoCache);
-window.addEventListener('resize', updateVideoCache);
 
 // 使用 requestAnimationFrame 批量处理移动事件，减少延迟
 let pendingMoveEvents = new Map(); // pointerId -> {x, y}
@@ -87,26 +34,26 @@ function scheduleMoveSend() {
 
 function getScreenCoordinates(clientX, clientY) {
     // 使用缓存的矩形和缩放比例
-    if (!cachedVideoRect) {
+    if (!window.cachedRect.VideoRect) {
         if (!updateVideoCache()) {
             return null;
         }
     }
 
-    const offsetX = clientX - cachedVideoRect.left;
-    const offsetY = clientY - cachedVideoRect.top;
+    const offsetX = clientX - window.cachedRect.VideoRect.left;
+    const offsetY = clientY - window.cachedRect.VideoRect.top;
 
     // 相对于视频内容区域的坐标
-    const contentX = offsetX - cachedContentRect.left;
-    const contentY = offsetY - cachedContentRect.top;
+    const contentX = offsetX - window.cachedRect.ContentRect.left;
+    const contentY = offsetY - window.cachedRect.ContentRect.top;
 
     // 映射到视频源分辨率
-    const x = (contentX / cachedContentRect.width) * videoElementTouch.videoWidth;
-    const y = (contentY / cachedContentRect.height) * videoElementTouch.videoHeight;
+    const x = (contentX / window.cachedRect.ContentRect.width) * remoteVideo.videoWidth;
+    const y = (contentY / window.cachedRect.ContentRect.height) * remoteVideo.videoHeight;
 
     // Clamp coordinates to be within video bounds
-    const clampedX = Math.max(0, Math.min(Math.round(x), videoElementTouch.videoWidth));
-    const clampedY = Math.max(0, Math.min(Math.round(y), videoElementTouch.videoHeight));
+    const clampedX = Math.max(0, Math.min(Math.round(x), remoteVideo.videoWidth));
+    const clampedY = Math.max(0, Math.min(Math.round(y), remoteVideo.videoHeight));
 
     return { x: clampedX, y: clampedY };
 }
@@ -117,19 +64,19 @@ function getTouchPressure(touch) {
     // 转换为 uint16: 0 到 65535
     // 某些设备不支持 force 属性，默认返回 1.0 (完全按下)
     const force = typeof touch.force !== 'undefined' ? touch.force : 1.0;
-    
+
     // 映射到 0-65535 范围
     // 注意：很多设备即使支持 force，也只会返回 0 或 1，而不是连续值
     // iOS 设备(支持 3D Touch/Haptic Touch) 会返回 0.0 - 1.0 之间的浮点数
     const pressure = Math.round(force * 65535);
-    
+
     return Math.max(0, Math.min(65535, pressure));
 }
 
 // ========== 鼠标事件处理 (单点) ==========
 let activeMousePointer = null;
 
-videoElementTouch.addEventListener('mousedown', (event) => {
+remoteVideo.addEventListener('mousedown', (event) => {
     // console.log("Mouse down event:", event);
     if (event.button !== 0) return; // Only Left Click
     activeMousePointer = 0; // 使用 pointerId 0 表示鼠标
@@ -139,7 +86,7 @@ videoElementTouch.addEventListener('mousedown', (event) => {
     }
 });
 
-videoElementTouch.addEventListener('mouseup', (event) => {
+remoteVideo.addEventListener('mouseup', (event) => {
     if (activeMousePointer !== null) {
         const coords = getScreenCoordinates(event.clientX, event.clientY);
         if (coords) {
@@ -149,8 +96,9 @@ videoElementTouch.addEventListener('mouseup', (event) => {
     }
 });
 
-videoElementTouch.addEventListener('mousemove', (event) => {
+remoteVideo.addEventListener('mousemove', (event) => {
     if (activeMousePointer !== null && event.buttons === 1) {
+        // console.log("Mouse move event:", event);
         const coords = getScreenCoordinates(event.clientX, event.clientY);
         if (coords) {
             pendingMoveEvents.set(0, { ...coords, pressure: 65535 });
@@ -160,7 +108,7 @@ videoElementTouch.addEventListener('mousemove', (event) => {
 });
 
 // 处理鼠标移出视频区域后释放的情况
-videoElementTouch.addEventListener('mouseleave', (event) => {
+remoteVideo.addEventListener('mouseleave', (event) => {
     if (activeMousePointer !== null && event.buttons !== 1) {
         const coords = getScreenCoordinates(event.clientX, event.clientY);
         if (coords) {
@@ -173,15 +121,15 @@ videoElementTouch.addEventListener('mouseleave', (event) => {
 // ========== 触摸事件处理 (多点触控) ==========
 const activeTouches = new Map(); // touchIdentifier -> pointerId
 
-videoElementTouch.addEventListener('touchstart', (event) => {
+remoteVideo.addEventListener('touchstart', (event) => {
     event.preventDefault();
     updateVideoCache(); // 触摸开始时更新缓存
-    
+
     for (let i = 0; i < event.changedTouches.length; i++) {
         const touch = event.changedTouches[i];
         const pointerId = touch.identifier % 10; // 限制在 0-9 范围内
         activeTouches.set(touch.identifier, pointerId);
-        
+
         const coords = getScreenCoordinates(touch.clientX, touch.clientY);
         if (coords) {
             const pressure = getTouchPressure(touch);
@@ -190,13 +138,13 @@ videoElementTouch.addEventListener('touchstart', (event) => {
     }
 }, { passive: false });
 
-videoElementTouch.addEventListener('touchend', (event) => {
+remoteVideo.addEventListener('touchend', (event) => {
     event.preventDefault();
-    
+
     for (let i = 0; i < event.changedTouches.length; i++) {
         const touch = event.changedTouches[i];
         const pointerId = activeTouches.get(touch.identifier);
-        
+
         if (pointerId !== undefined) {
             const coords = getScreenCoordinates(touch.clientX, touch.clientY);
             if (coords) {
@@ -207,13 +155,13 @@ videoElementTouch.addEventListener('touchend', (event) => {
     }
 }, { passive: false });
 
-videoElementTouch.addEventListener('touchmove', (event) => {
+remoteVideo.addEventListener('touchmove', (event) => {
     event.preventDefault();
-    
+
     for (let i = 0; i < event.changedTouches.length; i++) {
         const touch = event.changedTouches[i];
         const pointerId = activeTouches.get(touch.identifier);
-        
+
         if (pointerId !== undefined) {
             const coords = getScreenCoordinates(touch.clientX, touch.clientY);
             if (coords) {
@@ -225,13 +173,13 @@ videoElementTouch.addEventListener('touchmove', (event) => {
     scheduleMoveSend();
 }, { passive: false });
 
-videoElementTouch.addEventListener('touchcancel', (event) => {
+remoteVideo.addEventListener('touchcancel', (event) => {
     event.preventDefault();
-    
+
     for (let i = 0; i < event.changedTouches.length; i++) {
         const touch = event.changedTouches[i];
         const pointerId = activeTouches.get(touch.identifier);
-        
+
         if (pointerId !== undefined) {
             const coords = getScreenCoordinates(touch.clientX, touch.clientY);
             if (coords) {
@@ -242,7 +190,7 @@ videoElementTouch.addEventListener('touchcancel', (event) => {
     }
 }, { passive: false });
 
-function sendTouchEvent(action, ptrId, x, y, pressure=65535, buttons=1) {
+function sendTouchEvent(action, ptrId, x, y, pressure = 65535, buttons = 1) {
     if (!window.ws || window.ws.readyState !== WebSocket.OPEN) {
         console.warn("WebSocket is not open. Cannot send message.");
         return;
@@ -254,7 +202,7 @@ function sendTouchEvent(action, ptrId, x, y, pressure=65535, buttons=1) {
 }
 
 
-function createTouchPacket(action, ptrId, x, y, pressure=65535, buttons=1) {
+function createTouchPacket(action, ptrId, x, y, pressure = 65535, buttons = 1) {
     const buffer = new ArrayBuffer(10);
     const view = new DataView(buffer);
     view.setUint8(0, TYPE_TOUCH);
@@ -279,7 +227,7 @@ function praseTouchEvent(packet) {
     const y = view.getUint16(5);
     const pressure = view.getUint16(7);
     const buttons = view.getUint8(9);
-    console.log("Parsed Touch Event:", {action, ptrId, x, y, pressure, buttons});
+    console.log("Parsed Touch Event:", { action, ptrId, x, y, pressure, buttons });
     return {
         action,
         ptrId,

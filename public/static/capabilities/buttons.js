@@ -65,6 +65,9 @@ function rotateButton() {
     let p = createRotatePacket();
     sendButtonEvent(p);
     MANNUAL_ROTATE = true;
+    setTimeout(() => {
+        updateVideoCache();
+    }, 500);
 }
 
 function sendButtonEvent(packet) {
@@ -73,4 +76,12 @@ function sendButtonEvent(packet) {
     } else {
         console.warn("WebSocket is not open. Cannot send button event.");
     }
+}
+
+const TYPE_ROTATE    = 0x0B; // rotate event
+function createRotatePacket() {
+    const buffer = new ArrayBuffer(1);
+    const view = new DataView(buffer);
+    view.setUint8(0, TYPE_ROTATE);
+    return buffer;
 }

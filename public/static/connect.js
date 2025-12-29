@@ -300,7 +300,6 @@ async function updateUIBasedOnCapabilities(caps) {
                 // show('.feature-linux-mouse');
             }
             if (caps.is_android) {
-                await loadScript('/static/capabilities/controlMessages.js');
                 await loadScript('/static/capabilities/keyboard.js');
                 await loadScript('/static/capabilities/touch.js');
                 await loadScript('/static/capabilities/scroll.js');

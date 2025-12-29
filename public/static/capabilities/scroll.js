@@ -1,7 +1,5 @@
 
 const TYPE_SCROLL = 0x03; // scroll event
-
-const videoElementScroll = document.getElementById('remoteVideo');
 const SCROLL_SCALE = 30; // 调整此值以改变滚动灵敏度
 
 // 使用 requestAnimationFrame 批量处理滚动事件
@@ -56,7 +54,7 @@ const handleWheel = (event) => {
     }
 };
 
-videoElementScroll.addEventListener('wheel', handleWheel, { passive: false });
+remoteVideo.addEventListener('wheel', handleWheel, { passive: false });
 
 
 function createScrollPacket(x, y, hScroll, vScroll) {
