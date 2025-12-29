@@ -104,6 +104,8 @@ func (wm *WebMaster) listenScreenWS(wsConn *websocket.Conn, agent *sagent.Agent,
 	wm.removeScreenSession(sessionID)
 }
 
+
+
 func (wm *WebMaster) listenEventFeedback(agent *sagent.Agent, wsConn *websocket.Conn) {
 	agent.EventFeedback(func(msg []byte) bool {
 		err := wsConn.WriteMessage(websocket.BinaryMessage, msg)

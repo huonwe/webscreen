@@ -1,4 +1,4 @@
-const jitterBufferTargetMs = 35; // 0 is a cake
+const jitterBufferTargetMs = 20; // 0 is a cake
 
 // Load CONFIG from sessionStorage if available, otherwise use URL params or defaults
 var CONFIG = (function () {
