@@ -3,6 +3,7 @@ package scrcpy
 import (
 	"bytes"
 	"log"
+	"time"
 	"webscreen/sdriver"
 )
 
@@ -21,6 +22,7 @@ func (da *ScrcpyDriver) updateCache(payload []byte, codec string) {
 
 	totalLen := len(payload)
 
+	var nalType byte
 	da.cacheMutex.Lock()
 	defer da.cacheMutex.Unlock()
 	for pos < totalLen {
@@ -47,7 +49,6 @@ func (da *ScrcpyDriver) updateCache(payload []byte, codec string) {
 			continue
 		}
 
-		var nalType byte
 		switch codec {
 		case "h265":
 			nalType = (nal[0] >> 1) & 0x3F
@@ -59,13 +60,17 @@ func (da *ScrcpyDriver) updateCache(payload []byte, codec string) {
 		}
 		switch nalType {
 		case 32: // VPS
+			// log.Println("cached VPS")
 			da.LastVPS = createCopy(nal)
 		case 7, 33: // SPS
+			// log.Println("cached SPS")
 			da.updateVideoMetaFromSPS(nal, codec)
 			da.LastSPS = createCopy(nal)
 		case 8, 34: // PPS
+			// log.Println("cached PPS")
 			da.LastPPS = createCopy(nal)
 		case 5, 19, 20, 21: // IDR
+			// log.Println("cached IDR")
 			da.LastIDR = createCopy(nal)
 		default:
 			// 其他类型暂不处理
@@ -95,4 +100,33 @@ func (da *ScrcpyDriver) sendCachedKeyFrame() {
 	merged_data = append(merged_data, cachedIDR...)
 	log.Println("⚡ Sending cached key frame and parameter sets")
 	da.VideoChan <- sdriver.AVBox{Data: merged_data, PTS: lastPTS, IsKeyFrame: true, IsConfig: false}
+}
+
+func (da *ScrcpyDriver) sendWithCachedConfigFrame(PTS time.Duration, IDRFrame []byte) {
+	da.cacheMutex.RLock()
+	cachedVPS := createCopy(da.LastVPS)
+	cachedSPS := createCopy(da.LastSPS)
+	cachedPPS := createCopy(da.LastPPS)
+	da.cacheMutex.RUnlock()
+
+	var merged_data []byte
+	if len(cachedVPS) > 0 {
+		merged_data = append(merged_data, startCode...)
+		merged_data = append(merged_data, cachedVPS...)
+	}
+	merged_data = append(merged_data, startCode...)
+	merged_data = append(merged_data, cachedSPS...)
+	merged_data = append(merged_data, startCode...)
+	merged_data = append(merged_data, cachedPPS...)
+	merged_data = append(merged_data, IDRFrame...) // IDRFrame 已经包含起始码
+	log.Println("⚡ Sending cached key frame and parameter sets")
+	// parts := bytes.Split(merged_data, startCode)
+	// for i, part := range parts {
+	// 	if len(part) == 0 {
+	// 		continue
+	// 	}
+	// 	log.Printf("  Part %d: NALU Type=%d, Size=%d bytes\n", i, (part[0]>>1)&0x3F, len(part))
+	// }
+
+	da.VideoChan <- sdriver.AVBox{Data: merged_data, PTS: PTS, IsKeyFrame: true, IsConfig: false}
 }

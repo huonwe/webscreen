@@ -11,7 +11,7 @@ import (
 func (da *ScrcpyDriver) convertVideoFrame() {
 	var headerBuf [12]byte
 	header := ScrcpyFrameHeader{}
-
+	var nalType byte
 	for {
 		// read frame header
 		if _, err := io.ReadFull(da.videoConn, headerBuf[:]); err != nil {
@@ -22,6 +22,7 @@ func (da *ScrcpyDriver) convertVideoFrame() {
 			log.Println("Failed to read scrcpy frame header:", err)
 			return
 		}
+		da.LastPTS = time.Duration(header.PTS) * time.Microsecond
 		// showFrameHeaderInfo(frame.Header)
 		frameSize := int(header.Size)
 
@@ -32,20 +33,48 @@ func (da *ScrcpyDriver) convertVideoFrame() {
 			log.Println("Failed to read video frame payload:", err)
 			return
 		}
+
+		// fmt.Printf("ScrcpyDriver: isKeyFrame=%v, nal Type=%v, Size=%d bytes\n", header.IsKeyFrame, nalType, len(payloadBuf))
+
 		if header.IsKeyFrame {
-			go da.updateCache(payloadBuf, da.mediaMeta.VideoCodec)
+			switch da.mediaMeta.VideoCodec {
+			case "h265":
+				nalType = (payloadBuf[4] >> 1) & 0x3F
+			case "h264":
+				nalType = payloadBuf[4] & 0x1F
+			default:
+				log.Println("Unknown codec type for NALU parsing:", da.mediaMeta.VideoCodec)
+				continue
+			}
+			switch nalType {
+			case 5, 19: // H.264 IDR / H.265 IDR_W_RADL
+				da.sendWithCachedConfigFrame(da.LastPTS, payloadBuf)
+				continue
+			case 6, 39, 40: // H.264 SEI / H.265 Prefix/Suffix SEI
+				payloadBuf = PruneSEI(payloadBuf, da.mediaMeta.VideoCodec)
+				da.sendWithCachedConfigFrame(da.LastPTS, payloadBuf)
+				continue
+			case 7, 32: // H.264 SPS / H.265 VPS
+				go da.updateCache(payloadBuf, da.mediaMeta.VideoCodec)
+				da.VideoChan <- sdriver.AVBox{
+					Data:       payloadBuf,
+					PTS:        da.LastPTS,
+					IsKeyFrame: true,
+					IsConfig:   false,
+				}
+				continue
+			}
 		}
-		webRTCFrame := sdriver.AVBox{
-			Data:     payloadBuf,
-			PTS:      time.Duration(header.PTS) * time.Microsecond,
-			IsConfig: false,
-		}
-		da.LastPTS = webRTCFrame.PTS
+
 		select {
-		case da.VideoChan <- webRTCFrame:
+		case da.VideoChan <- sdriver.AVBox{
+			Data:       payloadBuf[4:],
+			PTS:        da.LastPTS,
+			IsConfig:   false,
+			IsKeyFrame: false,
+		}:
 		default:
-			log.Println("Video channel full, waiting to send frame...")
-			da.VideoChan <- webRTCFrame
+			log.Println("Video channel full, skip...")
 		}
 	}
 }
