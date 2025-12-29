@@ -19,6 +19,7 @@ Android supports ([scrcpy](https://github.com/Genymobile/scrcpy)):
 - Video, Audio, Control
 - UHID Devices (Mouse, Keyboard, Gamepad)
 - Clipboard Sync
+- H.264/H.265
 - Maybe more...
 
 Linux supports (xvfb):
