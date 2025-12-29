@@ -72,10 +72,10 @@ func New(config map[string]string, deviceID string) (*ScrcpyDriver, error) {
 		videoBuffer: comm.NewLinearBuffer(0),
 		audioBuffer: comm.NewLinearBuffer(1 * 1024 * 1024), // 1MB 音频缓冲区
 
-		LastVPS: make([]byte, 32),
-		LastSPS: make([]byte, 64),
-		LastPPS: make([]byte, 8),
-		LastIDR: make([]byte, 1*1024*1024), // 1MB IDR 缓存
+		// LastVPS: make([]byte, 32),
+		// LastSPS: make([]byte, 64),
+		// LastPPS: make([]byte, 8),
+		// LastIDR: make([]byte, 1*1024*1024), // 1MB IDR 缓存
 
 		// scid: GenerateSCID(),
 		scid: "00000000",
@@ -277,6 +277,7 @@ func (da *ScrcpyDriver) readVideoMeta(conn net.Conn) error {
 }
 
 func (da *ScrcpyDriver) updateVideoMetaFromSPS(sps []byte, codec string) {
+	// log.Printf("last SPS len=%d, new SPS len=%d", len(da.LastSPS), len(sps))
 	if da.LastSPS != nil && bytes.Equal(da.LastSPS, sps) {
 		// log.Println("SPS unchanged, no need to update video meta")
 		return
@@ -301,13 +302,6 @@ func (da *ScrcpyDriver) updateVideoMetaFromSPS(sps []byte, codec string) {
 	da.mediaMeta.Height = spsInfo.Height
 	log.Printf("[scrcpy] Updated Video Meta from SPS: Width=%d, Height=%d", da.mediaMeta.Width, da.mediaMeta.Height)
 }
-
-// func (da *ScrcpyDriver) cacheFrame(webrtcFrame *WebRTCFrame, frameType string) {
-// 	switch frameType {
-// 	case "SPS":
-// 		da.keyFrameMutex.Lock()
-
-// }
 
 func readScrcpyFrameHeader(headerBuf []byte, header *ScrcpyFrameHeader) error {
 

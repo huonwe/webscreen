@@ -147,7 +147,7 @@ async function start() {
                         case 'webrtc_init':
                             const answerSdp = message.sdp;
                             const capabilities = message.capabilities;
-                            console.log("Received SDP Answer", answerSdp);
+                            // console.log("Received SDP Answer", answerSdp);
                             console.log("Driver Capabilities:", capabilities);
 
                             // Update UI based on capabilities

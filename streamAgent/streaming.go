@@ -30,25 +30,25 @@ func (sa *Agent) StreamingVideo() {
 
 		var duration time.Duration
 
-		if vBox.IsConfig {
-			// Config 帧 (SPS/PPS) 不应该占据时间轴
-			duration = 0
+		// if vBox.IsConfig {
+		// 	// Config 帧 (SPS/PPS) 不应该占据时间轴
+		// 	duration = 0
+		// } else {
+		// 如果是第一帧 VCL
+		if sa.lastVideoPTS == 0 {
+			duration = defaultDuration
 		} else {
-			// 如果是第一帧 VCL
-			if sa.lastVideoPTS == 0 {
+			// 计算与上一帧的时间差
+			delta := vBox.PTS - sa.lastVideoPTS
+
+			if delta <= 0 {
 				duration = defaultDuration
 			} else {
-				// 计算与上一帧的时间差
-				delta := vBox.PTS - sa.lastVideoPTS
-
-				if delta <= 0 {
-					duration = defaultDuration
-				} else {
-					duration = delta
-				}
+				duration = delta
 			}
-			sa.lastVideoPTS = vBox.PTS
 		}
+		sa.lastVideoPTS = vBox.PTS
+		// }
 
 		sample := media.Sample{
 			Data:      vBox.Data,

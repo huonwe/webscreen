@@ -59,27 +59,14 @@ func (da *ScrcpyDriver) updateCache(payload []byte, codec string) {
 		}
 		switch nalType {
 		case 32: // VPS
-			if len(da.LastVPS) < len(nal) {
-				da.LastVPS = make([]byte, len(nal))
-			}
-			copy(da.LastVPS, nal)
+			da.LastVPS = createCopy(nal)
 		case 7, 33: // SPS
 			da.updateVideoMetaFromSPS(nal, codec)
-			if len(da.LastSPS) < len(nal) {
-				da.LastSPS = make([]byte, len(nal))
-			}
-			copy(da.LastSPS, nal)
+			da.LastSPS = createCopy(nal)
 		case 8, 34: // PPS
-			if len(da.LastPPS) < len(nal) {
-				da.LastPPS = make([]byte, len(nal))
-			}
-			copy(da.LastPPS, nal)
-			// configInPacket = true
+			da.LastPPS = createCopy(nal)
 		case 5, 19, 20, 21: // IDR
-			if len(da.LastIDR) < len(nal) {
-				da.LastIDR = make([]byte, len(nal))
-			}
-			copy(da.LastIDR, nal)
+			da.LastIDR = createCopy(nal)
 		default:
 			// 其他类型暂不处理
 		}
