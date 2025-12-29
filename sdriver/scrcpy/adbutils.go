@@ -47,6 +47,7 @@ func scrcpyParamsToArgs(params map[string]string) []string {
 		"max_size",
 		"video_codec_options",
 		"log_level",
+		"video_encoder",
 	}
 	for _, key := range keys {
 		if v, ok := params[key]; ok && v != "" {

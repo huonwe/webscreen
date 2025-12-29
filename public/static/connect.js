@@ -1,7 +1,38 @@
-const jitterBufferTargetMs = 20; // 0 is a cake
+const jitterBufferTargetMs = 35; // 0 is a cake
 
 // Load CONFIG from sessionStorage if available, otherwise use URL params or defaults
 var CONFIG = (function () {
+
+    // // if url has ?debug_config, use hardcoded debug config
+    // const urlParams = new URLSearchParams(window.location.search);
+    // if (urlParams.has('debug')) {
+    //     console.log("Using debug config from URL parameter");
+    //     const capabilities = RTCRtpReceiver.getCapabilities('video');
+    //     const h265Supported = capabilities.codecs.some(codec =>
+    //         codec.mimeType.toLowerCase() === 'video/h265'
+    //     );
+
+    //     if (!h265Supported) {
+    //         console.error('Browser does not support H.265');
+    //     }
+    //     return {
+    //         device_type: "android",
+    //         device_id: "127.0.0.1:5555",
+    //         device_ip: "127.0.0.1",
+    //         device_port: "5555",
+    //         av_sync: false,
+    //         driver_config: {
+    //             max_fps: "60",
+    //             video_codec: "h265",
+    //             audio_codec: "opus",
+    //             video_bit_rate: "4000000",
+    //             audio: "true",
+    //             file_path: "test/test.h265"
+    //             // new_display: "1920x1080/60",
+    //         }
+    //     };
+    // }
+
     // Try to load from sessionStorage first (set by console.js)
     const stored = sessionStorage.getItem('webscreen_device_configs');
     console.log("Stored config:", stored);
@@ -116,7 +147,7 @@ async function start() {
                         case 'webrtc_init':
                             const answerSdp = message.sdp;
                             const capabilities = message.capabilities;
-                            console.log("Received SDP Answer");
+                            console.log("Received SDP Answer", answerSdp);
                             console.log("Driver Capabilities:", capabilities);
 
                             // Update UI based on capabilities

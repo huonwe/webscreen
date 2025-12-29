@@ -52,14 +52,13 @@ type ScrcpyDriver struct {
 	scid      string
 	// socketName string
 
-	lastIDRRequestTime time.Time
-
-	keyFrameMutex sync.RWMutex // 保护 LastSPS, LastPPS, LastIDR
-	LastVPS       []byte       // 新增：H.265 VPS
-	LastSPS       []byte
-	LastPPS       []byte
-	LastIDR       []byte
-	LastPTS       time.Duration
+	cacheMutex         sync.RWMutex
+	LastVPS            []byte
+	LastSPS            []byte
+	LastPPS            []byte
+	LastIDR            []byte
+	LastPTS            time.Duration
+	LastIDRRequestTime time.Time
 }
 
 // 一个ScrcpyDriver对应一个scrcpy实例，通过本地端口建立三个连接：视频、音频、控制
@@ -72,6 +71,11 @@ func New(config map[string]string, deviceID string) (*ScrcpyDriver, error) {
 
 		videoBuffer: comm.NewLinearBuffer(0),
 		audioBuffer: comm.NewLinearBuffer(1 * 1024 * 1024), // 1MB 音频缓冲区
+
+		LastVPS: make([]byte, 32),
+		LastSPS: make([]byte, 64),
+		LastPPS: make([]byte, 8),
+		LastIDR: make([]byte, 1*1024*1024), // 1MB IDR 缓存
 
 		// scid: GenerateSCID(),
 		scid: "00000000",
@@ -141,6 +145,7 @@ func New(config map[string]string, deviceID string) (*ScrcpyDriver, error) {
 		"new_display":    config["new_display"],
 		"cleanup":        "true",
 		"log_level":      "info",
+		// "video_encoder":  "c2.rk.hevc.encoder",
 	}
 
 	da.adbClient.StartScrcpyServer(options)
@@ -224,7 +229,7 @@ func (da *ScrcpyDriver) assignConn(conn net.Conn) error {
 	switch codecID {
 	case "h264", "h265", "av1 ":
 		da.videoConn = conn
-		da.mediaMeta.VideoCodecID = codecID
+		da.mediaMeta.VideoCodec = codecID
 		err := da.readVideoMeta(conn)
 		if err != nil {
 			log.Fatalln("Failed to read video metadata:", err)
@@ -234,7 +239,7 @@ func (da *ScrcpyDriver) assignConn(conn net.Conn) error {
 		log.Println("Scrcpy Video Connection Established")
 	case "aac ", "opus":
 		da.audioConn = conn
-		da.mediaMeta.AudioCodecID = codecID
+		da.mediaMeta.AudioCodec = codecID
 		da.capabilities.CanAudio = true
 		log.Println("Audio Connection Established")
 		// default:

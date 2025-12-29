@@ -100,6 +100,9 @@ func HandleSDP(sdp string, vTrack *webrtc.TrackLocalStaticSample, aTrack *webrtc
 func CreateMediaEngine(mimeTypes []string) *webrtc.MediaEngine {
 	m := &webrtc.MediaEngine{}
 
+	// m.RegisterDefaultCodecs()
+	// return m
+
 	for _, mime := range mimeTypes {
 		switch mime {
 		case webrtc.MimeTypeOpus:
@@ -119,7 +122,7 @@ func CreateMediaEngine(mimeTypes []string) *webrtc.MediaEngine {
 					ClockRate:    90000,
 					Channels:     0,
 					SDPFmtpLine:  "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f",
-					RTCPFeedback: []webrtc.RTCPFeedback{{Type: "goog-remb", Parameter: ""}, {Type: "ccm", Parameter: "fir"}, {Type: "nack", Parameter: ""}, {Type: "nack", Parameter: "pli"}}, // 显式禁用 Generic NACK，只保留 PLI
+					RTCPFeedback: []webrtc.RTCPFeedback{{Type: "goog-remb", Parameter: ""}, {Type: "ccm", Parameter: "fir"}, {Type: "nack", Parameter: "pli"}}, // 显式禁用 Generic NACK，只保留 PLI
 				},
 				PayloadType: 102,
 			}, webrtc.RTPCodecTypeVideo)
@@ -134,8 +137,8 @@ func CreateMediaEngine(mimeTypes []string) *webrtc.MediaEngine {
 					MimeType:     webrtc.MimeTypeH265,
 					ClockRate:    90000,
 					Channels:     0,
-					SDPFmtpLine:  "",                                                                                         // H.265 通常不需要复杂的 fmtp，或者可以留空让 Pion 处理
-					RTCPFeedback: []webrtc.RTCPFeedback{{Type: "goog-remb", Parameter: ""}, {Type: "ccm", Parameter: "fir"}}, // 禁用 {"nack", ""} 以关闭重传
+					SDPFmtpLine:  "",                                                                                                                           // H.265 通常不需要复杂的 fmtp，或者可以留空让 Pion 处理
+					RTCPFeedback: []webrtc.RTCPFeedback{{Type: "goog-remb", Parameter: ""}, {Type: "ccm", Parameter: "fir"}, {Type: "nack", Parameter: "pli"}}, // 显式禁用 Generic NACK，只保留 PLI
 				},
 				PayloadType: 104, // 使用 104，避开 Offer 中的 49/51 和 H.264 的 102
 			}, webrtc.RTPCodecTypeVideo)

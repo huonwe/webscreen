@@ -3,7 +3,6 @@ package scrcpy
 import (
 	"encoding/binary"
 	"log"
-	"time"
 	"webscreen/sdriver"
 )
 
@@ -74,6 +73,7 @@ func (da *ScrcpyDriver) RotateDevice() {
 	if err != nil {
 		log.Printf("Error sending rotate command: %v\n", err)
 	}
+	// da.mediaMeta.Width, da.mediaMeta.Height = da.mediaMeta.Height, da.mediaMeta.Width
 }
 
 func (da *ScrcpyDriver) SendScrollEvent(e *sdriver.ScrollEvent) {
@@ -266,7 +266,6 @@ func (da *ScrcpyDriver) KeyFrameRequest() error {
 	log.Println("⚡ Sending Request KeyFrame (Type 99)...")
 	msg := []byte{TYPE_REQUEST_IDR}
 	//<-da.VideoChan
-	da.lastIDRRequestTime = time.Now()
 	_, err := da.controlConn.Write(msg)
 	if err != nil {
 		log.Printf("Error sending keyframe request: %v\n", err)

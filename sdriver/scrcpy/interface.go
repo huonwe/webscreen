@@ -63,25 +63,16 @@ func (sd *ScrcpyDriver) RequestIDR(firstFrame bool) {
 	}
 
 	if firstFrame {
-		sd.keyFrameMutex.RLock()
-		cachedSPS := createCopy(sd.LastSPS)
-		cachedPPS := createCopy(sd.LastPPS)
-		cachedVPS := createCopy(sd.LastVPS)
-		cachedIDR := createCopy(sd.LastIDR)
-		sd.keyFrameMutex.RUnlock()
-		log.Println("⚡ Sending cached IDR and parameter sets for first frame")
-		if len(sd.LastVPS) > 0 {
-			sd.VideoChan <- sdriver.AVBox{Data: cachedVPS, PTS: sd.LastPTS, IsKeyFrame: false, IsConfig: true}
-		}
-		sd.VideoChan <- sdriver.AVBox{Data: cachedSPS, PTS: sd.LastPTS, IsKeyFrame: false, IsConfig: true}
-		sd.VideoChan <- sdriver.AVBox{Data: cachedPPS, PTS: sd.LastPTS, IsKeyFrame: false, IsConfig: true}
-		sd.VideoChan <- sdriver.AVBox{Data: cachedIDR, PTS: sd.LastPTS, IsKeyFrame: true, IsConfig: false}
+		sd.sendCachedKeyFrame()
+		sd.KeyFrameRequest()
+		return
+	} else if time.Since(sd.LastIDRRequestTime) < 2*time.Second {
+		sd.sendCachedKeyFrame()
+		return
 	}
 
-	if time.Since(sd.lastIDRRequestTime) > 2*time.Second {
-		log.Println("⚡ Requesting new KeyFrame from device...")
-		sd.KeyFrameRequest()
-	}
+	sd.KeyFrameRequest()
+	sd.LastIDRRequestTime = time.Now()
 }
 
 func (sd *ScrcpyDriver) Capabilities() sdriver.DriverCaps {

@@ -81,7 +81,7 @@ func NewAgent(config AgentConfig) (*Agent, error) {
 	mediaMeta := sa.driver.MediaMeta()
 	log.Printf("Driver media meta: %+v", mediaMeta)
 	var videoMimeType, audioMimeType string
-	switch mediaMeta.VideoCodecID {
+	switch mediaMeta.VideoCodec {
 	case "h264":
 		videoMimeType = webrtc.MimeTypeH264
 	case "h265":
@@ -89,13 +89,13 @@ func NewAgent(config AgentConfig) (*Agent, error) {
 	case "av1":
 		videoMimeType = webrtc.MimeTypeAV1
 	default:
-		log.Printf("Unsupported video codec: %s", mediaMeta.VideoCodecID)
+		log.Printf("Unsupported video codec: %s", mediaMeta.VideoCodec)
 	}
-	switch mediaMeta.AudioCodecID {
+	switch mediaMeta.AudioCodec {
 	case "opus":
 		audioMimeType = webrtc.MimeTypeOpus
 	default:
-		log.Printf("Unsupported audio codec: %s", mediaMeta.AudioCodecID)
+		log.Printf("Unsupported audio codec: %s", mediaMeta.AudioCodec)
 	}
 	log.Printf("Creating tracks with MIME types - Video: %s, Audio: %s", videoMimeType, audioMimeType)
 	streamID := generateStreamID()
@@ -139,6 +139,7 @@ func (sa *Agent) HandleRTCP() {
 	for {
 		n, _, err := sa.rtpSenderVideo.Read(rtcpBuf)
 		if err != nil {
+			log.Printf("Error reading RTCP: %v", err)
 			return
 		}
 		packets, err := rtcp.Unmarshal(rtcpBuf[:n])
@@ -173,7 +174,7 @@ func (sa *Agent) Close() {
 
 func (sa *Agent) GetCodecInfo() (string, string) {
 	m := sa.driver.MediaMeta()
-	return m.VideoCodecID, m.AudioCodecID
+	return m.VideoCodec, m.AudioCodec
 }
 
 func (sa *Agent) GetMediaMeta() sdriver.MediaMeta {
@@ -189,7 +190,10 @@ func (sa *Agent) StartStreaming() {
 	sa.baseTime = time.Now()
 	go sa.StreamingVideo()
 	go sa.StreamingAudio()
-	go sa.HandleRTCP()
+	if sa.rtpSenderVideo != nil {
+		log.Printf("RTCP handler started")
+		go sa.HandleRTCP()
+	}
 	sa.driver.RequestIDR(true)
 }
 

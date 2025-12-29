@@ -12,8 +12,6 @@ func (da *ScrcpyDriver) convertVideoFrame() {
 	var headerBuf [12]byte
 	header := ScrcpyFrameHeader{}
 
-	isH265 := da.mediaMeta.VideoCodecID == "h265"
-
 	for {
 		// read frame header
 		if _, err := io.ReadFull(da.videoConn, headerBuf[:]); err != nil {
@@ -34,23 +32,20 @@ func (da *ScrcpyDriver) convertVideoFrame() {
 			log.Println("Failed to read video frame payload:", err)
 			return
 		}
-
-		var iter func(func(sdriver.AVBox) bool)
-		if isH265 {
-			iter = da.GenerateWebRTCFrameH265(header, payloadBuf)
-		} else {
-			// 	niltype := (frameData[4] >> 1) & 0x3F
-			// 	log.Printf("(h265) NALU Type of first NALU in frame: %d; total size: %d", niltype, len(frameData))
-			iter = da.GenerateWebRTCFrameH264(header, payloadBuf)
+		if header.IsKeyFrame {
+			go da.updateCache(payloadBuf, da.mediaMeta.VideoCodec)
 		}
-
-		for webRTCFrame := range iter {
-			select {
-			case da.VideoChan <- webRTCFrame:
-			default:
-				log.Println("Video channel full, waiting to send frame...")
-				da.VideoChan <- webRTCFrame
-			}
+		webRTCFrame := sdriver.AVBox{
+			Data:     payloadBuf,
+			PTS:      time.Duration(header.PTS) * time.Microsecond,
+			IsConfig: false,
+		}
+		da.LastPTS = webRTCFrame.PTS
+		select {
+		case da.VideoChan <- webRTCFrame:
+		default:
+			log.Println("Video channel full, waiting to send frame...")
+			da.VideoChan <- webRTCFrame
 		}
 	}
 }

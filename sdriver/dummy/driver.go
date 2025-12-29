@@ -51,7 +51,13 @@ func New(c map[string]string) (*DummyDriver, error) {
 		return nil, errors.New("dummy: file path is empty")
 	}
 
-	d.fetchMediaMeta()
+	// d.fetchMediaMeta()
+	d.mediaMeta = sdriver.MediaMeta{
+		Width:      1920,
+		Height:     1080,
+		VideoCodec: "h265",
+		FPS:        30,
+	}
 	log.Printf("Dummy driver media meta: %+v", d.mediaMeta)
 
 	return d, nil
@@ -114,14 +120,6 @@ func (d *DummyDriver) Capabilities() sdriver.DriverCaps {
 	return sdriver.DriverCaps{CanClipboard: false, CanUHID: false, CanVideo: true, CanAudio: false, CanControl: false}
 }
 
-// CodecInfo returns the video/audio codec identifiers.
-func (d *DummyDriver) CodecInfo() (string, string) {
-	if d.mediaMeta.VideoCodecID != "" {
-		return d.mediaMeta.VideoCodecID, ""
-	}
-	return "h264", ""
-}
-
 func (d *DummyDriver) MediaMeta() sdriver.MediaMeta {
 	return d.mediaMeta
 }
@@ -160,7 +158,7 @@ func (d *DummyDriver) loop() {
 			NextNAL() ([]byte, error)
 		}
 
-		if d.mediaMeta.VideoCodecID == "h265" {
+		if d.mediaMeta.VideoCodec == "h265" {
 			h265, err := h265reader.NewReader(f)
 			if err != nil {
 				log.Printf("Failed to create H.265 reader: %v", err)
@@ -198,7 +196,7 @@ func (d *DummyDriver) loop() {
 
 			var isIDR, isConfig, isVCL bool
 
-			if d.mediaMeta.VideoCodecID == "h265" {
+			if d.mediaMeta.VideoCodec == "h265" {
 				// H.265 NAL header parsing
 				// Forbidden_zero_bit (1) + Nal_unit_type (6) + Nuh_layer_id (6) + Nuh_temporal_id_plus1 (3)
 				// nal_unit_type is bits 1-6 of the first byte
@@ -223,7 +221,7 @@ func (d *DummyDriver) loop() {
 				d.mu.Lock()
 				// For simplicity, we just store the last config frame as SPS/PPS equivalent
 				// In a real H.265 implementation, you'd want to store VPS/SPS/PPS separately
-				if d.mediaMeta.VideoCodecID == "h265" {
+				if d.mediaMeta.VideoCodec == "h265" {
 					// Simple storage for H.265 config frames
 					d.lastSPS = nalData // Just store as lastSPS for now to satisfy RequestIDR
 				} else {
@@ -309,7 +307,7 @@ func (d *DummyDriver) fetchMediaMeta() {
 					if err == nil {
 						d.mediaMeta.Width = spsInfo.Width
 						d.mediaMeta.Height = spsInfo.Height
-						d.mediaMeta.VideoCodecID = "h264"
+						d.mediaMeta.VideoCodec = "h264"
 						if spsInfo.FrameRate > 0 {
 							d.mediaMeta.FPS = uint32(spsInfo.FrameRate + 0.5)
 						}

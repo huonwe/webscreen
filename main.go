@@ -18,12 +18,16 @@ func main() {
 	port := flag.String("port", "8079", "server port")
 	pin := flag.String("pin", "123456", "initial PIN for web access")
 	// pin should be 6 digits and only digits
-	if len(*pin) != 6 {
-		log.Fatal("PIN must be exactly 6 digits")
-	}
-	for _, ch := range *pin {
-		if ch < '0' || ch > '9' {
-			log.Fatal("PIN must contain only digits")
+	if *pin == "DISABLED" {
+		*pin = ""
+	} else {
+		if len(*pin) != 6 {
+			log.Fatal("PIN must be exactly 6 digits")
+		}
+		for _, ch := range *pin {
+			if ch < '0' || ch > '9' {
+				log.Fatal("PIN must contain only digits")
+			}
 		}
 	}
 

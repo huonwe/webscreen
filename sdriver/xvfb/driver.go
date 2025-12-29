@@ -199,10 +199,10 @@ func (d *LinuxDriver) Capabilities() sdriver.DriverCaps {
 // CodecInfo() (videoCodec string, audioCodec string)
 func (d *LinuxDriver) MediaMeta() sdriver.MediaMeta {
 	return sdriver.MediaMeta{
-		Width:        1920,
-		Height:       1080,
-		VideoCodecID: "h264",
-		AudioCodecID: "",
+		Width:      1920,
+		Height:     1080,
+		VideoCodec: "h264",
+		AudioCodec: "",
 	}
 }
 func (d *LinuxDriver) Stop() {

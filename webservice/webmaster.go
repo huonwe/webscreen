@@ -75,7 +75,9 @@ func (wm *WebMaster) setRouter() {
 	r.GET("/", func(ctx *gin.Context) {
 		ctx.Redirect(302, "/console")
 	})
-	r.Use(wm.HybridAuthMiddleware())
+	if wm.pin != "" {
+		r.Use(wm.HybridAuthMiddleware())
+	}
 	screen := r.Group("/screen")
 	{
 		screen.GET("/:id", func(ctx *gin.Context) {

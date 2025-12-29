@@ -12,11 +12,11 @@ type AVBox struct {
 }
 
 type MediaMeta struct {
-	VideoCodecID string `json:"video_codec_id"`
-	Width        uint32 `json:"width"`
-	Height       uint32 `json:"height"`
-	FPS          uint32 `json:"fps"`
-	AudioCodecID string `json:"audio_codec_id"`
+	VideoCodec string `json:"video_codec_id"`
+	Width      uint32 `json:"width"`
+	Height     uint32 `json:"height"`
+	FPS        uint32 `json:"fps"`
+	AudioCodec string `json:"audio_codec_id"`
 }
 
 type DriverCaps struct {
