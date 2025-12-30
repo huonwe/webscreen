@@ -17,6 +17,7 @@ var publicFS embed.FS
 func main() {
 	port := flag.String("port", "8079", "server port")
 	pin := flag.String("pin", "123456", "initial PIN for web access")
+	flag.Parse()
 	// pin should be 6 digits and only digits
 	if *pin == "DISABLED" {
 		*pin = ""
@@ -30,8 +31,6 @@ func main() {
 			}
 		}
 	}
-
-	flag.Parse()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
