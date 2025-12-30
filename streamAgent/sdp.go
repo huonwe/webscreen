@@ -29,6 +29,12 @@ func HandleSDP(sdp string, vTrack *webrtc.TrackLocalStaticSample, aTrack *webrtc
 	); err != nil {
 		panic(err)
 	}
+	if err := m.RegisterHeaderExtension(
+		webrtc.RTPHeaderExtensionCapability{URI: "http://www.webrtc.org/experiments/rtp-hdrext/playout-delay"},
+		webrtc.RTPCodecTypeVideo,
+	); err != nil {
+		panic(err)
+	}
 	i := &interceptor.Registry{}
 	if err := webrtc.RegisterDefaultInterceptors(m, i); err != nil {
 		panic(err)
@@ -109,6 +115,133 @@ func CreateMediaEngine(mimeTypes []string) *webrtc.MediaEngine {
 
 	for _, mime := range mimeTypes {
 		switch mime {
+		case webrtc.MimeTypeAV1:
+			err := m.RegisterCodec(webrtc.RTPCodecParameters{
+				RTPCodecCapability: webrtc.RTPCodecCapability{
+					MimeType:  webrtc.MimeTypeAV1,
+					ClockRate: 90000,
+					Channels:  0,
+					// profile=0 (Main Profile), level-idx=13 (Level 5.1), tier=0 (Main Tier)
+					SDPFmtpLine: "profile=0;level-idx=13;tier=0",
+					RTCPFeedback: []webrtc.RTCPFeedback{
+						{Type: "transport-cc", Parameter: ""},
+						{Type: "ccm", Parameter: "fir"},
+						{Type: "nack", Parameter: ""},
+						{Type: "nack", Parameter: "pli"},
+					},
+				},
+				PayloadType: 100,
+			}, webrtc.RTPCodecTypeVideo)
+			if err != nil {
+				log.Println("RegisterCodec AV1 failed:", err)
+			}
+			log.Println("Registered AV1 codec")
+		case webrtc.MimeTypeH265:
+			// Register H.265 (video)
+			err := m.RegisterCodec(webrtc.RTPCodecParameters{
+				RTPCodecCapability: webrtc.RTPCodecCapability{
+					MimeType:    webrtc.MimeTypeH265,
+					ClockRate:   90000,
+					Channels:    0,
+					SDPFmtpLine: "profile-id=1;tier-flag=0;level-id=153;level-asymmetry-allowed=1",
+					RTCPFeedback: []webrtc.RTCPFeedback{
+						{Type: "transport-cc", Parameter: ""},
+						{Type: "ccm", Parameter: "fir"},
+						{Type: "nack", Parameter: ""},
+						{Type: "nack", Parameter: "pli"},
+					},
+				},
+				PayloadType: 102,
+			}, webrtc.RTPCodecTypeVideo)
+			if err != nil {
+				log.Println("RegisterCodec H265 failed:", err)
+			}
+			err = m.RegisterCodec(webrtc.RTPCodecParameters{
+				RTPCodecCapability: webrtc.RTPCodecCapability{
+					MimeType:    webrtc.MimeTypeH265,
+					ClockRate:   90000,
+					Channels:    0,
+					SDPFmtpLine: "profile-id=1;tier-flag=0;level-id=123;level-asymmetry-allowed=1",
+					RTCPFeedback: []webrtc.RTCPFeedback{
+						{Type: "transport-cc", Parameter: ""},
+						{Type: "ccm", Parameter: "fir"},
+						{Type: "nack", Parameter: ""},
+						{Type: "nack", Parameter: "pli"},
+					},
+				},
+				PayloadType: 103,
+			}, webrtc.RTPCodecTypeVideo)
+			if err != nil {
+				log.Println("RegisterCodec H265 failed:", err)
+			}
+			log.Println("Registered H265 codec")
+		case webrtc.MimeTypeH264:
+			err := m.RegisterCodec(webrtc.RTPCodecParameters{
+				RTPCodecCapability: webrtc.RTPCodecCapability{
+					MimeType:  webrtc.MimeTypeH264,
+					ClockRate: 90000,
+					Channels:  0,
+					// profile-level-id 解析:
+					// 64: High Profile (0x64)
+					// 00: Constraint Set (默认)
+					// 33: Level 5.1 (5.1 * 10 = 51 = 0x33)
+					// packetization-mode=1: 支持非交错模式
+					SDPFmtpLine: "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=640033",
+					RTCPFeedback: []webrtc.RTCPFeedback{
+						{Type: "transport-cc", Parameter: ""},
+						{Type: "ccm", Parameter: "fir"},
+						{Type: "nack", Parameter: ""},
+						{Type: "nack", Parameter: "pli"},
+					},
+				},
+				PayloadType: 104, // 优先级最高
+			}, webrtc.RTPCodecTypeVideo)
+			err = m.RegisterCodec(webrtc.RTPCodecParameters{
+				RTPCodecCapability: webrtc.RTPCodecCapability{
+					MimeType:  webrtc.MimeTypeH264,
+					ClockRate: 90000,
+					Channels:  0,
+					// profile-level-id 解析:
+					// 4d: Main Profile (0x4d)
+					// e0: Constraint Set (Constrained Baseline)
+					// 1f: Level 4.2 (4.2 * 10 = 42 = 0x2a)
+					SDPFmtpLine: "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=4de02a",
+					RTCPFeedback: []webrtc.RTCPFeedback{
+						{Type: "transport-cc", Parameter: ""},
+						{Type: "ccm", Parameter: "fir"},
+						{Type: "nack", Parameter: ""},
+						{Type: "nack", Parameter: "pli"},
+					},
+				},
+				PayloadType: 105, // 备选
+			}, webrtc.RTPCodecTypeVideo)
+			if err != nil {
+				log.Println("RegisterCodec H264 failed:", err)
+			}
+			err = m.RegisterCodec(webrtc.RTPCodecParameters{
+				RTPCodecCapability: webrtc.RTPCodecCapability{
+					MimeType:  webrtc.MimeTypeH264,
+					ClockRate: 90000,
+					Channels:  0,
+					// profile-level-id 解析:
+					// 42: Baseline Profile (0x42)
+					// e0: Constraint Set (Constrained Baseline)
+					// 1f: Level 3.1 (3.1 * 10 = 31 = 0x1f)
+					SDPFmtpLine: "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f",
+					RTCPFeedback: []webrtc.RTCPFeedback{
+						{Type: "transport-cc", Parameter: ""},
+						{Type: "ccm", Parameter: "fir"},
+						{Type: "nack", Parameter: ""},
+						{Type: "nack", Parameter: "pli"},
+					},
+				},
+				PayloadType: 106, // 保底
+			}, webrtc.RTPCodecTypeVideo)
+			if err != nil {
+				log.Println("RegisterCodec H264 failed:", err)
+			}
+			log.Println("Registered H264 codec")
+
 		case webrtc.MimeTypeOpus:
 			// 1. 注册 Opus (音频)
 			err := m.RegisterCodec(webrtc.RTPCodecParameters{
@@ -126,109 +259,6 @@ func CreateMediaEngine(mimeTypes []string) *webrtc.MediaEngine {
 			}, webrtc.RTPCodecTypeAudio)
 			if err != nil {
 				log.Println("RegisterCodec Opus failed:", err)
-			}
-		case webrtc.MimeTypeH264:
-			err := m.RegisterCodec(webrtc.RTPCodecParameters{
-				RTPCodecCapability: webrtc.RTPCodecCapability{
-					MimeType:  webrtc.MimeTypeH264,
-					ClockRate: 90000,
-					Channels:  0,
-					// profile-id=1: Main Profile
-					// tier-flag=0:  Main Tier (Level 5.1 upper limit 40Mbps, good enough for cloud gaming and good compatibility)
-					// level-id=153: Level 5.1 (perfectly supports 2K@60fps / 4K@30fps)
-					// level-asymmetry-allowed=1: Allows server to send high quality, client to send low quality
-					SDPFmtpLine: "profile-id=1;tier-flag=0;level-id=153;level-asymmetry-allowed=1",
-					RTCPFeedback: []webrtc.RTCPFeedback{
-						{Type: "transport-cc", Parameter: ""},
-						{Type: "ccm", Parameter: "fir"},
-						{Type: "nack", Parameter: ""},
-						{Type: "nack", Parameter: "pli"},
-					},
-				},
-				PayloadType: 102,
-			}, webrtc.RTPCodecTypeVideo)
-			if err != nil {
-				log.Println("RegisterCodec H264 failed:", err)
-			}
-			err = m.RegisterCodec(webrtc.RTPCodecParameters{
-				RTPCodecCapability: webrtc.RTPCodecCapability{
-					MimeType:  webrtc.MimeTypeH264,
-					ClockRate: 90000,
-					Channels:  0,
-					// profile-id=1: Main Profile
-					// tier-flag=0:  Main Tier (Level 5.1 upper limit 40Mbps, good enough for cloud gaming and good compatibility)
-					// level-id=120: Level 4.0 (supports up to 1080p@60fps)
-					// level-asymmetry-allowed=1: Allows server to send high quality, client to send low quality
-					SDPFmtpLine: "profile-id=1;tier-flag=0;level-id=120;level-asymmetry-allowed=1",
-					RTCPFeedback: []webrtc.RTCPFeedback{
-						{Type: "transport-cc", Parameter: ""},
-						{Type: "ccm", Parameter: "fir"},
-						{Type: "nack", Parameter: ""},
-						{Type: "nack", Parameter: "pli"},
-					},
-				},
-				PayloadType: 103,
-			}, webrtc.RTPCodecTypeVideo)
-			if err != nil {
-				log.Println("RegisterCodec H264 failed:", err)
-			}
-
-			log.Println("Registered H264 codec")
-		case webrtc.MimeTypeH265:
-			// Register H.265 (video)
-			err := m.RegisterCodec(webrtc.RTPCodecParameters{
-				RTPCodecCapability: webrtc.RTPCodecCapability{
-					MimeType:    webrtc.MimeTypeH265,
-					ClockRate:   90000,
-					Channels:    0,
-					SDPFmtpLine: "profile-id=1;tier-flag=0;level-id=153;level-asymmetry-allowed=1",
-					RTCPFeedback: []webrtc.RTCPFeedback{
-						{Type: "transport-cc", Parameter: ""},
-						{Type: "ccm", Parameter: "fir"},
-						{Type: "nack", Parameter: ""},
-						{Type: "nack", Parameter: "pli"},
-					},
-				},
-				PayloadType: 104,
-			}, webrtc.RTPCodecTypeVideo)
-			if err != nil {
-				log.Println("RegisterCodec H265 failed:", err)
-			}
-			err = m.RegisterCodec(webrtc.RTPCodecParameters{
-				RTPCodecCapability: webrtc.RTPCodecCapability{
-					MimeType:    webrtc.MimeTypeH265,
-					ClockRate:   90000,
-					Channels:    0,
-					SDPFmtpLine: "profile-id=1;tier-flag=0;level-id=120;level-asymmetry-allowed=1",
-					RTCPFeedback: []webrtc.RTCPFeedback{
-						{Type: "transport-cc", Parameter: ""},
-						{Type: "ccm", Parameter: "fir"},
-						{Type: "nack", Parameter: ""},
-						{Type: "nack", Parameter: "pli"},
-					},
-				},
-				PayloadType: 105,
-			}, webrtc.RTPCodecTypeVideo)
-			if err != nil {
-				log.Println("RegisterCodec H265 failed:", err)
-			}
-			log.Println("Registered H265 codec")
-		case webrtc.MimeTypeAV1:
-			err := m.RegisterCodec(webrtc.RTPCodecParameters{
-				RTPCodecCapability: webrtc.RTPCodecCapability{
-					MimeType:    webrtc.MimeTypeAV1,
-					ClockRate:   90000,
-					Channels:    0,
-					SDPFmtpLine: "",
-					RTCPFeedback: []webrtc.RTCPFeedback{
-						{Type: "goog-remb", Parameter: ""},
-						{Type: "ccm", Parameter: "fir"},
-					},
-				},
-				PayloadType: 106,
-			}, webrtc.RTPCodecTypeVideo)
-			if err != nil {
-				log.Println("RegisterCodec AV1 failed:", err)
 			}
 		default:
 			log.Printf("Unsupported MIME type: %s", mime)
