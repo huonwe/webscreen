@@ -97,10 +97,10 @@ func (da *ScrcpyDriver) convertAudioFrame() {
 
 		// read frame payload
 		_, _ = io.ReadFull(da.audioConn, payloadBuf)
-		if header.IsConfig {
-			log.Println("[scrcpy driver]Received audio config frame, skipping...")
-			continue
-		}
+		// if header.IsConfig {
+		// 	log.Println("[scrcpy driver]Received audio config frame, skipping...")
+		// 	continue
+		// }
 
 		da.AudioChan <- sdriver.AVBox{
 			Data:     payloadBuf,

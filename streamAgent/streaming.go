@@ -70,7 +70,7 @@ func (sa *Agent) StreamingAudio() {
 		return
 	}
 	log.Println("[Agent] Audio streaming started")
-	// 音频通常是非常规律的，Opus 默认帧长通常是 20ms
+	// Opus 默认帧长通常是 20ms
 	const defaultDuration = 20 * time.Millisecond
 	var currentTimestamp = sa.baseTime
 	for aBox := range sa.audioCh {

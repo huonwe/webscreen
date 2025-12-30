@@ -10,8 +10,10 @@ let activeConfigSerial = null;
 // Refactored structure to match new requirements (all in driver_config)
 const defaultStreamConfig = {
     device_type: 'android',
+    av_sync: false,
     driver_config: {
         max_fps: '60',
+        max_size: '',
         video_codec: 'h264',
         audio: 'true',
         audio_codec: 'opus',
@@ -78,6 +80,7 @@ function ensureDeviceConfig(device) {
             device_id: serial,
             device_ip: device.ip || '0',
             device_port: device.port || '0',
+            av_sync: baseConfig.av_sync,
             driver_config: baseConfig.driver_config
         };
         saveDeviceConfigs(deviceConfigs);
@@ -306,7 +309,7 @@ function startStream(serial) {
             device_id: config.device_id || serial,
             device_ip: config.device_ip || "127.0.0.1",
             device_port: config.device_port || "0",
-            av_sync: false,
+            av_sync: document.getElementById('configAVSync').checked,
             driver_config: {
                 ip : drv.ip || "",
                 user: drv.user || "",
@@ -323,22 +326,18 @@ function startStream(serial) {
             device_id: config.device_id || serial,
             device_ip: config.device_ip || '0',
             device_port: config.device_port || '0',
+            av_sync: document.getElementById('configAVSync').checked,
             driver_config: {
                 max_fps: String(drv.max_fps || '60'),
                 video_codec: drv.video_codec || "h264",
                 audio_codec: drv.audio_codec || "opus",
                 audio: drv.audio || "true",
-                video_bit_rate: String(drv.video_bit_rate || 8000000)
+                video_bit_rate: String(drv.video_bit_rate || 8000000),
+                video_codec_options: drv.video_codec_options || '',
+                new_display: drv.new_display || '',
+                max_size: drv.max_size || ''
             }
         };
-
-        // Optional fields
-        if (drv.video_codec_options) {
-            finalConfig.driver_config.video_codec_options = drv.video_codec_options;
-        }
-        if (drv.new_display) {
-            finalConfig.driver_config.new_display = drv.new_display;
-        }
     }
 
     console.log('Starting stream with config:', finalConfig);
@@ -384,6 +383,8 @@ function showConfigModal(serial) {
 
     const androidSettings = document.getElementById('androidSettings');
     const xvfbSettings = document.getElementById('xvfbSettings');
+
+    document.getElementById('configAVSync').checked = config.av_sync || false;
     console.log('Configuring modal for', serial, 'of type', config.device_type);
     if (config.device_type === 'xvfb') {
         console.log('Showing XVFB settings for', serial);
@@ -403,6 +404,7 @@ function showConfigModal(serial) {
 
         document.getElementById('configMaxFPS').value = drv.max_fps || '';
         document.getElementById('configVideoBitrate').value = formatBitrate(drv.video_bit_rate).replace(/[KMG]$/, '') || '';
+        document.getElementById('configMaxSize').value = drv.max_size || '';
         document.getElementById('configVideoCodec').value = drv.video_codec || 'h264';
         document.getElementById('configVideoCodecOptions').value = drv.video_codec_options || '';
         document.getElementById('configAudio').checked = drv.audio === 'true';
@@ -419,6 +421,8 @@ function saveDeviceConfig() {
     const device = knownDevices.find(d => d.device_id === activeConfigSerial);
     const config = ensureDeviceConfig(device);
 
+    config.av_sync = document.getElementById('configAVSync').checked;
+
     // Initialize if missing
     if (!config.driver_config) config.driver_config = {};
     const drv = config.driver_config;
@@ -430,7 +434,7 @@ function saveDeviceConfig() {
         drv.frameRate = document.getElementById('xvfbFrameRate').value.trim();
         drv.bitRate = document.getElementById('xvfbBitRate').value.trim();
         drv.codec = document.getElementById('xvfbCodec').value;
-    } else {
+    } else { // Android Scrcpy
         drv.max_fps = document.getElementById('configMaxFPS').value.trim() || '60';
         // Parse bitrate input (e.g. "8") to number (8000000) using 'M' as default if not specified
         const bitrateInput = document.getElementById('configVideoBitrate').value.trim();
@@ -439,7 +443,7 @@ function saveDeviceConfig() {
         // If user enters "8", we append "M" to maintain previous UX, or rewrite parseBitrate.
         // Let's assume input "8" means 8Mbps for simplicity in this UI context.
         drv.video_bit_rate = parseBitrate(bitrateInput + (bitrateInput.match(/[KMG]/i) ? '' : 'M'));
-
+        drv.max_size = document.getElementById('configMaxSize').value.trim() || '';
         drv.video_codec = document.getElementById('configVideoCodec').value;
         drv.video_codec_options = document.getElementById('configVideoCodecOptions').value.trim();
         drv.new_display = document.getElementById('configNewDisplay').value.trim();

@@ -68,6 +68,7 @@ func (sd *ScrcpyDriver) RequestIDR(firstFrame bool) {
 		sd.KeyFrameRequest()
 		return
 	} else if time.Since(sd.LastIDRRequestTime) < 2*time.Second {
+		// log.Printf("last IDR time request was %.1f seconds ago, sending cached key frame", time.Since(sd.LastIDRRequestTime).Seconds())
 		sd.sendCachedKeyFrame()
 		return
 	}

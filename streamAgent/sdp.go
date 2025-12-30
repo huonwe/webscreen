@@ -112,8 +112,17 @@ func CreateMediaEngine(mimeTypes []string) *webrtc.MediaEngine {
 		case webrtc.MimeTypeOpus:
 			// 1. 注册 Opus (音频)
 			err := m.RegisterCodec(webrtc.RTPCodecParameters{
-				RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeOpus, ClockRate: 48000, Channels: 2, SDPFmtpLine: "minptime=10;useinbandfec=1"},
-				PayloadType:        111,
+				RTPCodecCapability: webrtc.RTPCodecCapability{
+					MimeType:  webrtc.MimeTypeOpus,
+					ClockRate: 48000,
+					Channels:  2,
+					// force 10ms low latency, but not working well, so disable it
+					// force stereo (spatial audio)
+					// enable FEC (forward error correction)
+					// disable DTX (discontinuous transmission) (usedtx=0)
+					SDPFmtpLine: "minptime=10;maxptime=20;useinbandfec=1;stereo=1;sprop-stereo=1",
+				},
+				PayloadType: 111,
 			}, webrtc.RTPCodecTypeAudio)
 			if err != nil {
 				log.Println("RegisterCodec Opus failed:", err)
@@ -141,19 +150,37 @@ func CreateMediaEngine(mimeTypes []string) *webrtc.MediaEngine {
 			if err != nil {
 				log.Println("RegisterCodec H264 failed:", err)
 			}
+			err = m.RegisterCodec(webrtc.RTPCodecParameters{
+				RTPCodecCapability: webrtc.RTPCodecCapability{
+					MimeType:  webrtc.MimeTypeH264,
+					ClockRate: 90000,
+					Channels:  0,
+					// profile-id=1: Main Profile
+					// tier-flag=0:  Main Tier (Level 5.1 upper limit 40Mbps, good enough for cloud gaming and good compatibility)
+					// level-id=120: Level 4.0 (supports up to 1080p@60fps)
+					// level-asymmetry-allowed=1: Allows server to send high quality, client to send low quality
+					SDPFmtpLine: "profile-id=1;tier-flag=0;level-id=120;level-asymmetry-allowed=1",
+					RTCPFeedback: []webrtc.RTCPFeedback{
+						{Type: "transport-cc", Parameter: ""},
+						{Type: "ccm", Parameter: "fir"},
+						{Type: "nack", Parameter: ""},
+						{Type: "nack", Parameter: "pli"},
+					},
+				},
+				PayloadType: 103,
+			}, webrtc.RTPCodecTypeVideo)
+			if err != nil {
+				log.Println("RegisterCodec H264 failed:", err)
+			}
 
 			log.Println("Registered H264 codec")
 		case webrtc.MimeTypeH265:
 			// Register H.265 (video)
 			err := m.RegisterCodec(webrtc.RTPCodecParameters{
 				RTPCodecCapability: webrtc.RTPCodecCapability{
-					MimeType:  webrtc.MimeTypeH265,
-					ClockRate: 90000,
-					Channels:  0,
-					// profile-id=1: Main Profile
-					// tier-flag=0:  Main Tier (Level 5.1 upper limit 40Mbps, good enough for cloud gaming and good compatibility)
-					// level-id=153: Level 5.1 (perfectly supports 2K@60fps / 4K@30fps)
-					// level-asymmetry-allowed=1: Allows server to send high quality, client to send low quality
+					MimeType:    webrtc.MimeTypeH265,
+					ClockRate:   90000,
+					Channels:    0,
 					SDPFmtpLine: "profile-id=1;tier-flag=0;level-id=153;level-asymmetry-allowed=1",
 					RTCPFeedback: []webrtc.RTCPFeedback{
 						{Type: "transport-cc", Parameter: ""},
@@ -163,6 +190,24 @@ func CreateMediaEngine(mimeTypes []string) *webrtc.MediaEngine {
 					},
 				},
 				PayloadType: 104,
+			}, webrtc.RTPCodecTypeVideo)
+			if err != nil {
+				log.Println("RegisterCodec H265 failed:", err)
+			}
+			err = m.RegisterCodec(webrtc.RTPCodecParameters{
+				RTPCodecCapability: webrtc.RTPCodecCapability{
+					MimeType:    webrtc.MimeTypeH265,
+					ClockRate:   90000,
+					Channels:    0,
+					SDPFmtpLine: "profile-id=1;tier-flag=0;level-id=120;level-asymmetry-allowed=1",
+					RTCPFeedback: []webrtc.RTCPFeedback{
+						{Type: "transport-cc", Parameter: ""},
+						{Type: "ccm", Parameter: "fir"},
+						{Type: "nack", Parameter: ""},
+						{Type: "nack", Parameter: "pli"},
+					},
+				},
+				PayloadType: 105,
 			}, webrtc.RTPCodecTypeVideo)
 			if err != nil {
 				log.Println("RegisterCodec H265 failed:", err)
@@ -180,7 +225,7 @@ func CreateMediaEngine(mimeTypes []string) *webrtc.MediaEngine {
 						{Type: "ccm", Parameter: "fir"},
 					},
 				},
-				PayloadType: 105,
+				PayloadType: 106,
 			}, webrtc.RTPCodecTypeVideo)
 			if err != nil {
 				log.Println("RegisterCodec AV1 failed:", err)

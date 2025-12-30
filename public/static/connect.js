@@ -48,33 +48,13 @@ var CONFIG = (function () {
         }
     }
 
-    // Try to extract from URL path: /screen/:device_type/:device_id/:device_ip/:device_port
-    const pathMatch = window.location.pathname.match(/^\/screen\/([^\/]+)\/([^\/]+)\/([^\/]+)\/([^\/]+)/);
-    if (pathMatch) {
-        return {
-            device_type: decodeURIComponent(pathMatch[1]),
-            device_id: decodeURIComponent(pathMatch[2]),
-            device_ip: decodeURIComponent(pathMatch[3]),
-            device_port: decodeURIComponent(pathMatch[4]),
-            av_sync: false,
-            driver_config: {
-                max_fps: "60",
-                video_codec: "h264",
-                audio_codec: "opus",
-                video_bit_rate: "8000000",
-                audio: "true",
-
-                // new_display: "1920x1080/60",
-            }
-        };
-    }
-
     // Fallback to hardcoded defaults for testing
     return {
         device_type: "android",
         device_id: "emulator-5554",
         device_ip: "0",
         device_port: "0",
+        av_sync: false,
         driver_config: {
             video_codec: "h264",
             audio: "true",
@@ -147,7 +127,7 @@ async function start() {
                         case 'webrtc_init':
                             const answerSdp = message.sdp;
                             const capabilities = message.capabilities;
-                            // console.log("Received SDP Answer", answerSdp);
+                            console.log("Received SDP Answer", answerSdp);
                             console.log("Driver Capabilities:", capabilities);
 
                             // Update UI based on capabilities

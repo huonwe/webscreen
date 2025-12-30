@@ -102,9 +102,11 @@ func NewAgent(config AgentConfig) (*Agent, error) {
 
 	var videoStreamID, audioStreamID string
 	if sa.config.AVSync {
+		log.Printf("AV Sync enabled: using same StreamID for audio and video")
 		videoStreamID = streamID
 		audioStreamID = streamID
 	} else {
+		log.Printf("AV Sync disabled: using different StreamIDs for audio and video")
 		videoStreamID = streamID + "_video"
 		audioStreamID = streamID + "_audio"
 	}

@@ -118,9 +118,6 @@ func New(config map[string]string, deviceID string) (*ScrcpyDriver, error) {
 		config["audio"] = "false"
 		log.Println("[scrcpy] Device does not support Opus audio encoding, disabling audio.")
 		da.ControlChan <- sdriver.TextMsgEvent{Msg: "[scrcpy] Device does not support Opus audio encoding, disabling audio."}
-	} else {
-		da.ControlChan <- sdriver.TextMsgEvent{Msg: "[scrcpy] Device supports Opus audio encoding, enabling audio if configured."}
-		log.Println("[scrcpy] Device supports Opus audio encoding, enabling audio if configured.")
 	}
 	da.adbClient.PushScrcpyServer(SCRCPY_SERVER_LOCAL_PATH, SCRCPY_SERVER_ANDROID_DST)
 	os.Remove(SCRCPY_SERVER_LOCAL_PATH)
@@ -132,19 +129,23 @@ func New(config map[string]string, deviceID string) (*ScrcpyDriver, error) {
 	// da.adbClient.cancel()
 	log.Printf("[scrcpy] driver config: %v", config)
 	options := map[string]string{
-		"CLASSPATH":      SCRCPY_SERVER_ANDROID_DST,
-		"Version":        SCRCPY_VERSION,
-		"scid":           da.scid,
-		"max_size":       config["max_size"],
-		"max_fps":        config["max_fps"],
-		"video":          "true",
-		"video_bit_rate": config["video_bit_rate"],
-		"video_codec":    config["video_codec"],
-		"audio":          config["audio"],
-		"control":        "true",
-		"new_display":    config["new_display"],
-		"cleanup":        "true",
-		"log_level":      "info",
+		"CLASSPATH":           SCRCPY_SERVER_ANDROID_DST,
+		"Version":             SCRCPY_VERSION,
+		"scid":                da.scid,
+		"max_size":            config["max_size"],
+		"max_fps":             config["max_fps"],
+		"video":               "true",
+		"video_codec_options": config["video_codec_options"],
+		"video_bit_rate":      config["video_bit_rate"],
+		"video_codec":         config["video_codec"],
+		"audio":               config["audio"],
+		"audio_bit_rate":      config["audio_bit_rate"],
+		// "audio_codec_options": "durationUs=10000", // 10ms
+		"control":     "true",
+		"new_display": config["new_display"],
+		"cleanup":     "true",
+		"log_level":   "info",
+
 		// "video_encoder":  "c2.rk.hevc.encoder",
 	}
 

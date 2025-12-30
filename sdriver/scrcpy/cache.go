@@ -118,8 +118,8 @@ func (da *ScrcpyDriver) sendWithCachedConfigFrame(PTS time.Duration, IDRFrame []
 	merged_data = append(merged_data, cachedSPS...)
 	merged_data = append(merged_data, startCode...)
 	merged_data = append(merged_data, cachedPPS...)
-	merged_data = append(merged_data, IDRFrame...) // IDRFrame 已经包含起始码
-	log.Println("⚡ Sending cached key frame and parameter sets")
+	merged_data = append(merged_data, IDRFrame...)
+	log.Println("⚡ wrap with cached parameter sets")
 	// parts := bytes.Split(merged_data, startCode)
 	// for i, part := range parts {
 	// 	if len(part) == 0 {

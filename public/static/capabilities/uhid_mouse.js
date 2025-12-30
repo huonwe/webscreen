@@ -1,4 +1,3 @@
-const videoElementMouse = document.getElementById('remoteVideo');
 const SC_CONTROL_MSG_TYPE_UHID_CREATE = 12;
 const SC_CONTROL_MSG_TYPE_UHID_INPUT = 13;
 const SC_CONTROL_MSG_TYPE_UHID_DESTROY = 14; // 注意：并非所有版本都公开支持 Destroy 消息，如果没有只能靠断开连接
@@ -21,6 +20,7 @@ const UHID_DEVICE_NAME = "Virtual Mouse";
 
 function initUHIDMouse() {
     if (uhidMouseInitialized) {
+        window.isUHIDMouseEnabled = true;
         console.log("UHID Mouse already initialized");
         return;
     }
@@ -36,6 +36,7 @@ function initUHIDMouse() {
     if (window.ws && window.ws.readyState === WebSocket.OPEN) {
         window.ws.send(packet);
         uhidMouseInitialized = true;
+        window.isUHIDMouseEnabled = true;
         console.log("UHID Mouse device created");
     } else {
         console.warn("WebSocket is not open. Cannot initialize UHID Mouse.");
@@ -52,6 +53,7 @@ function destroyUHIDMouse() {
         window.ws.send(packet);
         uhidMouseInitialized = false;
         uhidMouseEnabled = false;
+        window.isUHIDMouseEnabled = false;
         console.log("UHID Mouse device destroyed");
     }
 }
@@ -107,13 +109,13 @@ function scheduleMouseSend() {
 
 // ========== UHID 鼠标事件处理 ==========
 
-videoElementMouse.addEventListener('mousedown', (event) => {
+remoteVideo.addEventListener('mousedown', (event) => {
     if (!uhidMouseEnabled) return;
 
     // 如果未锁定，点击时自动请求锁定
-    if (document.pointerLockElement !== videoElementMouse && 
-        document.mozPointerLockElement !== videoElementMouse && 
-        document.webkitPointerLockElement !== videoElementMouse) {
+    if (document.pointerLockElement !== remoteVideo && 
+        document.mozPointerLockElement !== remoteVideo && 
+        document.webkitPointerLockElement !== remoteVideo) {
         requestPointerLock();
     }
 
@@ -132,7 +134,7 @@ videoElementMouse.addEventListener('mousedown', (event) => {
     }
 });
 
-videoElementMouse.addEventListener('mouseup', (event) => {
+remoteVideo.addEventListener('mouseup', (event) => {
     if (!uhidMouseEnabled) return;
 
     event.preventDefault();
@@ -150,7 +152,7 @@ videoElementMouse.addEventListener('mouseup', (event) => {
     }
 });
 
-videoElementMouse.addEventListener('mousemove', (event) => {
+remoteVideo.addEventListener('mousemove', (event) => {
     if (!uhidMouseEnabled) return;
 
     // 锁定模式下只信赖 movementX/Y
@@ -168,7 +170,7 @@ videoElementMouse.addEventListener('mousemove', (event) => {
 });
 
 // 右键菜单拦截（在 UHID 模式下）
-videoElementMouse.addEventListener('contextmenu', (event) => {
+remoteVideo.addEventListener('contextmenu', (event) => {
     if (uhidMouseEnabled) {
         event.preventDefault();
         event.stopPropagation();
@@ -177,7 +179,7 @@ videoElementMouse.addEventListener('contextmenu', (event) => {
 
 // 滚轮事件已经在 scroll.js 中处理，但我们也可以在 UHID 模式下捕获
 // 注意：需要根据模式选择使用哪种滚轮处理方式
-videoElementMouse.addEventListener('wheel', (event) => {
+remoteVideo.addEventListener('wheel', (event) => {
     if (!uhidMouseEnabled) return; // 让 scroll.js 处理
 
     event.preventDefault();
@@ -193,7 +195,7 @@ videoElementMouse.addEventListener('wheel', (event) => {
 
 // 监听指针锁定状态变化
 document.addEventListener('pointerlockchange', () => {
-    if (document.pointerLockElement === videoElementMouse) {
+    if (document.pointerLockElement === remoteVideo) {
         console.log("Pointer locked - relative mouse mode active");
     } else {
         console.log("Pointer unlocked");
@@ -333,6 +335,7 @@ function createUHIDCreatePacket(deviceID = UHID_DEVICE_ID) {
     return buffer;
 }
 function createUHIDInputPacket(buttons, deltaX, deltaY, wheel = 0, hWheel = 0, deviceID = UHID_DEVICE_ID) {
+    // console.log("Creating UHID Input Packet:", {buttons, deltaX, deltaY, wheel, hWheel});
     // Scrcpy 协议结构 (Type 13):
     // [0]    Type (1 byte)
     // [1-2]  Device ID (2 bytes)
