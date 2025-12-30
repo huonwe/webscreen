@@ -1,10 +1,10 @@
 package sagent
 
 import (
-	"fmt"
 	"log"
-	"strings"
 
+	"github.com/pion/interceptor"
+	pionSDP "github.com/pion/sdp/v3"
 	"github.com/pion/webrtc/v4"
 )
 
@@ -23,7 +23,17 @@ func HandleSDP(sdp string, vTrack *webrtc.TrackLocalStaticSample, aTrack *webrtc
 		mimeTypes = append(mimeTypes, aTrack.Codec().MimeType)
 	}
 	m := CreateMediaEngine(mimeTypes)
-	api := webrtc.NewAPI(webrtc.WithMediaEngine(m))
+	if err := m.RegisterHeaderExtension(
+		webrtc.RTPHeaderExtensionCapability{URI: pionSDP.TransportCCURI},
+		webrtc.RTPCodecTypeVideo,
+	); err != nil {
+		panic(err)
+	}
+	i := &interceptor.Registry{}
+	if err := webrtc.RegisterDefaultInterceptors(m, i); err != nil {
+		panic(err)
+	}
+	api := webrtc.NewAPI(webrtc.WithMediaEngine(m), webrtc.WithInterceptorRegistry(i))
 	// 配置 ICE 服务器 (STUN)，用于穿透 NAT
 	config := webrtc.Configuration{
 		ICEServers: []webrtc.ICEServer{
@@ -87,12 +97,6 @@ func HandleSDP(sdp string, vTrack *webrtc.TrackLocalStaticSample, aTrack *webrtc
 
 	// 阻塞等待 ICE 收集完成 (通常几百毫秒)
 	<-gatherComplete
-	// log.Println("Final Server SDP:", peerConnection.LocalDescription().SDP)
-	// G. 将最终的 SDP Answer 返回给浏览器
-
-	// 手动修改 SDP 以突破浏览器默认带宽限制 (SDP Munging)
-	// 这里先不改，在函数外面改
-	// finalSDP := setSDPBandwidth(peerConnection.LocalDescription().SDP, 20000) // 20 Mbps
 	finalSDP := peerConnection.LocalDescription().SDP
 	return finalSDP, rtpSenderVideo, rtpSenderAudio
 }
@@ -115,47 +119,68 @@ func CreateMediaEngine(mimeTypes []string) *webrtc.MediaEngine {
 				log.Println("RegisterCodec Opus failed:", err)
 			}
 		case webrtc.MimeTypeH264:
-			// 注册 H.264 (视频) - 即使我们想用 H.265，注册 H.264 也是个好习惯，作为 fallback
 			err := m.RegisterCodec(webrtc.RTPCodecParameters{
 				RTPCodecCapability: webrtc.RTPCodecCapability{
-					MimeType:     webrtc.MimeTypeH264,
-					ClockRate:    90000,
-					Channels:     0,
-					SDPFmtpLine:  "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f",
-					RTCPFeedback: []webrtc.RTCPFeedback{{Type: "goog-remb", Parameter: ""}, {Type: "ccm", Parameter: "fir"}, {Type: "nack", Parameter: "pli"}}, // 显式禁用 Generic NACK，只保留 PLI
+					MimeType:  webrtc.MimeTypeH264,
+					ClockRate: 90000,
+					Channels:  0,
+					// profile-id=1: Main Profile
+					// tier-flag=0:  Main Tier (Level 5.1 upper limit 40Mbps, good enough for cloud gaming and good compatibility)
+					// level-id=153: Level 5.1 (perfectly supports 2K@60fps / 4K@30fps)
+					// level-asymmetry-allowed=1: Allows server to send high quality, client to send low quality
+					SDPFmtpLine: "profile-id=1;tier-flag=0;level-id=153;level-asymmetry-allowed=1",
+					RTCPFeedback: []webrtc.RTCPFeedback{
+						{Type: "transport-cc", Parameter: ""},
+						{Type: "ccm", Parameter: "fir"},
+						{Type: "nack", Parameter: ""},
+						{Type: "nack", Parameter: "pli"},
+					},
 				},
 				PayloadType: 102,
 			}, webrtc.RTPCodecTypeVideo)
 			if err != nil {
 				log.Println("RegisterCodec H264 failed:", err)
 			}
+
 			log.Println("Registered H264 codec")
 		case webrtc.MimeTypeH265:
-			// 注册 H.265 (视频)
+			// Register H.265 (video)
 			err := m.RegisterCodec(webrtc.RTPCodecParameters{
 				RTPCodecCapability: webrtc.RTPCodecCapability{
-					MimeType:     webrtc.MimeTypeH265,
-					ClockRate:    90000,
-					Channels:     0,
-					SDPFmtpLine:  "",                                                                                                                           // H.265 通常不需要复杂的 fmtp，或者可以留空让 Pion 处理
-					RTCPFeedback: []webrtc.RTCPFeedback{{Type: "goog-remb", Parameter: ""}, {Type: "ccm", Parameter: "fir"}, {Type: "nack", Parameter: "pli"}}, // 显式禁用 Generic NACK，只保留 PLI
+					MimeType:  webrtc.MimeTypeH265,
+					ClockRate: 90000,
+					Channels:  0,
+					// profile-id=1: Main Profile
+					// tier-flag=0:  Main Tier (Level 5.1 upper limit 40Mbps, good enough for cloud gaming and good compatibility)
+					// level-id=153: Level 5.1 (perfectly supports 2K@60fps / 4K@30fps)
+					// level-asymmetry-allowed=1: Allows server to send high quality, client to send low quality
+					SDPFmtpLine: "profile-id=1;tier-flag=0;level-id=153;level-asymmetry-allowed=1",
+					RTCPFeedback: []webrtc.RTCPFeedback{
+						{Type: "transport-cc", Parameter: ""},
+						{Type: "ccm", Parameter: "fir"},
+						{Type: "nack", Parameter: ""},
+						{Type: "nack", Parameter: "pli"},
+					},
 				},
-				PayloadType: 104, // 使用 104，避开 Offer 中的 49/51 和 H.264 的 102
+				PayloadType: 104,
 			}, webrtc.RTPCodecTypeVideo)
 			if err != nil {
 				log.Println("RegisterCodec H265 failed:", err)
 			}
+			log.Println("Registered H265 codec")
 		case webrtc.MimeTypeAV1:
-			// 注册 AV1 (视频)
 			err := m.RegisterCodec(webrtc.RTPCodecParameters{
 				RTPCodecCapability: webrtc.RTPCodecCapability{
-					MimeType:     webrtc.MimeTypeAV1,
-					ClockRate:    90000,
-					Channels:     0,
-					SDPFmtpLine:  "",
-					RTCPFeedback: []webrtc.RTCPFeedback{{Type: "goog-remb", Parameter: ""}, {Type: "ccm", Parameter: "fir"}}, // 禁用 {"nack", ""} 以关闭重传
+					MimeType:    webrtc.MimeTypeAV1,
+					ClockRate:   90000,
+					Channels:    0,
+					SDPFmtpLine: "",
+					RTCPFeedback: []webrtc.RTCPFeedback{
+						{Type: "goog-remb", Parameter: ""},
+						{Type: "ccm", Parameter: "fir"},
+					},
 				},
-				PayloadType: 105, // 使用 105，避开其他视频编解码器的 Payload Type
+				PayloadType: 105,
 			}, webrtc.RTPCodecTypeVideo)
 			if err != nil {
 				log.Println("RegisterCodec AV1 failed:", err)
@@ -169,18 +194,18 @@ func CreateMediaEngine(mimeTypes []string) *webrtc.MediaEngine {
 }
 
 // SetSDPBandwidth 在 SDP 的 video m-line 后插入 b=AS:20000 (20Mbps)
-func SetSDPBandwidth(sdp string, bandwidth int) string {
-	lines := strings.Split(sdp, "\r\n")
-	var newLines []string
-	for _, line := range lines {
-		newLines = append(newLines, line)
-		if strings.HasPrefix(line, "m=video") {
-			// b=AS:<bandwidth>  (Application Specific Maximum, 单位 kbps)
-			// 设置为 20000 kbps = 20 Mbps，远超默认的 2.5 Mbps
-			newLines = append(newLines, fmt.Sprintf("b=AS:%d", bandwidth))
-			// 也可以加上 TIAS (Transport Independent Application Specific Maximum, 单位 bps)
-			// newLines = append(newLines, "b=TIAS:20000000")
-		}
-	}
-	return strings.Join(newLines, "\r\n")
-}
+// func SetSDPBandwidth(sdp string, bandwidth int) string {
+// 	lines := strings.Split(sdp, "\r\n")
+// 	var newLines []string
+// 	for _, line := range lines {
+// 		newLines = append(newLines, line)
+// 		if strings.HasPrefix(line, "m=video") {
+// 			// b=AS:<bandwidth>  (Application Specific Maximum, 单位 kbps)
+// 			// 设置为 20000 kbps = 20 Mbps，远超默认的 2.5 Mbps
+// 			newLines = append(newLines, fmt.Sprintf("b=AS:%d", bandwidth))
+// 			// 也可以加上 TIAS (Transport Independent Application Specific Maximum, 单位 bps)
+// 			// newLines = append(newLines, "b=TIAS:20000000")
+// 		}
+// 	}
+// 	return strings.Join(newLines, "\r\n")
+// }

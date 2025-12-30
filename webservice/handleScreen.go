@@ -3,7 +3,6 @@ package webservice
 import (
 	"log"
 	"net/http"
-	"strconv"
 	sagent "webscreen/streamAgent"
 
 	"github.com/gin-gonic/gin"
@@ -61,13 +60,13 @@ func (wm *WebMaster) handleScreenWS(c *gin.Context) {
 	session.Agent = agent
 	wm.ScreenSessions[sessionID] = session
 	finalSDP := agent.CreateWebRTCConnection(string(config.SDP))
-	bitrateInt, err := strconv.Atoi(config.DriverConfig["video_bit_rate"])
-	if err != nil {
-		bitrateInt = 8000000 // default to 8Mbps
-	}
-	if bitrateInt > 0 {
-		finalSDP = sagent.SetSDPBandwidth(finalSDP, bitrateInt)
-	}
+	// bitrateInt, err := strconv.Atoi(config.DriverConfig["video_bit_rate"])
+	// if err != nil {
+	// 	bitrateInt = 8000000 // default to 8Mbps
+	// }
+	// if bitrateInt > 0 {
+	// 	finalSDP = sagent.SetSDPBandwidth(finalSDP, bitrateInt)
+	// }
 	// finalSDP = webrtcHelper.SetSDPBandwidth(finalSDP, 20_000_000)
 	// conn.WriteMessage(websocket.TextMessage, []byte(finalSDP))
 	capabilities := agent.Capabilities()
@@ -103,8 +102,6 @@ func (wm *WebMaster) listenScreenWS(wsConn *websocket.Conn, agent *sagent.Agent,
 	agent.Close()
 	wm.removeScreenSession(sessionID)
 }
-
-
 
 func (wm *WebMaster) listenEventFeedback(agent *sagent.Agent, wsConn *websocket.Conn) {
 	agent.EventFeedback(func(msg []byte) bool {

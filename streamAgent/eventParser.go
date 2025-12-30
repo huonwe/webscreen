@@ -25,7 +25,7 @@ func (a *Agent) parseEvent(raw []byte) (sdriver.Event, error) {
 	case sdriver.EVENT_TYPE_SCROLL:
 		return a.parseScrollEvent(raw)
 	case sdriver.EVENT_TYPE_ROTATE:
-		return a.parseRotateEvent(raw)
+		return a.parseRotateEvent()
 	case sdriver.EVENT_TYPE_UHID_CREATE:
 		return a.parseUHIDCreateEvent(raw)
 	case sdriver.EVENT_TYPE_UHID_INPUT:
@@ -37,7 +37,7 @@ func (a *Agent) parseEvent(raw []byte) (sdriver.Event, error) {
 	case sdriver.EVENT_TYPE_SET_CLIPBOARD:
 		return a.parseSetClipboardEvent(raw)
 	case sdriver.EVENT_TYPE_REQ_IDR:
-		return a.parseIDRReqEvent(raw)
+		return a.parseIDRReqEvent()
 	default:
 		return nil, fmt.Errorf("unknown event type: %d", eventType)
 	}
@@ -106,11 +106,11 @@ func (a *Agent) parseScrollEvent(raw []byte) (*sdriver.ScrollEvent, error) {
 	return e, nil
 }
 
-func (a *Agent) parseRotateEvent(raw []byte) (*sdriver.RotateEvent, error) {
+func (a *Agent) parseRotateEvent() (*sdriver.RotateEvent, error) {
 	return &sdriver.RotateEvent{}, nil
 }
 
-func (a *Agent) parseIDRReqEvent(raw []byte) (*sdriver.IDRReqEvent, error) {
+func (a *Agent) parseIDRReqEvent() (*sdriver.IDRReqEvent, error) {
 	return &sdriver.IDRReqEvent{}, nil
 }
 
@@ -183,7 +183,7 @@ func (a *Agent) parseGetClipboardEvent(raw []byte) (*sdriver.GetClipboardEvent, 
 	// log.Printf("Parsing GetClipboardEvent, raw length: %d", len(raw))
 	CopyKey := raw[1]
 	e := &sdriver.GetClipboardEvent{
-		CopyKey: CopyKey, // 默认不模拟复制按键
+		CopyKey: CopyKey,
 	}
 	return e, nil
 }
