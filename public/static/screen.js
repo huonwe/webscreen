@@ -47,9 +47,40 @@ function updateVideoCache() {
     return false;
 }
 
+/**
+ * 自动监听视频元素尺寸变化
+ * 代替 window.resize，能捕捉 CSS 旋转、缩放等引起的尺寸改变
+ */
+function initVideoObserver() {
+    const remoteVideo = document.getElementById('remoteVideo');
+    if (!remoteVideo) return;
+
+    const observer = new ResizeObserver(entries => {
+        for (let entry of entries) {
+            // 使用防抖，防止短时间内频繁触发
+            if (window.updateCacheTimer) clearTimeout(window.updateCacheTimer);
+            
+            window.updateCacheTimer = setTimeout(() => {
+                console.log("Detected video size change, updating cache...");
+                if (typeof updateVideoCache === 'function') {
+                    updateVideoCache();
+                }
+            }, 100);
+        }
+    });
+
+    // 开始观察视频元素
+    observer.observe(remoteVideo);
+}
+initVideoObserver();
+
 // 监听视频尺寸变化
-remoteVideo.addEventListener('loadedmetadata', updateVideoCache);
-window.addEventListener('resize', updateVideoCache);
+// remoteVideo.addEventListener('loadedmetadata', updateVideoCache);
+// window.addEventListener('resize', ()=> {
+//     setTimeout(() => {
+//         updateVideoCache();
+//     }, 500);
+// });
 
 // 指针锁定 API (Pointer Lock) - 用于更好的鼠标控制
 function requestPointerLock() {
