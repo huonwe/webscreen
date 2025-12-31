@@ -125,20 +125,37 @@ async function start() {
                 case 'ok':
                     switch (message.stage) {
                         case 'webrtc_init':
-                            const answerSdp = message.sdp;
+                            let answerSdp = message.sdp;
                             const capabilities = message.capabilities;
                             const media_meta = message.media_meta;
                             console.log("Received SDP Answer", answerSdp);
                             console.log("Driver Capabilities:", capabilities);
                             console.log("Media Meta:", media_meta);
 
+                            if (!answerSdp.length) {
+                                console.error("Empty SDP Answer received");
+                                showToast(i18n.t('error_empty_sdp_answer'), 2000);
+                                console.error("WebRTC connection cannot be established without a valid SDP answer. This may be the browser not supporting the required codecs (H264/H265).");
+                                return;
+                            }
+
                             // Update UI based on capabilities
                             await updateUIBasedOnCapabilities(capabilities);
-
+                            
+                            // for edge browser compatibility, format the SDP properly
+                            let formattedSdp = answerSdp
+                                .split(/\r\n|\r|\n/)
+                                .map(line => line.trim())
+                                .filter(line => line.length > 0)
+                                .join('\r\n');
+                            // formattedSdp += '\r\n';
+                            if (!formattedSdp.endsWith('\r\n')) {
+                                formattedSdp += '\r\n';
+                            }
                             // 设置 Answer
                             await pc.setRemoteDescription(new RTCSessionDescription({
                                 type: 'answer',
-                                sdp: answerSdp
+                                sdp: formattedSdp
                             }));
 
                             pc.getReceivers().forEach(receiver => {
@@ -150,12 +167,12 @@ async function start() {
                                 }
                             });
                             setInterval(() => force_sync(pc), 1000);
-                            setTimeout(()=> {
+                            setTimeout(() => {
                                 let rect = remoteVideo.getBoundingClientRect();
                                 // console.log("Initial video size:", rect.width, "x", rect.height);
                                 // updateVideoCache();
-                                console.log(rect.width/rect.height, media_meta.width/media_meta.height);
-                                if (rect.width/rect.height != media_meta.width/media_meta.height) {
+                                console.log(rect.width / rect.height, media_meta.width / media_meta.height);
+                                if (rect.width / rect.height != media_meta.width / media_meta.height) {
                                     let p = createRequestKeyFramePacket();
                                     ws.send(p);
                                 }

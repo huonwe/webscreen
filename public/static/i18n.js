@@ -76,6 +76,8 @@ const translations = {
         unlock_welcome: "Welcome to Webscreen Management Console",
         unlock_network_error: "Network error, please try again",
         unlock_verify_success: "Verification successful",
+
+        error_empty_sdp_answer: "Received empty SDP answer from server. WebRTC connection cannot be established.",
     },
     zh: {
         app_title: "WebScreen 控制台",
@@ -154,6 +156,8 @@ const translations = {
         unlock_welcome: "欢迎进入 Webscreen 管理控制台",
         unlock_network_error: "网络错误，请重试",
         unlock_verify_success: "验证成功",
+
+        error_empty_sdp_answer: "从服务器收到空的 SDP 答案，无法建立 WebRTC 连接。",
     },
     ja: {
         app_title: "WebScreen コンソール",
@@ -232,6 +236,8 @@ const translations = {
         unlock_welcome: "Webscreen 管理コンソールへようこそ",
         unlock_network_error: "ネットワークエラー。もう一度お試しください",
         unlock_verify_success: "検証成功",
+
+        error_empty_sdp_answer: "サーバーから空のSDPアンサーが受信されました。WebRTC接続を確立できません。",
     }
 };
 

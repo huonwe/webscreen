@@ -13,7 +13,7 @@ func HandleSDP(sdp string, vTrack *webrtc.TrackLocalStaticSample, aTrack *webrtc
 		Type: webrtc.SDPTypeOffer,
 		SDP:  sdp,
 	}
-
+	log.Println("Handling SDP Offer", sdp)
 	// 创建 MediaEngine
 	mimeTypes := []string{}
 	if vTrack != nil {
@@ -29,12 +29,12 @@ func HandleSDP(sdp string, vTrack *webrtc.TrackLocalStaticSample, aTrack *webrtc
 	); err != nil {
 		panic(err)
 	}
-	if err := m.RegisterHeaderExtension(
-		webrtc.RTPHeaderExtensionCapability{URI: "http://www.webrtc.org/experiments/rtp-hdrext/playout-delay"},
-		webrtc.RTPCodecTypeVideo,
-	); err != nil {
-		panic(err)
-	}
+	// if err := m.RegisterHeaderExtension(
+	// 	webrtc.RTPHeaderExtensionCapability{URI: "http://www.webrtc.org/experiments/rtp-hdrext/playout-delay"},
+	// 	webrtc.RTPCodecTypeVideo,
+	// ); err != nil {
+	// 	panic(err)
+	// }
 	i := &interceptor.Registry{}
 	if err := webrtc.RegisterDefaultInterceptors(m, i); err != nil {
 		panic(err)

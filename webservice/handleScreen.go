@@ -60,6 +60,7 @@ func (wm *WebMaster) handleScreenWS(c *gin.Context) {
 	session.Agent = agent
 	wm.ScreenSessions[sessionID] = session
 	finalSDP := agent.CreateWebRTCConnection(string(config.SDP))
+	log.Println("Final SDP generated", finalSDP)
 	// bitrateInt, err := strconv.Atoi(config.DriverConfig["video_bit_rate"])
 	// if err != nil {
 	// 	bitrateInt = 8000000 // default to 8Mbps
