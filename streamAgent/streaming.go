@@ -69,7 +69,6 @@ func (sa *Agent) StreamingAudio() {
 		sa.controlCh <- sdriver.TextMsgEvent{Msg: "Audio channel is nil, cannot stream audio."}
 		return
 	}
-	log.Println("[Agent] Audio streaming started")
 	// Opus 默认帧长通常是 20ms
 	const defaultDuration = 20 * time.Millisecond
 	var currentTimestamp = sa.baseTime

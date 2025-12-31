@@ -10,6 +10,8 @@ import (
 	"log"
 	"net"
 	"os"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 	"webscreen/sdriver"
@@ -72,11 +74,6 @@ func New(config map[string]string, deviceID string) (*ScrcpyDriver, error) {
 		videoBuffer: comm.NewLinearBuffer(0),
 		audioBuffer: comm.NewLinearBuffer(4 * 1024 * 1024), // 4MB 音频缓冲区
 
-		// LastVPS: make([]byte, 32),
-		// LastSPS: make([]byte, 64),
-		// LastPPS: make([]byte, 8),
-		// LastIDR: make([]byte, 1*1024*1024), // 1MB IDR 缓存
-
 		// scid: GenerateSCID(),
 		scid: "00000000",
 
@@ -128,15 +125,148 @@ func New(config map[string]string, deviceID string) (*ScrcpyDriver, error) {
 	}
 	// da.adbClient.cancel()
 	log.Printf("[scrcpy] driver config: %v", config)
+	video_codec_options := ""
+	max_size, err := strconv.Atoi(config["max_size"])
+	if err != nil {
+		max_size = 3840
+	}
+	max_fps, err := strconv.Atoi(config["max_fps"])
+	if err != nil {
+		max_fps = 120
+	}
+	video_bit_rate, err := strconv.Atoi(config["video_bit_rate"])
+	if err != nil {
+		video_bit_rate = 8000000
+	}
+	codecConfigStr := config["webrtc_codec"]
+	if codecConfigStr != "" {
+		parts := strings.Split(codecConfigStr, "||")
+		mimeType := parts[1]
+		sdpFmtpLine := parts[2]
+		if strings.EqualFold(mimeType, "video/AV1") {
+			log.Println("AV1 Main 5.1")
+			// --- AV1 ---
+			// PAYLOAD_TYPE_AV1_PROFILE_MAIN_5_1
+			video_codec_options += "profile=1"
+			kv := strings.Split(sdpFmtpLine, ";")
+			for _, item := range kv {
+				item = strings.TrimSpace(item)
+				if strings.HasPrefix(item, "level-idx=") {
+					levelStr := strings.TrimPrefix(item, "level-idx=")
+					levelID64, err := strconv.ParseUint(levelStr, 10, 32)
+					if err != nil {
+						log.Printf("Failed to parse level-idx: %v", err)
+						return nil, err
+					}
+					levelID := uint(levelID64)
+					switch levelID {
+					case 8:
+						log.Println("AV1 Level 4.0")
+						max_size = min(max_size, 1920)
+						video_bit_rate = min(video_bit_rate, 12_000_000)
+					case 9:
+						log.Println("AV1 Level 4.1")
+						max_size = min(max_size, 1920)
+						max_fps = min(max_fps, 60)
+						video_bit_rate = min(video_bit_rate, 20_000_000)
+					case 12:
+						log.Println("AV1 Level 5.0")
+						video_bit_rate = min(video_bit_rate, 30_000_000)
+					case 13:
+						log.Println("AV1 Level 5.1")
+						video_bit_rate = min(video_bit_rate, 40_000_000)
+					case 14:
+						log.Println("AV1 Level 5.2")
+						video_bit_rate = min(video_bit_rate, 60_000_000)
+					case 15:
+						log.Println("AV1 Level 5.3")
+						video_bit_rate = min(video_bit_rate, 80_000_000)
+					default:
+						log.Println("AV1 Unexpected Level ID:", levelID)
+						if levelID < 8 {
+							video_bit_rate = min(video_bit_rate, 10_000_000)
+						}
+						if levelID > 15 {
+							video_bit_rate = min(video_bit_rate, 80_000_000)
+						}
+					}
+				}
+			}
+		} else if strings.EqualFold(mimeType, "video/H265") || strings.EqualFold(mimeType, "video/HEVC") {
+			// --- H.265 (HEVC) ---
+			// Main Profile
+			video_codec_options += "profile=1"
+			// FMTP example: "profile-id=1;tier-flag=0;level-id=123"
+			// level-id=123 (Level 4.1), level-id=153 (Level 5.1)
+			var levelID uint
+			kv := strings.Split(sdpFmtpLine, ";")
+			for _, item := range kv {
+				item = strings.TrimSpace(item)
+				if strings.HasPrefix(item, "level-id=") {
+					levelStr := strings.TrimPrefix(item, "level-id=")
+					levelID64, err := strconv.ParseUint(levelStr, 10, 32)
+					if err != nil {
+						log.Printf("Failed to parse level-id: %v", err)
+						return nil, err
+					}
+					levelID = uint(levelID64)
+					break
+				}
+			}
+			switch levelID {
+			case 123:
+				log.Println("H.265 Level 4.1")
+				max_size = min(max_size, 1920)
+				max_fps = min(max_fps, 60)
+				video_bit_rate = min(video_bit_rate, 20_000_000)
+			case 150:
+				log.Println("H.265 Level 5.0")
+				video_bit_rate = min(video_bit_rate, 25_000_000)
+			case 153:
+				log.Println("H.265 Level 5.1")
+				video_bit_rate = min(video_bit_rate, 40_000_000)
+			case 156:
+				log.Println("H.265 Level 5.2")
+				video_bit_rate = min(video_bit_rate, 50_000_000)
+			case 180:
+				log.Println("H.265 Level 6.0")
+				video_bit_rate = min(video_bit_rate, 60_000_000)
+			default:
+				log.Println("H.265 Unexpected Level ID:", levelID)
+				if levelID < 123 {
+					video_bit_rate = min(video_bit_rate, 10_000_000)
+				}
+				if levelID > 180 {
+					video_bit_rate = min(video_bit_rate, 60_000_000)
+				}
+			}
+		} else if strings.EqualFold(mimeType, "video/H264") {
+			// --- H.264 (AVC) ---
+			// profile-level-id : Baseline (42), Main (4d), High (64)
+			// level-asymmetry-allowed=1 is supposed to be always set
+			video_bit_rate = min(video_bit_rate, 300_000_000)
+			if strings.Contains(sdpFmtpLine, "profile-level-id=42") {
+				log.Println("H.264 Baseline Profile")
+				video_codec_options += "profile=1"
+			} else if strings.Contains(sdpFmtpLine, "profile-level-id=4d") {
+				log.Println("H.264 Main Profile")
+				video_codec_options += "profile=2"
+			} else if strings.Contains(sdpFmtpLine, "profile-level-id=64") {
+				log.Println("H.264 High Profile")
+				video_codec_options += "profile=8"
+			}
+		}
+
+	}
 	options := map[string]string{
 		"CLASSPATH":           SCRCPY_SERVER_ANDROID_DST,
 		"Version":             SCRCPY_VERSION,
 		"scid":                da.scid,
-		"max_size":            config["max_size"],
-		"max_fps":             config["max_fps"],
+		"max_size":            strconv.Itoa(max_size),
+		"max_fps":             strconv.Itoa(max_fps),
 		"video":               "true",
-		"video_codec_options": config["video_codec_options"],
-		"video_bit_rate":      config["video_bit_rate"],
+		"video_codec_options": video_codec_options, // bitrate-mode=2 to enable CBR
+		"video_bit_rate":      strconv.Itoa(video_bit_rate),
 		"video_codec":         config["video_codec"],
 		"audio":               config["audio"],
 		"audio_bit_rate":      config["audio_bit_rate"],

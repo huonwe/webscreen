@@ -8,11 +8,11 @@ let knownDevices = [];
 let activeConfigSerial = null;
 
 // Refactored structure to match new requirements (all in driver_config)
-const defaultStreamConfig = {
+const defaultScrcpyConfig = {
     device_type: 'android',
     av_sync: false,
     driver_config: {
-        max_fps: '60',
+        max_fps: '',
         max_size: '',
         video_codec: 'h264',
         audio: 'true',
@@ -35,7 +35,7 @@ const defaultXvfbConfig = {
         resolution: "1920x1080",
         frameRate: "60",
         bitRate: "8000000",
-        codec: "h264",
+        video_codec: "h264",
     }
 };
 
@@ -72,7 +72,7 @@ function ensureDeviceConfig(device) {
         if (type === 'xvfb') {
              baseConfig = JSON.parse(JSON.stringify(defaultXvfbConfig));
         } else {
-             baseConfig = JSON.parse(JSON.stringify(defaultStreamConfig));
+             baseConfig = JSON.parse(JSON.stringify(defaultScrcpyConfig));
         }
 
         deviceConfigs[serial] = {
@@ -316,7 +316,7 @@ function startStream(serial) {
                 resolution: drv.resolution || "1920x1080",
                 frameRate: String(drv.frameRate || "60"),
                 bitRate: String(drv.bitRate || "20000000"),
-                codec: drv.codec || "h264",
+                video_codec: drv.video_codec || "h264",
             }
         };
     } else {
@@ -328,7 +328,7 @@ function startStream(serial) {
             device_port: config.device_port || '0',
             av_sync: document.getElementById('configAVSync').checked,
             driver_config: {
-                max_fps: String(drv.max_fps || '60'),
+                max_fps: String(drv.max_fps || ''),
                 video_codec: drv.video_codec || "h264",
                 audio_codec: drv.audio_codec || "opus",
                 audio: drv.audio || "true",
@@ -396,7 +396,7 @@ function showConfigModal(serial) {
         document.getElementById('xvfbResolution').value = drv.resolution || '1920x1080';
         document.getElementById('xvfbFrameRate').value = drv.frameRate || '60';
         document.getElementById('xvfbBitRate').value = drv.bitRate || '20000000';
-        document.getElementById('xvfbCodec').value = drv.codec || 'h264';
+        document.getElementById('xvfbVideoCodec').value = drv.video_codec || 'h264';
 
     } else {
         androidSettings.classList.remove('hidden');
@@ -406,7 +406,7 @@ function showConfigModal(serial) {
         document.getElementById('configVideoBitrate').value = formatBitrate(drv.video_bit_rate).replace(/[KMG]$/, '') || '';
         document.getElementById('configMaxSize').value = drv.max_size || '';
         document.getElementById('configVideoCodec').value = drv.video_codec || 'h264';
-        document.getElementById('configVideoCodecOptions').value = drv.video_codec_options || '';
+        // document.getElementById('configVideoCodecOptions').value = drv.video_codec_options || '';
         document.getElementById('configAudio').checked = drv.audio === 'true';
         document.getElementById('configNewDisplay').value = drv.new_display || '';
     }
@@ -433,9 +433,9 @@ function saveDeviceConfig() {
         drv.resolution = document.getElementById('xvfbResolution').value.trim();
         drv.frameRate = document.getElementById('xvfbFrameRate').value.trim();
         drv.bitRate = document.getElementById('xvfbBitRate').value.trim();
-        drv.codec = document.getElementById('xvfbCodec').value;
+        drv.video_codec = document.getElementById('xvfbVideoCodec').value;
     } else { // Android Scrcpy
-        drv.max_fps = document.getElementById('configMaxFPS').value.trim() || '60';
+        drv.max_fps = document.getElementById('configMaxFPS').value.trim() || '';
         // Parse bitrate input (e.g. "8") to number (8000000) using 'M' as default if not specified
         const bitrateInput = document.getElementById('configVideoBitrate').value.trim();
         // If user just types "8", treat as 8M. If "20000000", parseBitrate handles it?
@@ -445,7 +445,7 @@ function saveDeviceConfig() {
         drv.video_bit_rate = parseBitrate(bitrateInput + (bitrateInput.match(/[KMG]/i) ? '' : 'M'));
         drv.max_size = document.getElementById('configMaxSize').value.trim() || '';
         drv.video_codec = document.getElementById('configVideoCodec').value;
-        drv.video_codec_options = document.getElementById('configVideoCodecOptions').value.trim();
+        // drv.video_codec_options = document.getElementById('configVideoCodecOptions').value.trim();
         drv.new_display = document.getElementById('configNewDisplay').value.trim();
         drv.audio = document.getElementById('configAudio').checked ? 'true' : 'false';
         drv.audio_codec = 'opus'; // Hardcoded default for now

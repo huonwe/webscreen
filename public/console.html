@@ -154,16 +154,17 @@
                         
                         <div class="grid grid-cols-3 gap-4">
                             <div>
-                                <label class="block text-xs font-medium text-gray-400 mb-1 ml-1" data-i18n="max_fps">最大 FPS</label>
-                                <input type="number" id="configMaxFPS" class="md-input w-full px-3 py-2 rounded-lg text-white text-sm" placeholder="60">
+                                <label class="block text-xs font-medium text-gray-400 mb-1 ml-1" data-i18n="bitrate">比特率 (Mbps)</label>
+                                <input type="number" id="configVideoBitrate" class="md-input w-full px-3 py-2 rounded-lg text-white text-sm" placeholder="8">
                             </div>
                             <div>
-                                <label class="block text-xs font-medium text-gray-400 mb-1 ml-1" data-i18n="bitrate">比特率 (Mbps)</label>
-                                <input type="text" id="configVideoBitrate" class="md-input w-full px-3 py-2 rounded-lg text-white text-sm" placeholder="8M">
+                                <label class="block text-xs font-medium text-gray-400 mb-1 ml-1" data-i18n="max_fps">最大 FPS</label>
+                                <input type="number" id="configMaxFPS" class="md-input w-full px-3 py-2 rounded-lg text-white text-sm" placeholder="60">
+                                <p class="text-[10px] text-gray-500 mt-1 ml-1" data-i18n="leave_empty_disable">留空以禁用此选项</p>
                             </div>
                             <div>
                                 <label class="block text-xs font-medium text-gray-400 mb-1 ml-1" data-i18n="max_size">最大尺寸</label>
-                                <input type="text" id="configMaxSize" class="md-input w-full px-3 py-2 rounded-lg text-white text-sm" placeholder="1920">
+                                <input type="number" id="configMaxSize" class="md-input w-full px-3 py-2 rounded-lg text-white text-sm" placeholder="1920">
                                 <p class="text-[10px] text-gray-500 mt-1 ml-1" data-i18n="leave_empty_disable">留空以禁用此选项</p>
                             </div>
                         </div>
@@ -171,9 +172,9 @@
                         <div>
                             <label class="block text-xs font-medium text-gray-400 mb-1 ml-1" data-i18n="video_codec">视频编码</label>
                             <select id="configVideoCodec" class="md-input w-full px-3 py-2 rounded-lg text-white text-sm appearance-none bg-[url('data:image/svg+xml;base64,PHN2ZyBmaWxsPSIjZmZmIiBoZWlnaHQ9IjI0IiB2aWV3Qm94PSIwIDAgMjQgMjQiIHdpZHRoPSIyNCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBkPSJNNyAxMGw1IDUgNS01eiIvPjwvc3ZnPg==')] bg-no-repeat bg-right">
-                                <option value="h264" data-i18n="h264_recommended">H.264 (推荐)</option>
-                                <option value="h265" data-i18n="h265_efficient">H.265 (高效)</option>
-                                <!-- <option value="av1">AV1 (实验性)</option> -->
+                                <option value="h264" data-i18n="h264_compatible">H.264</option>
+                                <option value="h265" data-i18n="h265_efficient">H.265</option>
+                                <!-- <option value="av1">AV1</option> -->
                             </select>
                         </div>
 
@@ -182,10 +183,10 @@
                             <input type="checkbox" id="configAudio" class="md-switch">
                         </div>
 
-                        <div>
+                        <!-- <div>
                             <label class="block text-xs font-medium text-gray-400 mb-1 ml-1" data-i18n="video_codec_options">video_codec_options</label>
                             <input type="text" id="configVideoCodecOptions" class="md-input w-full px-3 py-2 rounded-lg text-white text-sm" placeholder="例如: i-frame-interval=10" data-i18n="codec_options_placeholder">
-                        </div>
+                        </div> -->
                     </div>
 
                     <!-- Display Section -->
@@ -235,8 +236,8 @@
                                 <input type="text" id="xvfbBitRate" class="md-input w-full px-3 py-2 rounded-lg text-white text-sm" placeholder="20000000">
                             </div>
                             <div>
-                                <label class="block text-xs font-medium text-gray-400 mb-1 ml-1">Codec</label>
-                                <select id="xvfbCodec" class="md-input w-full px-3 py-2 rounded-lg text-white text-sm appearance-none bg-[url('data:image/svg+xml;base64,PHN2ZyBmaWxsPSIjZmZmIiBoZWlnaHQ9IjI0IiB2aWV3Qm94PSIwIDAgMjQgMjQiIHdpZHRoPSIyNCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBkPSJNNyAxMGw1IDUgNS01eiIvPjwvc3ZnPg==')] bg-no-repeat bg-right">
+                                <label class="block text-xs font-medium text-gray-400 mb-1 ml-1">Video Codec</label>
+                                <select id="xvfbVideoCodec" class="md-input w-full px-3 py-2 rounded-lg text-white text-sm appearance-none bg-[url('data:image/svg+xml;base64,PHN2ZyBmaWxsPSIjZmZmIiBoZWlnaHQ9IjI0IiB2aWV3Qm94PSIwIDAgMjQgMjQiIHdpZHRoPSIyNCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBkPSJNNyAxMGw1IDUgNS01eiIvPjwvc3ZnPg==')] bg-no-repeat bg-right">
                                     <option value="h264">H.264</option>
                                     <!-- <option value="h265">H.265</option> -->
                                 </select>

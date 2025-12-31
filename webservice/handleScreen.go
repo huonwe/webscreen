@@ -32,11 +32,10 @@ func (wm *WebMaster) handleScreenWS(c *gin.Context) {
 	err = conn.ReadJSON(&config)
 	if err != nil {
 		log.Println("Failed to read connection options:", err)
-		conn.WriteJSON(map[string]interface{}{"status": "error", "message": err.Error(), "stage": "webrtc_init"})
+		conn.WriteJSON(map[string]any{"status": "error", "message": err.Error(), "stage": "webrtc_init"})
 		conn.Close()
 		return
 	}
-	log.Printf("driver config: %+v", config.DriverConfig)
 	// if config.DeviceType != deviceType || config.DeviceID != deviceID || config.DeviceIP != deviceIP || config.DevicePort != devicePort {
 	// 	log.Println("Connection options do not match URL parameters")
 	// 	// conn.Close()
@@ -53,14 +52,21 @@ func (wm *WebMaster) handleScreenWS(c *gin.Context) {
 	agent, err := sagent.NewAgent(config)
 	if err != nil {
 		log.Println("Failed to create agent:", err)
-		conn.WriteJSON(map[string]interface{}{"status": "error", "message": err.Error(), "stage": "webrtc_init"})
+		conn.WriteJSON(map[string]any{"status": "error", "message": err.Error(), "stage": "webrtc_init"})
 		conn.Close()
 		return
 	}
 	session.Agent = agent
 	wm.ScreenSessions[sessionID] = session
 	finalSDP := agent.CreateWebRTCConnection(string(config.SDP))
-	log.Println("Final SDP generated", finalSDP)
+	// log.Println("Final SDP generated", finalSDP)
+	if finalSDP == "" {
+		log.Println("Failed to create WebRTC connection")
+		conn.WriteJSON(map[string]any{"status": "error", "message": "Failed to create WebRTC connection", "stage": "webrtc_init"})
+		conn.Close()
+		return
+	}
+	conn.WriteJSON(map[string]any{"status": "ok", "sdp": finalSDP, "stage": "webrtc_init"})
 	// bitrateInt, err := strconv.Atoi(config.DriverConfig["video_bit_rate"])
 	// if err != nil {
 	// 	bitrateInt = 8000000 // default to 8Mbps
@@ -70,10 +76,17 @@ func (wm *WebMaster) handleScreenWS(c *gin.Context) {
 	// }
 	// finalSDP = webrtcHelper.SetSDPBandwidth(finalSDP, 20_000_000)
 	// conn.WriteMessage(websocket.TextMessage, []byte(finalSDP))
+	err = agent.InitDriver()
+	if err != nil {
+		log.Println("Failed to initialize driver:", err)
+		conn.WriteJSON(map[string]any{"status": "error", "message": err.Error(), "stage": "webrtc_init"})
+		conn.Close()
+		return
+	}
 	capabilities := agent.Capabilities()
 	log.Printf("Driver Capabilities: %+v", capabilities)
 	media_meta := agent.GetMediaMeta()
-	conn.WriteJSON(map[string]interface{}{"status": "ok", "capabilities": capabilities, "media_meta": media_meta, "sdp": finalSDP, "stage": "webrtc_init"})
+	conn.WriteJSON(map[string]interface{}{"status": "ok", "capabilities": capabilities, "media_meta": media_meta, "stage": "webrtc_metainfo"})
 	go wm.listenScreenWS(conn, agent, sessionID)
 	go wm.listenEventFeedback(agent, conn)
 
@@ -119,8 +132,12 @@ func (wm *WebMaster) listenEventFeedback(agent *sagent.Agent, wsConn *websocket.
 func (wm *WebMaster) removeScreenSession(sessionID string) {
 	log.Printf("Removing screen session: %s", sessionID)
 	if session, exists := wm.ScreenSessions[sessionID]; exists {
-		session.WSConn.Close()
-		session.Agent.Close()
+		if session.WSConn != nil {
+			session.WSConn.Close()
+		}
+		if session.Agent != nil {
+			session.Agent.Close()
+		}
 	}
 	delete(wm.ScreenSessions, sessionID)
 }

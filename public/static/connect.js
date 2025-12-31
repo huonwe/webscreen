@@ -126,12 +126,7 @@ async function start() {
                     switch (message.stage) {
                         case 'webrtc_init':
                             let answerSdp = message.sdp;
-                            const capabilities = message.capabilities;
-                            const media_meta = message.media_meta;
-                            console.log("Received SDP Answer", answerSdp);
-                            console.log("Driver Capabilities:", capabilities);
-                            console.log("Media Meta:", media_meta);
-
+                            console.log("Received SDP Answer");
                             if (!answerSdp.length) {
                                 console.error("Empty SDP Answer received");
                                 showToast(i18n.t('error_empty_sdp_answer'), 2000);
@@ -139,9 +134,6 @@ async function start() {
                                 return;
                             }
 
-                            // Update UI based on capabilities
-                            await updateUIBasedOnCapabilities(capabilities);
-                            
                             // for edge browser compatibility, format the SDP properly
                             let formattedSdp = answerSdp
                                 .split(/\r\n|\r|\n/)
@@ -157,15 +149,15 @@ async function start() {
                                 type: 'answer',
                                 sdp: formattedSdp
                             }));
-
-                            pc.getReceivers().forEach(receiver => {
-                                if (receiver.track.kind === 'video') {
-                                    if (receiver.jitterBufferTarget !== undefined) {
-                                        receiver.jitterBufferTarget = jitterBufferTargetMs;
-                                    }
-                                    console.log('✓ (playoutDelayHint=', receiver.playoutDelayHint, ', jitterBufferTarget=', receiver.jitterBufferTarget, ')');
-                                }
-                            });
+                            console.log("WebRTC connection established");
+                            break;
+                        case 'webrtc_metainfo':
+                            const capabilities = message.capabilities;
+                            const media_meta = message.media_meta;
+                            console.log("Driver Capabilities:", capabilities);
+                            console.log("Media Meta:", media_meta);
+                            // Update UI based on capabilities
+                            await updateUIBasedOnCapabilities(capabilities);
                             setInterval(() => force_sync(pc), 1000);
                             setTimeout(() => {
                                 let rect = remoteVideo.getBoundingClientRect();
@@ -177,7 +169,14 @@ async function start() {
                                     ws.send(p);
                                 }
                             }, 2000);
-
+                            pc.getReceivers().forEach(receiver => {
+                                if (receiver.track.kind === 'video') {
+                                    if (receiver.jitterBufferTarget !== undefined) {
+                                        receiver.jitterBufferTarget = jitterBufferTargetMs;
+                                    }
+                                    console.log('✓ (playoutDelayHint=', receiver.playoutDelayHint, ', jitterBufferTarget=', receiver.jitterBufferTarget, ')');
+                                }
+                            });
                             break;
                         default:
                             break;

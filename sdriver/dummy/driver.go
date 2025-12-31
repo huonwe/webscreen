@@ -68,6 +68,10 @@ func (d *DummyDriver) GetReceivers() (<-chan sdriver.AVBox, <-chan sdriver.AVBox
 	return d.videoCh, d.audioCh, d.controlCh
 }
 
+func (d *DummyDriver) UpdateDriverConfig(config map[string]string) error {
+	return nil
+}
+
 // StartStream starts reading the H.264 file and produces AVBox packets.
 func (d *DummyDriver) Start() {
 	d.mu.Lock()

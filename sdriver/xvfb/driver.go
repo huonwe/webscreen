@@ -22,13 +22,13 @@ type LinuxDriver struct {
 	videoBuffer *comm.LinearBuffer
 	conn        net.Conn
 
-	ip         string
-	user       string
-	password   string
-	resolution string
-	frameRate  string
-	bitRate    string
-	codec      string
+	ip          string
+	user        string
+	password    string
+	resolution  string
+	frameRate   string
+	bitRate     string
+	video_codec string
 }
 
 // 简单的 Header 定义，对应发送端的结构
@@ -39,13 +39,13 @@ type Header struct {
 
 func New(cfg map[string]string) (*LinuxDriver, error) {
 	d := &LinuxDriver{
-		videoChan:  make(chan sdriver.AVBox, 10), // 适当增大缓冲防止阻塞
-		ip:         cfg["ip"],
-		user:       cfg["user"],
-		resolution: cfg["resolution"],
-		frameRate:  cfg["frameRate"],
-		bitRate:    cfg["bitRate"],
-		codec:      cfg["codec"],
+		videoChan:   make(chan sdriver.AVBox, 10), // 适当增大缓冲防止阻塞
+		ip:          cfg["ip"],
+		user:        cfg["user"],
+		resolution:  cfg["resolution"],
+		frameRate:   cfg["frameRate"],
+		bitRate:     cfg["bitRate"],
+		video_codec: cfg["video_codec"],
 
 		videoBuffer: comm.NewLinearBuffer(16 * 1024 * 1024),
 	}
@@ -62,9 +62,9 @@ func New(cfg map[string]string) (*LinuxDriver, error) {
 	}
 	if d.ip == "127.0.0.1" || d.ip == "localhost" || d.ip == "" {
 		d.ip = "127.0.0.1"
-		err = LocalStartXvfb("27184", d.resolution, d.bitRate, d.frameRate, d.codec)
+		err = LocalStartXvfb("27184", d.resolution, d.bitRate, d.frameRate, d.video_codec)
 	} else {
-		err = PushAndStartXvfb(d.user, d.ip, "27184", d.resolution, d.bitRate, d.frameRate, d.codec)
+		err = PushAndStartXvfb(d.user, d.ip, "27184", d.resolution, d.bitRate, d.frameRate, d.video_codec)
 	}
 	if err != nil {
 		log.Printf("[xvfb] 启动远程 capturer_xvfb 失败: %v", err)
@@ -93,6 +93,10 @@ func (d *LinuxDriver) Start() {
 	// 启动视频监听
 	go d.handleConnection()
 	log.Println("LinuxDriver started, listening for connections...")
+}
+
+func (d *LinuxDriver) UpdateDriverConfig(config map[string]string) error {
+	return nil
 }
 
 // Start, GetReceivers 等方法保持不变...

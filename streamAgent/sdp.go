@@ -8,21 +8,21 @@ import (
 	"github.com/pion/webrtc/v4"
 )
 
-func HandleSDP(sdp string, vTrack *webrtc.TrackLocalStaticSample, aTrack *webrtc.TrackLocalStaticSample) (string, *webrtc.RTPSender, *webrtc.RTPSender) {
+func (sa *Agent) handleSDP(sdp string) string {
 	offer := webrtc.SessionDescription{
 		Type: webrtc.SDPTypeOffer,
 		SDP:  sdp,
 	}
-	log.Println("Handling SDP Offer", sdp)
-	// 创建 MediaEngine
+	// log.Println("Handling SDP Offer", sdp)
+	// Create MediaEngine
 	mimeTypes := []string{}
-	if vTrack != nil {
-		mimeTypes = append(mimeTypes, vTrack.Codec().MimeType)
+	if sa.VideoTrack != nil {
+		mimeTypes = append(mimeTypes, sa.VideoTrack.Codec().MimeType)
 	}
-	if aTrack != nil {
-		mimeTypes = append(mimeTypes, aTrack.Codec().MimeType)
+	if sa.AudioTrack != nil {
+		mimeTypes = append(mimeTypes, sa.AudioTrack.Codec().MimeType)
 	}
-	m := CreateMediaEngine(mimeTypes)
+	m := createMediaEngine(mimeTypes)
 	if err := m.RegisterHeaderExtension(
 		webrtc.RTPHeaderExtensionCapability{URI: pionSDP.TransportCCURI},
 		webrtc.RTPCodecTypeVideo,
@@ -40,79 +40,94 @@ func HandleSDP(sdp string, vTrack *webrtc.TrackLocalStaticSample, aTrack *webrtc
 		panic(err)
 	}
 	api := webrtc.NewAPI(webrtc.WithMediaEngine(m), webrtc.WithInterceptorRegistry(i))
-	// 配置 ICE 服务器 (STUN)，用于穿透 NAT
+	// Configure ICE servers (STUN) for NAT traversal
 	config := webrtc.Configuration{
 		ICEServers: []webrtc.ICEServer{
 			{URLs: []string{"stun:stun.l.google.com:19302"}},
 		},
 	}
-	// 创建 PeerConnection
+	// Create PeerConnection
 	peerConnection, err := api.NewPeerConnection(config)
 	if err != nil {
-		log.Println("创建 PeerConnection 失败:", err)
-		return "", nil, nil
+		log.Println("Create PeerConnection failed:", err)
+		return ""
 	}
 
 	var rtpSenderVideo *webrtc.RTPSender
 	var rtpSenderAudio *webrtc.RTPSender
-	// C. 添加视频轨道 (Video Track)
-	if vTrack != nil {
-		rtpSenderVideo, err = peerConnection.AddTrack(vTrack)
+	// Add Tracks
+	if sa.VideoTrack != nil {
+		rtpSenderVideo, err = peerConnection.AddTrack(sa.VideoTrack)
 		if err != nil {
-			log.Println("添加 Track 失败:", err)
+			log.Println("add Track failed:", err)
 			rtpSenderVideo = nil
 		}
 	}
-	// 添加音频轨道 (Audio Track)
-	if aTrack != nil {
-		rtpSenderAudio, err = peerConnection.AddTrack(aTrack)
+	if sa.AudioTrack != nil {
+		rtpSenderAudio, err = peerConnection.AddTrack(sa.AudioTrack)
 		if err != nil {
-			log.Println("添加 Audio Track 失败:", err)
+			log.Println("add Audio Track failed:", err)
 			rtpSenderAudio = nil
 		}
 	}
-	// D. 设置 Remote Description (浏览器发来的 Offer)
+	sa.rtpSenderVideo = rtpSenderVideo
+	sa.rtpSenderAudio = rtpSenderAudio
+	// Set Remote Description (Offer from browser)
 	if err := peerConnection.SetRemoteDescription(offer); err != nil {
-		log.Println("设置 Remote Description 失败:", err)
-		return "", nil, nil
+		log.Println("set Remote Description failed:", err)
+		return ""
 	}
 
-	// E. 创建 Answer
+	// Create Answer
 	answer, err := peerConnection.CreateAnswer(nil)
 	if err != nil {
-		log.Println("创建 Answer 失败:", err)
-		return "", nil, nil
+		log.Println("Create Answer failed:", err)
+		return ""
 	}
 	peerConnection.OnConnectionStateChange(func(s webrtc.PeerConnectionState) {
-		log.Printf("连接状态改变: %s", s)
+		log.Printf("webrtc Connection State: %s", s)
 		if s == webrtc.PeerConnectionStateFailed || s == webrtc.PeerConnectionStateClosed {
-			// 做一些清理工作，比如移除引用
+			// Do some cleanup, like removing references
 			peerConnection.Close()
+
+		}
+		if s == webrtc.PeerConnectionStateConnected {
+			for _, sender := range peerConnection.GetSenders() {
+				if sender.Track() == nil {
+					continue
+				}
+				if sender.Track().Kind() != webrtc.RTPCodecTypeVideo {
+					continue
+				}
+				params := sender.GetParameters()
+				selectedCodec := params.Codecs[0] // 通常只有一个活跃的 codec
+				log.Printf("Negotiation result: %v", selectedCodec)
+				// 根据 PayloadType 决定 scrcpy 参数
+				sa.negotiatedCodec <- selectedCodec
+				close(sa.negotiatedCodec)
+				break
+			}
 		}
 	})
 
-	// F. 设置 Local Description 并等待 ICE 收集完成
+	// 设置 Local Description 并等待 ICE 收集完成
 	// 这一步是为了生成一个包含所有网络路径信息的完整 SDP，
 	// 这样我们就不需要写复杂的 Trickle ICE 逻辑了。
 	gatherComplete := webrtc.GatheringCompletePromise(peerConnection)
 
 	if err := peerConnection.SetLocalDescription(answer); err != nil {
-		log.Println("设置 Local Description 失败:", err)
-		return "", nil, nil
+		log.Println("Set Local Description failed:", err)
+		return ""
 	}
 
 	// 阻塞等待 ICE 收集完成 (通常几百毫秒)
 	<-gatherComplete
 	finalSDP := peerConnection.LocalDescription().SDP
-	return finalSDP, rtpSenderVideo, rtpSenderAudio
+	return finalSDP
 }
 
-func CreateMediaEngine(mimeTypes []string) *webrtc.MediaEngine {
+func createMediaEngine(mimeTypes []string) *webrtc.MediaEngine {
 	m := &webrtc.MediaEngine{}
-
-	// m.RegisterDefaultCodecs()
-	// return m
-
 	for _, mime := range mimeTypes {
 		switch mime {
 		case webrtc.MimeTypeAV1:
@@ -130,120 +145,18 @@ func CreateMediaEngine(mimeTypes []string) *webrtc.MediaEngine {
 						{Type: "nack", Parameter: "pli"},
 					},
 				},
-				PayloadType: 100,
+				PayloadType: PAYLOAD_TYPE_AV1_PROFILE_MAIN_5_1,
 			}, webrtc.RTPCodecTypeVideo)
 			if err != nil {
 				log.Println("RegisterCodec AV1 failed:", err)
 			}
 			log.Println("Registered AV1 codec")
 		case webrtc.MimeTypeH265:
-			// Register H.265 (video)
-			err := m.RegisterCodec(webrtc.RTPCodecParameters{
-				RTPCodecCapability: webrtc.RTPCodecCapability{
-					MimeType:    webrtc.MimeTypeH265,
-					ClockRate:   90000,
-					Channels:    0,
-					SDPFmtpLine: "profile-id=1;tier-flag=0;level-id=153;level-asymmetry-allowed=1",
-					RTCPFeedback: []webrtc.RTCPFeedback{
-						{Type: "transport-cc", Parameter: ""},
-						{Type: "ccm", Parameter: "fir"},
-						{Type: "nack", Parameter: ""},
-						{Type: "nack", Parameter: "pli"},
-					},
-				},
-				PayloadType: 102,
-			}, webrtc.RTPCodecTypeVideo)
-			if err != nil {
-				log.Println("RegisterCodec H265 failed:", err)
-			}
-			err = m.RegisterCodec(webrtc.RTPCodecParameters{
-				RTPCodecCapability: webrtc.RTPCodecCapability{
-					MimeType:    webrtc.MimeTypeH265,
-					ClockRate:   90000,
-					Channels:    0,
-					SDPFmtpLine: "profile-id=1;tier-flag=0;level-id=123;level-asymmetry-allowed=1",
-					RTCPFeedback: []webrtc.RTCPFeedback{
-						{Type: "transport-cc", Parameter: ""},
-						{Type: "ccm", Parameter: "fir"},
-						{Type: "nack", Parameter: ""},
-						{Type: "nack", Parameter: "pli"},
-					},
-				},
-				PayloadType: 103,
-			}, webrtc.RTPCodecTypeVideo)
-			if err != nil {
-				log.Println("RegisterCodec H265 failed:", err)
-			}
-			log.Println("Registered H265 codec")
+			batchRegisterCodecH265(m)
 		case webrtc.MimeTypeH264:
-			err := m.RegisterCodec(webrtc.RTPCodecParameters{
-				RTPCodecCapability: webrtc.RTPCodecCapability{
-					MimeType:  webrtc.MimeTypeH264,
-					ClockRate: 90000,
-					Channels:  0,
-					// profile-level-id 解析:
-					// 64: High Profile (0x64)
-					// 00: Constraint Set (默认)
-					// 33: Level 5.1 (5.1 * 10 = 51 = 0x33)
-					// packetization-mode=1: 支持非交错模式
-					SDPFmtpLine: "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=640033",
-					RTCPFeedback: []webrtc.RTCPFeedback{
-						{Type: "transport-cc", Parameter: ""},
-						{Type: "ccm", Parameter: "fir"},
-						{Type: "nack", Parameter: ""},
-						{Type: "nack", Parameter: "pli"},
-					},
-				},
-				PayloadType: 104, // 优先级最高
-			}, webrtc.RTPCodecTypeVideo)
-			err = m.RegisterCodec(webrtc.RTPCodecParameters{
-				RTPCodecCapability: webrtc.RTPCodecCapability{
-					MimeType:  webrtc.MimeTypeH264,
-					ClockRate: 90000,
-					Channels:  0,
-					// profile-level-id 解析:
-					// 4d: Main Profile (0x4d)
-					// e0: Constraint Set (Constrained Baseline)
-					// 1f: Level 4.2 (4.2 * 10 = 42 = 0x2a)
-					SDPFmtpLine: "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=4de02a",
-					RTCPFeedback: []webrtc.RTCPFeedback{
-						{Type: "transport-cc", Parameter: ""},
-						{Type: "ccm", Parameter: "fir"},
-						{Type: "nack", Parameter: ""},
-						{Type: "nack", Parameter: "pli"},
-					},
-				},
-				PayloadType: 105, // 备选
-			}, webrtc.RTPCodecTypeVideo)
-			if err != nil {
-				log.Println("RegisterCodec H264 failed:", err)
-			}
-			err = m.RegisterCodec(webrtc.RTPCodecParameters{
-				RTPCodecCapability: webrtc.RTPCodecCapability{
-					MimeType:  webrtc.MimeTypeH264,
-					ClockRate: 90000,
-					Channels:  0,
-					// profile-level-id 解析:
-					// 42: Baseline Profile (0x42)
-					// e0: Constraint Set (Constrained Baseline)
-					// 1f: Level 3.1 (3.1 * 10 = 31 = 0x1f)
-					SDPFmtpLine: "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f",
-					RTCPFeedback: []webrtc.RTCPFeedback{
-						{Type: "transport-cc", Parameter: ""},
-						{Type: "ccm", Parameter: "fir"},
-						{Type: "nack", Parameter: ""},
-						{Type: "nack", Parameter: "pli"},
-					},
-				},
-				PayloadType: 106, // 保底
-			}, webrtc.RTPCodecTypeVideo)
-			if err != nil {
-				log.Println("RegisterCodec H264 failed:", err)
-			}
-			log.Println("Registered H264 codec")
-
+			batchRegisterCodecH264(m)
 		case webrtc.MimeTypeOpus:
-			// 1. 注册 Opus (音频)
+			// Register Opus (Audio)
 			err := m.RegisterCodec(webrtc.RTPCodecParameters{
 				RTPCodecCapability: webrtc.RTPCodecCapability{
 					MimeType:  webrtc.MimeTypeOpus,
@@ -284,3 +197,126 @@ func CreateMediaEngine(mimeTypes []string) *webrtc.MediaEngine {
 // 	}
 // 	return strings.Join(newLines, "\r\n")
 // }
+
+func batchRegisterCodecH264(m *webrtc.MediaEngine) {
+	// profile-level-id :
+	// High Profile (0x64) 4d: Main Profile (0x4d) 42: Baseline Profile (0x42)
+	// Constraint Set (00) Constrained Baseline (e0)
+	// Level 5.1 (5.1 * 10 = 51 = 0x33) Level 4.2 (4.2 * 10 = 42 = 0x2a) Level 3.1 (3.1 * 10 = 31 = 0x1f)
+	// packetization-mode=1: 支持非交错模式
+	// high profile
+	err := m.RegisterCodec(webrtc.RTPCodecParameters{
+		RTPCodecCapability: webrtc.RTPCodecCapability{
+			MimeType:    webrtc.MimeTypeH264,
+			ClockRate:   90000,
+			Channels:    0,
+			SDPFmtpLine: "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=640033",
+			RTCPFeedback: []webrtc.RTCPFeedback{
+				{Type: "transport-cc", Parameter: ""},
+				{Type: "ccm", Parameter: "fir"},
+				{Type: "nack", Parameter: ""},
+				{Type: "nack", Parameter: "pli"},
+			},
+		},
+		PayloadType: PAYLOAD_TYPE_H264_PROFILE_HIGH_5_1,
+	}, webrtc.RTPCodecTypeVideo)
+	// high profile for iphone safari
+	err = m.RegisterCodec(webrtc.RTPCodecParameters{
+		RTPCodecCapability: webrtc.RTPCodecCapability{
+			MimeType:    webrtc.MimeTypeH264,
+			ClockRate:   90000,
+			Channels:    0,
+			SDPFmtpLine: "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=640c33",
+			RTCPFeedback: []webrtc.RTCPFeedback{
+				{Type: "transport-cc", Parameter: ""},
+				{Type: "ccm", Parameter: "fir"},
+				{Type: "nack", Parameter: ""},
+				{Type: "nack", Parameter: "pli"},
+			},
+		},
+		PayloadType: PAYLOAD_TYPE_H264_PROFILE_HIGH_5_1_0C,
+	}, webrtc.RTPCodecTypeVideo)
+	if err != nil {
+		log.Println("RegisterCodec H264 failed:", err)
+	}
+	// Baseline Profile
+	// err = m.RegisterCodec(webrtc.RTPCodecParameters{
+	// 	RTPCodecCapability: webrtc.RTPCodecCapability{
+	// 		MimeType:    webrtc.MimeTypeH264,
+	// 		ClockRate:   90000,
+	// 		Channels:    0,
+	// 		SDPFmtpLine: "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f",
+	// 		RTCPFeedback: []webrtc.RTCPFeedback{
+	// 			{Type: "transport-cc", Parameter: ""},
+	// 			{Type: "ccm", Parameter: "fir"},
+	// 			{Type: "nack", Parameter: ""},
+	// 			{Type: "nack", Parameter: "pli"},
+	// 		},
+	// 	},
+	// 	PayloadType: PAYLOAD_TYPE_H264_PROFILE_BASELINE_3_1,
+	// }, webrtc.RTPCodecTypeVideo)
+	// if err != nil {
+	// 	log.Println("RegisterCodec H264 failed:", err)
+	// }
+	// baseline profile for iphone safari
+	// err = m.RegisterCodec(webrtc.RTPCodecParameters{
+	// 	RTPCodecCapability: webrtc.RTPCodecCapability{
+	// 		MimeType:    webrtc.MimeTypeH264,
+	// 		ClockRate:   90000,
+	// 		Channels:    0,
+	// 		SDPFmtpLine: "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=420c1f",
+	// 		RTCPFeedback: []webrtc.RTCPFeedback{
+	// 			{Type: "transport-cc", Parameter: ""},
+	// 			{Type: "ccm", Parameter: "fir"},
+	// 			{Type: "nack", Parameter: ""},
+	// 			{Type: "nack", Parameter: "pli"},
+	// 		},
+	// 	},
+	// 	PayloadType: PAYLOAD_TYPE_H264_PROFILE_BASELINE_3_1_0C,
+	// }, webrtc.RTPCodecTypeVideo)
+	// if err != nil {
+	// 	log.Println("RegisterCodec H264 failed:", err)
+	// }
+	// log.Println("Registered H264 codec")
+}
+
+func batchRegisterCodecH265(m *webrtc.MediaEngine) {
+	// Register H.265 (video)
+	err := m.RegisterCodec(webrtc.RTPCodecParameters{
+		RTPCodecCapability: webrtc.RTPCodecCapability{
+			MimeType:    webrtc.MimeTypeH265,
+			ClockRate:   90000,
+			Channels:    0,
+			SDPFmtpLine: "profile-id=1;tier-flag=0;level-id=153",
+			RTCPFeedback: []webrtc.RTCPFeedback{
+				{Type: "transport-cc", Parameter: ""},
+				{Type: "ccm", Parameter: "fir"},
+				{Type: "nack", Parameter: ""},
+				{Type: "nack", Parameter: "pli"},
+			},
+		},
+		PayloadType: PAYLOAD_TYPE_H265_PROFILE_MAIN_TIER_MAIN_5_1,
+	}, webrtc.RTPCodecTypeVideo)
+	if err != nil {
+		log.Println("RegisterCodec H265 failed:", err)
+	}
+	err = m.RegisterCodec(webrtc.RTPCodecParameters{
+		RTPCodecCapability: webrtc.RTPCodecCapability{
+			MimeType:    webrtc.MimeTypeH265,
+			ClockRate:   90000,
+			Channels:    0,
+			SDPFmtpLine: "profile-id=1;tier-flag=0;level-id=123",
+			RTCPFeedback: []webrtc.RTCPFeedback{
+				{Type: "transport-cc", Parameter: ""},
+				{Type: "ccm", Parameter: "fir"},
+				{Type: "nack", Parameter: ""},
+				{Type: "nack", Parameter: "pli"},
+			},
+		},
+		PayloadType: PAYLOAD_TYPE_H265_PROFILE_MAIN_TIER_MAIN_4_1,
+	}, webrtc.RTPCodecTypeVideo)
+	if err != nil {
+		log.Println("RegisterCodec H265 failed:", err)
+	}
+	log.Println("Registered H265 codec")
+}

@@ -31,6 +31,8 @@ type Agent struct {
 	audioCh   <-chan sdriver.AVBox
 	controlCh chan sdriver.Event
 
+	negotiatedCodec chan webrtc.RTPCodecParameters
+
 	// 用于音视频推流的 PTS 记录
 	lastVideoPTS time.Duration
 	lastAudioPTS time.Duration
@@ -46,42 +48,9 @@ func NewAgent(config AgentConfig) (*Agent, error) {
 	sa := &Agent{
 		config: config,
 	}
-	switch config.DeviceType {
-	case DEVICE_TYPE_DUMMY:
-		// 初始化 Dummy Driver
-		dummyDriver, err := dummy.New(config.DriverConfig)
-		if err != nil {
-			log.Printf("Failed to initialize dummy driver: %v", err)
-			return nil, err
-		}
-		sa.driver = dummyDriver
-	case DEVICE_TYPE_ANDROID:
-		// 初始化 Android Driver
-		androidDriver, err := scrcpy.New(config.DriverConfig, config.DeviceID)
-		if err != nil {
-			log.Printf("Failed to initialize Android driver: %v", err)
-			return nil, err
-		}
-		sa.driver = androidDriver
-	case DEVICE_TYPE_XVFB:
-		// 初始化 Linux Driver
-		linuxDriver, err := linuxXvfbDriver.New(config.DriverConfig)
-		if err != nil {
-			log.Printf("Failed to initialize Linux driver: %v", err)
-			return nil, err
-		}
-		sa.driver = linuxDriver
-	default:
-		log.Printf("Unsupported device type: %s", config.DeviceType)
-		return nil, fmt.Errorf("unsupported device type: %s", config.DeviceType)
-	}
-	sa.driverCaps = sa.driver.Capabilities()
-	// sa.videoCh, sa.audioCh, sa.controlCh = sa.driver.GetReceivers()
-	sa.videoCh, sa.audioCh, sa.controlCh = sa.driver.GetReceivers()
-	mediaMeta := sa.driver.MediaMeta()
-	log.Printf("Driver media meta: %+v", mediaMeta)
+	log.Printf("Driver config: %+v", config.DriverConfig)
 	var videoMimeType, audioMimeType string
-	switch mediaMeta.VideoCodec {
+	switch config.DriverConfig["video_codec"] {
 	case "h264":
 		videoMimeType = webrtc.MimeTypeH264
 	case "h265":
@@ -89,13 +58,14 @@ func NewAgent(config AgentConfig) (*Agent, error) {
 	case "av1":
 		videoMimeType = webrtc.MimeTypeAV1
 	default:
-		log.Printf("Unsupported video codec: %s", mediaMeta.VideoCodec)
+		log.Printf("Unsupported video codec: %s", config.DriverConfig["video_codec"])
 	}
-	switch mediaMeta.AudioCodec {
+	switch config.DriverConfig["audio_codec"] {
 	case "opus":
 		audioMimeType = webrtc.MimeTypeOpus
 	default:
-		log.Printf("Unsupported audio codec: %s", mediaMeta.AudioCodec)
+		log.Printf("Unsupported audio codec: %s", config.DriverConfig["audio_codec"])
+		audioMimeType = webrtc.MimeTypeOpus
 	}
 	log.Printf("Creating tracks with MIME types - Video: %s, Audio: %s", videoMimeType, audioMimeType)
 	streamID := generateStreamID()
@@ -135,6 +105,62 @@ func NewAgent(config AgentConfig) (*Agent, error) {
 	return sa, nil
 }
 
+func (sa *Agent) waitFinalPayloadType() error {
+	for {
+		select {
+		case negotiatedCodec := <-sa.negotiatedCodec:
+			sa.config.DriverConfig["webrtc_codec"] = fmt.Sprintf("%d||%s||%s", negotiatedCodec.PayloadType, negotiatedCodec.MimeType, negotiatedCodec.SDPFmtpLine)
+			return nil
+		case <-time.After(10 * time.Second):
+			log.Printf("Timeout waiting for video payload type from SDP negotiation")
+			return fmt.Errorf("timeout waiting for video payload type")
+		}
+	}
+}
+
+func (sa *Agent) InitDriver() error {
+	err := sa.waitFinalPayloadType()
+	if err != nil {
+		return err
+	}
+	// finalPayloadType := <-sa.videoPayloadType
+	// sa.config.DriverConfig["video_payload_type"] = fmt.Sprintf("%d", finalPayloadType)
+	switch sa.config.DeviceType {
+	case DEVICE_TYPE_DUMMY:
+		// 初始化 Dummy Driver
+		dummyDriver, err := dummy.New(sa.config.DriverConfig)
+		if err != nil {
+			log.Printf("Failed to initialize dummy driver: %v", err)
+			return err
+		}
+		sa.driver = dummyDriver
+	case DEVICE_TYPE_ANDROID:
+		// 初始化 Android Driver
+		androidDriver, err := scrcpy.New(sa.config.DriverConfig, sa.config.DeviceID)
+		if err != nil {
+			log.Printf("Failed to initialize Android driver: %v", err)
+			return err
+		}
+		sa.driver = androidDriver
+	case DEVICE_TYPE_XVFB:
+		// 初始化 Linux Driver
+		linuxDriver, err := linuxXvfbDriver.New(sa.config.DriverConfig)
+		if err != nil {
+			log.Printf("Failed to initialize Linux driver: %v", err)
+			return err
+		}
+		sa.driver = linuxDriver
+	default:
+		log.Printf("Unsupported device type: %s", sa.config.DeviceType)
+		return fmt.Errorf("unsupported device type: %s", sa.config.DeviceType)
+	}
+	sa.driverCaps = sa.driver.Capabilities()
+	// sa.videoCh, sa.audioCh, sa.controlCh = sa.driver.GetReceivers()
+	sa.videoCh, sa.audioCh, sa.controlCh = sa.driver.GetReceivers()
+
+	return nil
+}
+
 func (sa *Agent) HandleRTCP() {
 	rtcpBuf := make([]byte, 1500)
 	lastRTCPTime := time.Now()
@@ -165,13 +191,16 @@ func (sa *Agent) HandleRTCP() {
 
 func (sa *Agent) CreateWebRTCConnection(offer string) string {
 	var finalSDP string
-	finalSDP, sa.rtpSenderVideo, sa.rtpSenderAudio = HandleSDP(offer, sa.VideoTrack, sa.AudioTrack)
+	sa.negotiatedCodec = make(chan webrtc.RTPCodecParameters, 1)
+	finalSDP = sa.handleSDP(offer)
 	return finalSDP
 }
 
 func (sa *Agent) Close() {
 	log.Printf("Closing agent for device %s", sa.config.DeviceID)
-	sa.driver.Stop()
+	if sa.driver != nil {
+		sa.driver.Stop()
+	}
 }
 
 func (sa *Agent) GetCodecInfo() (string, string) {

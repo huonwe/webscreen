@@ -23,6 +23,10 @@ func (sd *ScrcpyDriver) Start() {
 	}
 }
 
+func (sd *ScrcpyDriver) UpdateDriverConfig(config map[string]string) error {
+	return nil
+}
+
 func (sd *ScrcpyDriver) Pause() {
 	// sd.stopVideoReader()
 }
