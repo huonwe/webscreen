@@ -31,7 +31,7 @@ Linux supports (xvfb):
 
 For device side, please refer to [scrcpy](https://github.com/Genymobile/scrcpy/blob/master/README.md#prerequisites)
 
-For server side, you'd better have `adb` and `xvfb (if need this feature)` in your PATH first.
+For server side, you'd better have `adb` and `xvfb, ffmpeg (if need this feature)` in your PATH first.
 
 ```bash
 # for Termux
@@ -55,7 +55,7 @@ Additionally, a [modified scrcpy-server](https://github.com/huonwe/scrcpy-0x63) 
 
 ## Usage
 
-Download the latest [release](https://github.com/huonwe/webscreen/releases), execute the program. The default port is `8079`, but you can specifiy it by `-port 8080`. 6-digtal PIN is also needed. A example command: `./webscreen -port 8080 -pin 555555`
+Download the latest [release](https://github.com/huonwe/webscreen/releases), execute the program. The default port is `8079`, but you can specifiy it by `-port 8080`. 6-digtal PIN is also needed (default to '123456'). A example command: `./webscreen -port 8080 -pin 555555`
 Then open your favorite browser and visit `<your ip>:<your port>`
 
 Or you can build by yourself. Normally, you can build simply by `go build`. But if you want to build by yourself on `Termux`, you need to run `go build -ldflags "-checklinkname=0"`.
