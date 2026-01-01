@@ -49,7 +49,7 @@ apt install xvfb ffmpeg xfce4
 # then you can directly use pre-built binary
 ```
 
-for client side, you need a web browser that support WebRTC (H.264 High Profile, or H.265 Main Profile).
+**for client side, you need a web browser that support WebRTC (H.264 High Profile, or H.265 Main Profile).**
 
 Additionally, a [modified scrcpy-server](https://github.com/huonwe/scrcpy-0x63) is used.
 
