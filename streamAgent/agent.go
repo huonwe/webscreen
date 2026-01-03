@@ -9,6 +9,7 @@ import (
 	"webscreen/sdriver"
 	"webscreen/sdriver/dummy"
 	"webscreen/sdriver/scrcpy"
+	"webscreen/sdriver/sunshine"
 	linuxXvfbDriver "webscreen/sdriver/xvfb"
 
 	"github.com/pion/rtcp"
@@ -150,6 +151,8 @@ func (sa *Agent) InitDriver() error {
 			return err
 		}
 		sa.driver = linuxDriver
+	case DEVICE_TYPE_SUNSHINE:
+		sunshine.SSTest()
 	default:
 		log.Printf("Unsupported device type: %s", sa.config.DeviceType)
 		return fmt.Errorf("unsupported device type: %s", sa.config.DeviceType)

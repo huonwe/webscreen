@@ -1,9 +1,10 @@
 package sagent
 
 const (
-	DEVICE_TYPE_XVFB    = "xvfb"
-	DEVICE_TYPE_ANDROID = "android"
-	DEVICE_TYPE_DUMMY   = "dummy"
+	DEVICE_TYPE_SUNSHINE = "sunshine"
+	DEVICE_TYPE_XVFB     = "xvfb"
+	DEVICE_TYPE_ANDROID  = "android"
+	DEVICE_TYPE_DUMMY    = "dummy"
 )
 
 type AgentConfig struct {
