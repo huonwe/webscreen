@@ -255,7 +255,9 @@ async function start() {
 const DATA_CHANNEL_ORDERED = "control-ordered";
 const DATA_CHANNEL_UNORDERED = "control-unordered";
 function sendDataChannelMessage(channel, msg) {
+    console.log("sendDataChannelMessage:", channel, msg);
     if (channel && channel.readyState === 'open') {
+        console.log("Sending message via DataChannel:", channel.label);
         channel.send(msg);
     }
 }
