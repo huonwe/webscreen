@@ -26,21 +26,23 @@ function initUHIDMouse() {
     }
     if (window.ws && window.ws.readyState === WebSocket.OPEN) {
         // window.ws.send(createUHIDDestroyPacket(1)); // 确保之前的设备被销毁
-        window.ws.send(createUHIDDestroyPacket());
+        // window.ws.send(createUHIDDestroyPacket());
+        sendDataChannelMessage(DATA_CHANNEL_ORDERED, createUHIDDestroyPacket());
         console.log("UHID Mouse device destroyed (re-initializing)");
     } else {
         console.warn("WebSocket is not open. Cannot initialize UHID Mouse.");
     }
     
     const packet = createUHIDCreatePacket();
-    if (window.ws && window.ws.readyState === WebSocket.OPEN) {
-        window.ws.send(packet);
-        uhidMouseInitialized = true;
-        window.isUHIDMouseEnabled = true;
-        console.log("UHID Mouse device created");
-    } else {
-        console.warn("WebSocket is not open. Cannot initialize UHID Mouse.");
-    }
+    // if (window.ws && window.ws.readyState === WebSocket.OPEN) {
+        // window.ws.send(packet);
+    sendDataChannelMessage(DATA_CHANNEL_ORDERED, packet);
+    uhidMouseInitialized = true;
+    window.isUHIDMouseEnabled = true;
+    console.log("UHID Mouse device created");
+    // } else {
+    //     console.warn("WebSocket is not open. Cannot initialize UHID Mouse.");
+    // }
 }
 
 function destroyUHIDMouse() {
@@ -49,13 +51,14 @@ function destroyUHIDMouse() {
     }
 
     const packet = createUHIDDestroyPacket();
-    if (window.ws && window.ws.readyState === WebSocket.OPEN) {
-        window.ws.send(packet);
-        uhidMouseInitialized = false;
-        uhidMouseEnabled = false;
-        window.isUHIDMouseEnabled = false;
-        console.log("UHID Mouse device destroyed");
-    }
+    // if (window.ws && window.ws.readyState === WebSocket.OPEN) {
+    //     window.ws.send(packet);
+    sendDataChannelMessage(DATA_CHANNEL_ORDERED, packet);
+    uhidMouseInitialized = false;
+    uhidMouseEnabled = false;
+    window.isUHIDMouseEnabled = false;
+    console.log("UHID Mouse device destroyed");
+    // }
 }
 
 function toggleUHIDMouse() {
@@ -86,9 +89,10 @@ function sendMouseMove() {
             pendingMouseMove.wheel
         );
 
-        if (window.ws && window.ws.readyState === WebSocket.OPEN) {
-            window.ws.send(packet);
-        }
+        // if (window.ws && window.ws.readyState === WebSocket.OPEN) {
+        //     window.ws.send(packet);
+        // }
+        sendDataChannelMessage(DATA_CHANNEL_UNORDERED, packet);
 
         // 重置累积值
         pendingMouseMove.deltaX = 0;
@@ -129,9 +133,10 @@ remoteVideo.addEventListener('mousedown', (event) => {
 
     // 发送按键状态变化
     const packet = createUHIDInputPacket(mouseButtons, 0, 0, 0);
-    if (window.ws && window.ws.readyState === WebSocket.OPEN) {
-        window.ws.send(packet);
-    }
+    // if (window.ws && window.ws.readyState === WebSocket.OPEN) {
+    //     window.ws.send(packet);
+    // }
+    sendDataChannelMessage(DATA_CHANNEL_UNORDERED, packet);
 });
 
 remoteVideo.addEventListener('mouseup', (event) => {
@@ -147,9 +152,10 @@ remoteVideo.addEventListener('mouseup', (event) => {
 
     // 发送按键状态变化
     const packet = createUHIDInputPacket(mouseButtons, 0, 0, 0);
-    if (window.ws && window.ws.readyState === WebSocket.OPEN) {
-        window.ws.send(packet);
-    }
+    // if (window.ws && window.ws.readyState === WebSocket.OPEN) {
+    //     window.ws.send(packet);
+    // }
+    sendDataChannelMessage(DATA_CHANNEL_UNORDERED, packet);
 });
 
 remoteVideo.addEventListener('mousemove', (event) => {

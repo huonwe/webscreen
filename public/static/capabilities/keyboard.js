@@ -112,10 +112,12 @@ document.addEventListener('keyup', (e) => {
 
 function sendKeyboardEvent(action, keyCode) {
     // console.log(`Sending keyboard event: action=${action}, keyCode=${keyCode}`);
-    if (window.ws && window.ws.readyState === WebSocket.OPEN) {
-        const packet = createKeyPacket(action, keyCode);
-        window.ws.send(packet);
-    }
+    // if (window.ws && window.ws.readyState === WebSocket.OPEN) {
+    //     const packet = createKeyPacket(action, keyCode);
+    //     window.ws.send(packet);
+    // }
+    const packet = createKeyPacket(action, keyCode);
+    sendDataChannelMessage(DATA_CHANNEL_ORDERED, packet);
 }
 
 function createKeyPacket(action, keyCode) {

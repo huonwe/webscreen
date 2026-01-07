@@ -193,14 +193,15 @@ remoteVideo.addEventListener('touchcancel', (event) => {
 }, { passive: false });
 
 function sendTouchEvent(action, ptrId, x, y, pressure = 65535, buttons = 1) {
-    if (!window.ws || window.ws.readyState !== WebSocket.OPEN) {
-        console.warn("WebSocket is not open. Cannot send message.");
-        return;
-    }
+    // if (!window.ws || window.ws.readyState !== WebSocket.OPEN) {
+    //     console.warn("WebSocket is not open. Cannot send message.");
+    //     return;
+    // }
     // console.log(`Sending touch event: action=${action}, ptrId=${ptrId}, x=${x}, y=${y}`);
     const p = createTouchPacket(action, ptrId, x, y, pressure, buttons);
     // praseTouchEvent(p);
-    window.ws.send(p);
+    // window.ws.send(p);
+    sendDataChannelMessage(DATA_CHANNEL_UNORDERED, p);
 }
 
 

@@ -71,11 +71,7 @@ function rotateButton() {
 }
 
 function sendButtonEvent(packet) {
-    if (window.ws && window.ws.readyState === WebSocket.OPEN) {
-        window.ws.send(packet);
-    } else {
-        console.warn("WebSocket is not open. Cannot send button event.");
-    }
+    sendDataChannelMessage(DATA_CHANNEL_ORDERED, packet);
 }
 
 const TYPE_ROTATE    = 0x0B; // rotate event

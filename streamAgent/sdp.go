@@ -110,6 +110,19 @@ func (sa *Agent) handleSDP(sdp string) string {
 		}
 	})
 
+	peerConnection.OnDataChannel(func(d *webrtc.DataChannel) {
+		log.Printf("Receive DataChannel: Label '%s', ID: %d\n", d.Label(), d.ID())
+		switch d.Label() {
+		case "control-ordered", "control-unordered":
+			d.OnMessage(func(msg webrtc.DataChannelMessage) {
+				// log.Printf("DataChannel '%s'-'%d' message: %s\n", d.Label(), d.ID(), string(msg.Data))
+				sa.SendEvent(msg.Data)
+			})
+		default:
+			log.Printf("Unknown DataChannel label: %s\n", d.Label())
+		}
+	})
+
 	// 设置 Local Description 并等待 ICE 收集完成
 	// 这一步是为了生成一个包含所有网络路径信息的完整 SDP，
 	// 这样我们就不需要写复杂的 Trickle ICE 逻辑了。

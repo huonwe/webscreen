@@ -16,9 +16,10 @@ function sendPendingScroll() {
             pendingScroll.vScroll
         );
         
-        if (window.ws && window.ws.readyState === WebSocket.OPEN) {
-            window.ws.send(packet);
-        }
+        // if (window.ws && window.ws.readyState === WebSocket.OPEN) {
+        //     window.ws.send(packet);
+        // }
+        sendDataChannelMessage(DATA_CHANNEL_UNORDERED, packet);
         
         // 重置累积的滚动量
         pendingScroll.hScroll = 0;

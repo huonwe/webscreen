@@ -27,16 +27,18 @@ function setClipboard(text) {
     // Content
     packet.set(data, 14);
     
-    window.ws.send(packet);
+    // window.ws.send(packet);
+    sendDataChannelMessage(DATA_CHANNEL_ORDERED, packet);
     console.log("set clipboard to device:", text);
 }
 
 function getClipboard() {
-    if (!window.ws || window.ws.readyState !== WebSocket.OPEN) return;
+    // if (!window.ws || window.ws.readyState !== WebSocket.OPEN) return;
     const packet = new Uint8Array(2);
     packet[0] = 8; // WS_TYPE_GET_CLIPBOARD
     packet[1] = 0; // COPY_KEY_NONE
-    window.ws.send(packet);
+    sendDataChannelMessage(DATA_CHANNEL_ORDERED, packet);
+    // window.ws.send(packet);
 }
 
 function reveiveClipboard(packet) {

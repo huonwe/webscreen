@@ -130,9 +130,10 @@
         if (!uhidGamepadEnabled || !uhidGamepadInitialized) return;
 
         const packet = createUHIDGamepadInputPacket(gamepadState);
-        if (window.ws && window.ws.readyState === WebSocket.OPEN) {
-            window.ws.send(packet);
-        }
+        // if (window.ws && window.ws.readyState === WebSocket.OPEN) {
+        //     window.ws.send(packet);
+        // }
+        sendDataChannelMessage(DATA_CHANNEL_UNORDERED, packet);
     }
 
     // --- 3. 协议包构造函数 ---

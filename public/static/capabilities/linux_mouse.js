@@ -190,7 +190,7 @@ function flushPendingEvents(actionType, buttonsOverride) {
  * 实际的网络发送逻辑
  */
 function sendControlPacket(action, dx, dy, buttons, wheel) {
-    if (!window.ws || window.ws.readyState !== WebSocket.OPEN) return;
+    // if (!window.ws || window.ws.readyState !== WebSocket.OPEN) return;
 
     // 调试日志：查看发送的具体动作和坐标
 
@@ -203,7 +203,8 @@ function sendControlPacket(action, dx, dy, buttons, wheel) {
 
     // console.log(`Send: Act=${action}, x=${virtualMouse.x}, y=${virtualMouse.y}, Btn=${buttons}`);
     const packet = createMousePacket(action, virtualMouse.x, virtualMouse.y, buttons, 0, -wheel);
-    window.ws.send(packet);
+    // window.ws.send(packet);
+    sendDataChannelMessage(DATA_CHANNEL_UNORDERED, packet);
 }
 
 /**

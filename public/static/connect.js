@@ -80,6 +80,48 @@ async function start() {
     pc.addTransceiver('video', { direction: 'recvonly' });
     pc.addTransceiver('audio', { direction: 'recvonly' });
 
+    // Add data channel for control messages if needed
+    const dataChannelOrdered = pc.createDataChannel("control-ordered" ,{
+        ordered: true,
+    });
+    const dataChannelUnordered = pc.createDataChannel("control-unordered" ,{
+        ordered: false,
+        // maxRetransmits: 0,
+    });
+    // window.dataChannelOrdered = dataChannelOrdered;
+    // window.dataChannelUnordered = dataChannelUnordered;
+    dataChannelUnordered.addEventListener('message', (event) => {
+        console.log("DataChannel Unordered Message:", event.data);
+        const view = new Uint8Array(event.data);
+            const decoder = new TextDecoder();
+            // console.log("Received binary message, type:", view[0]);
+            switch (view[0]) {
+                case 0x17: // TYPE_CLIPBOARD_DATA
+                    const text = decoder.decode(view.slice(1));
+                    console.log("Clipboard from device:", text);
+                    // Copy to browser clipboard
+                    try {
+                        navigator.clipboard.writeText(text).catch(err => {
+                            console.error('Failed to write to clipboard:', err);
+                        });
+                    } catch (e) {
+                        console.error('Clipboard API not available:', e);
+                        console.log("HTTPS is required for clipboard access.");
+                    }
+                    break;
+                case 0x64: // TYPE_TEXT_MSG
+                    const textMsg = decoder.decode(view.slice(1));
+                    console.log("Text message from agent:", textMsg);
+                    showToast(textMsg, 3000);
+                    break;
+                default:
+                    console.warn("Unknown binary message type:", view[0]);
+                }
+        }
+    )
+    
+
+
     // 3. Create Offer
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
@@ -209,6 +251,13 @@ async function start() {
             }
         }
     };
+}
+const DATA_CHANNEL_ORDERED = "control-ordered";
+const DATA_CHANNEL_UNORDERED = "control-unordered";
+function sendDataChannelMessage(channel, msg) {
+    if (channel && channel.readyState === 'open') {
+        channel.send(msg);
+    }
 }
 
 let lastJitterDelay = 0;
