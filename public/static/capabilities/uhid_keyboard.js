@@ -128,7 +128,7 @@ function sendKeyboardReport() {
     // if (window.ws && window.ws.readyState === WebSocket.OPEN) {
     //     window.ws.send(packet);
     // }
-    sendDataChannelMessage(DATA_CHANNEL_ORDERED, packet);
+    sendDataChannelMessage(window.dataChannelOrdered, packet);
 }
 
 // 事件监听

@@ -117,7 +117,7 @@ function sendKeyboardEvent(action, keyCode) {
     //     window.ws.send(packet);
     // }
     const packet = createKeyPacket(action, keyCode);
-    sendDataChannelMessage(DATA_CHANNEL_ORDERED, packet);
+    sendDataChannelMessage(window.dataChannelOrdered, packet);
 }
 
 function createKeyPacket(action, keyCode) {

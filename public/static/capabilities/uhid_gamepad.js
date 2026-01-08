@@ -133,7 +133,7 @@
         // if (window.ws && window.ws.readyState === WebSocket.OPEN) {
         //     window.ws.send(packet);
         // }
-        sendDataChannelMessage(DATA_CHANNEL_UNORDERED, packet);
+        sendDataChannelMessage(window.dataChannelUnordered, packet);
     }
 
     // --- 3. 协议包构造函数 ---

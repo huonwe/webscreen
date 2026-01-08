@@ -88,8 +88,8 @@ async function start() {
         ordered: false,
         // maxRetransmits: 0,
     });
-    // window.dataChannelOrdered = dataChannelOrdered;
-    // window.dataChannelUnordered = dataChannelUnordered;
+    window.dataChannelOrdered = dataChannelOrdered;
+    window.dataChannelUnordered = dataChannelUnordered;
     dataChannelUnordered.addEventListener('message', (event) => {
         console.log("DataChannel Unordered Message:", event.data);
         const view = new Uint8Array(event.data);
@@ -252,12 +252,11 @@ async function start() {
         }
     };
 }
-const DATA_CHANNEL_ORDERED = "control-ordered";
-const DATA_CHANNEL_UNORDERED = "control-unordered";
+
 function sendDataChannelMessage(channel, msg) {
-    console.log("sendDataChannelMessage:", channel, msg);
+    // console.log("sendDataChannelMessage:", channel, msg);
     if (channel && channel.readyState === 'open') {
-        console.log("Sending message via DataChannel:", channel.label);
+        // console.log("Sending message via DataChannel:", channel.label);
         channel.send(msg);
     }
 }

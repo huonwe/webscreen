@@ -72,6 +72,24 @@ func (sa *Agent) handleSDP(sdp string) string {
 	}
 	sa.rtpSenderVideo = rtpSenderVideo
 	sa.rtpSenderAudio = rtpSenderAudio
+
+	peerConnection.OnDataChannel(func(d *webrtc.DataChannel) {
+		log.Printf("Have DataChannel: Label '%s', ID: %d\n", d.Label(), d.ID())
+		switch d.Label() {
+		case "control-ordered", "control-unordered":
+			d.OnMessage(func(msg webrtc.DataChannelMessage) {
+				// log.Printf("DataChannel '%s'-'%d' message: %s\n", d.Label(), d.ID(), string(msg.Data))
+				sa.SendEvent(msg.Data)
+			})
+		default:
+			// d.OnMessage(func(msg webrtc.DataChannelMessage) {
+			// 	log.Printf("DataChannel '%s'-'%d' message: %s\n", d.Label(), d.ID(), string(msg.Data))
+			// 	// sa.SendEvent(msg.Data)
+			// })
+			log.Printf("Unknown DataChannel label: %s\n", d.Label())
+		}
+	})
+
 	// Set Remote Description (Offer from browser)
 	if err := peerConnection.SetRemoteDescription(offer); err != nil {
 		log.Println("set Remote Description failed:", err)
@@ -107,19 +125,6 @@ func (sa *Agent) handleSDP(sdp string) string {
 				close(sa.negotiatedCodec)
 				break
 			}
-		}
-	})
-
-	peerConnection.OnDataChannel(func(d *webrtc.DataChannel) {
-		log.Printf("Receive DataChannel: Label '%s', ID: %d\n", d.Label(), d.ID())
-		switch d.Label() {
-		case "control-ordered", "control-unordered":
-			d.OnMessage(func(msg webrtc.DataChannelMessage) {
-				// log.Printf("DataChannel '%s'-'%d' message: %s\n", d.Label(), d.ID(), string(msg.Data))
-				sa.SendEvent(msg.Data)
-			})
-		default:
-			log.Printf("Unknown DataChannel label: %s\n", d.Label())
 		}
 	})
 

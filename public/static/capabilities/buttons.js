@@ -71,7 +71,7 @@ function rotateButton() {
 }
 
 function sendButtonEvent(packet) {
-    sendDataChannelMessage(DATA_CHANNEL_ORDERED, packet);
+    sendDataChannelMessage(window.dataChannelOrdered, packet);
 }
 
 const TYPE_ROTATE    = 0x0B; // rotate event
