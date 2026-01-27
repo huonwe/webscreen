@@ -221,7 +221,7 @@ func (s *XvfbSession) StartFFmpeg(codec string, resolution string, bitRate strin
 		"-g", "60",
 		"-bf", "0",
 		"-preset", _preset,
-		"-tune", "zerolatency",
+		// "-tune", "zerolatency",
 
 		"-f", "h264",
 		"-",
