@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -197,6 +198,16 @@ func (s *XvfbSession) StartFFmpeg(codec string, resolution string, bitRate strin
 	}
 
 	log.Printf("使用的 H.264 编码器: %s\n", bestEncoder)
+	_preset := "ultrafast"
+	if strings.Contains(bestEncoder, "nvenc") {
+		_preset = "p1"
+	}
+	if strings.Contains(bestEncoder, "qsv") {
+		_preset = "veryfast"
+	}
+	if strings.Contains(bestEncoder, "amf") {
+		_preset = "speed"
+	}
 	ffmpegCmd := exec.Command("ffmpeg",
 		"-f", "x11grab",
 		"-framerate", frameRate,
@@ -209,7 +220,7 @@ func (s *XvfbSession) StartFFmpeg(codec string, resolution string, bitRate strin
 		"-maxrate", bitRate,
 		"-g", "60",
 		"-bf", "0",
-		"-preset", "ultrafast",
+		"-preset", _preset,
 		"-tune", "zerolatency",
 
 		"-f", "h264",

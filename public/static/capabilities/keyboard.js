@@ -1,3 +1,4 @@
+(function() {
 const TYPE_KEY   = 0x00; // key event
 // Key Packet Structure:
 // 偏移,长度,类型,字段名,说明
@@ -128,3 +129,4 @@ function createKeyPacket(action, keyCode) {
     view.setUint16(2, keyCode);
     return buffer;
 }
+})();

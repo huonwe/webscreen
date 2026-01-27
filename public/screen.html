@@ -40,51 +40,48 @@
                 </svg>
             </button>
             <div class="separator feature-android-buttons" style="display: none;"></div>
-            <button onmousedown="pressButton(24)" onmouseup="releaseButton(24)" onmouseleave="releaseButton(24)"
-                ontouchstart="pressButton(24)" ontouchend="releaseButton(24)" class="control-btn feature-android-buttons"
-                data-i18n-title="volume_up" title="音量+" style="display: none;">
+            <button id="volumeUpButton" class="control-btn feature-android-buttons"
+                data-i18n-title="volume_up" title="volume up" style="display: none;">
                 <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
                     <path
                         d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z" />
                 </svg>
             </button>
-            <button onmousedown="pressButton(25)" onmouseup="releaseButton(25)" onmouseleave="releaseButton(25)"
-                ontouchstart="pressButton(25)" ontouchend="releaseButton(25)" class="control-btn feature-android-buttons"
-                data-i18n-title="volume_down" title="音量-" style="display: none;">
+            <button id="volumeDownButton" class="control-btn feature-android-buttons"
+                data-i18n-title="volume_down" title="volume down" style="display: none;">
                 <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
                     <path
                         d="M18.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM5 9v6h4l5 5V4L9 9H5z" />
                 </svg>
             </button>
-            <button onmousedown="pressButton(26)" onmouseup="releaseButton(26)" onmouseleave="releaseButton(26)"
-                ontouchstart="pressButton(26)" ontouchend="releaseButton(26)" class="control-btn feature-android-buttons"
-                data-i18n-title="power" title="电源" style="display: none;">
+            <button id="powerButton" class="control-btn feature-android-buttons"
+                data-i18n-title="power" title="power" style="display: none;">
                 <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
                     <path
                         d="M13 3h-2v10h2V3zm4.83 2.17l-1.42 1.42C17.99 7.86 19 9.81 19 12c0 3.87-3.13 7-7 7s-7-3.13-7-7c0-2.19 1.01-4.14 2.58-5.42L6.17 5.17C4.23 6.82 3 9.26 3 12c0 4.97 4.03 9 9 9s9-4.03 9-9c0-2.74-1.23-5.18-3.17-6.83z" />
                 </svg>
             </button>
             <div class="separator feature-control" style="display: none;"></div>
-            <button onclick="backButton()" class="control-btn feature-android-buttons" data-i18n-title="back" title="返回"
+            <button id="backButton" class="control-btn feature-android-buttons" data-i18n-title="back" title="back"
                 style="display: none;">
                 <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
                     <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
                 </svg>
             </button>
-            <button onclick="homeButton()" class="control-btn feature-android-buttons" data-i18n-title="home" title="主页"
+            <button id="homeButton" class="control-btn feature-android-buttons" data-i18n-title="home" title="home"
                 style="display: none;">
                 <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
                     <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
                 </svg>
             </button>
-            <button onclick="menuButton()" class="control-btn feature-android-buttons" data-i18n-title="menu" title="菜单"
+            <button id="menuButton" class="control-btn feature-android-buttons" data-i18n-title="menu" title="menu"
                 style="display: none;">
                 <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
                     <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z" />
                 </svg>
             </button>
             <div class="separator feature-control" style="display: none;"></div>
-            <button onclick="rotateButton()" class="control-btn feature-android-buttons" data-i18n-title="rotate" title="旋转"
+            <button id="rotateButton" class="control-btn feature-android-buttons" data-i18n-title="rotate" title="rotate"
                 style="display: none;">
                 <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"
                     stroke-linecap="round" stroke-linejoin="round">
@@ -98,8 +95,8 @@
             <!-- <button onclick="getClipboard()" class="control-btn feature-clipboard" title="获取剪贴板 (Device -> Browser)" style="display: none;">
                 <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M19 2h-4.18C14.4.84 13.3 0 12 0c-1.3 0-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm7 18H5V4h2v3h10V4h2v16z"/></svg>
             </button> -->
-            <button onclick="navigator.clipboard.readText().then(text => setClipboard(text))"
-                class="control-btn feature-clipboard" data-i18n-title="set_clipboard" title="设置剪贴板 (Browser -> Device)"
+            <button id="setClipboardButton"
+                class="control-btn feature-clipboard" data-i18n-title="set_clipboard" title="set clipboard (Browser -> Device)"
                 style="display: none;">
                 <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
                     <path
@@ -108,21 +105,21 @@
             </button>
             <div class="separator feature-uhid" style="display: none;"></div>
             <button onclick="toggleUHIDMouse()" class="control-btn feature-uhid" id="uhidToggleBtn"
-                data-i18n-title="mouse_mode" title="鼠标模式" style="display: none;">
+                data-i18n-title="mouse_mode" title="UHID Mouse" style="display: none;">
                 <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
                     <path
                         d="M13 1.07V9h7c0-4.08-3.05-7.44-7-7.93zM4 15c0 4.42 3.58 8 8 8s8-3.58 8-8v-4H4v4zm7-13.93C7.05 1.56 4 4.92 4 9h7V1.07z" />
                 </svg>
             </button>
             <button onclick="toggleUHIDKeyboard()" class="control-btn feature-uhid" id="uhidKeyboardToggleBtn"
-                data-i18n-title="keyboard_mode" title="键盘模式" style="display: none;">
+                data-i18n-title="keyboard_mode" title="UHID Keyboard" style="display: none;">
                 <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
                     <path
                         d="M20 5H4c-1.1 0-1.99.9-1.99 2L2 17c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm-9 3h2v2h-2V8zm0 3h2v2h-2v-2zM8 8h2v2H8V8zm0 3h2v2H8v-2zm-1 2H5v-2h2v2zm0-3H5V8h2v2zm9 7H8v-2h8v2zm0-4h-2v-2h2v2zm0-3h-2V8h2v2zm3 3h-2v-2h2v2zm0-3h-2V8h2v2z" />
                 </svg>
             </button>
             <button onclick="toggleUHIDGamepad()" class="control-btn feature-uhid" id="uhidGamepadToggleBtn"
-                data-i18n-title="gamepad_mode" title="手柄模式" style="display: none;">
+                data-i18n-title="gamepad_mode" title="UHID Gamepad" style="display: none;">
                 <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
                     <path
                         d="M21 6H3c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-10 7H8v3H6v-3H3v-2h3V8h2v3h3v2zm4.5 2c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm4-3c-.83 0-1.5-.67-1.5-1.5S18.67 9 19.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z" />
@@ -131,7 +128,7 @@
         </div>
     </div>
     <script>
-        var MANNUAL_ROTATE = false
+        window.MANNUAL_ROTATE = false
 
         // Debounce/Throttle check
         let checkTimeout;
@@ -143,7 +140,7 @@
         window.addEventListener('resize', triggerCheck);
 
         function checkOrientation() {
-            if (MANNUAL_ROTATE) {
+            if (window.MANNUAL_ROTATE) {
                 // console.log("Manual rotate detected, skipping auto-rotate.");
                 return;
             }

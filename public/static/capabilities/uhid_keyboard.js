@@ -1,4 +1,5 @@
 
+(function() {
 const UHID_KEYBOARD_MSG_CREATE = 12;
 const UHID_KEYBOARD_MSG_INPUT = 13;
 const UHID_KEYBOARD_MSG_DESTROY = 14;
@@ -271,3 +272,4 @@ function createUHIDKeyboardDestroyPacket() {
     view.setUint16(1, UHID_KEYBOARD_ID);
     return buffer;
 }
+})();

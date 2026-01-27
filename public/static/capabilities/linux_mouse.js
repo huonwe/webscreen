@@ -1,3 +1,4 @@
+(function() {
 // 动作常量定义 (必须与 Go 后端 InputController 保持一致)
 // Go端: 0=Move, 1=Down, 2=Up
 const TYPE_MOUSE = 0x01;
@@ -234,3 +235,4 @@ function createMousePacket(action, x, y, buttons, wheelDeltaX = 0, wheelDeltaY =
 
 // 启动
 initRemoteControl();
+})();

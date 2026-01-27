@@ -1,3 +1,4 @@
+(function() {
 const SC_CONTROL_MSG_TYPE_UHID_CREATE = 12;
 const SC_CONTROL_MSG_TYPE_UHID_INPUT = 13;
 const SC_CONTROL_MSG_TYPE_UHID_DESTROY = 14; // 注意：并非所有版本都公开支持 Destroy 消息，如果没有只能靠断开连接
@@ -393,3 +394,4 @@ function createUHIDDestroyPacket(deviceID = UHID_DEVICE_ID) {
 
     return buffer;
 }
+})();

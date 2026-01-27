@@ -1,4 +1,4 @@
-
+(function() {
 const TYPE_SCROLL = 0x03; // scroll event
 const SCROLL_SCALE = 30; // 调整此值以改变滚动灵敏度
 
@@ -77,3 +77,4 @@ function createScrollPacket(x, y, hScroll, vScroll) {
     // console.log("Created Scroll Packet:", {x, y, hScroll, vScroll});
     return buffer;
 }
+})();

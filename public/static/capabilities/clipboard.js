@@ -1,3 +1,4 @@
+(function() {
 function setClipboard(text) {
     if (!window.ws || window.ws.readyState !== WebSocket.OPEN) return;
     const encoder = new TextEncoder();
@@ -41,12 +42,10 @@ function getClipboard() {
     // window.ws.send(packet);
 }
 
-function reveiveClipboard(packet) {
-    const decoder = new TextDecoder();
-    const text = decoder.decode(packet.slice(1));
-    console.log("receive clipboard from device:", text);
-    const clipboardEvent = new CustomEvent('clipboardReceived', { detail: text });
-    window.dispatchEvent(clipboardEvent);
-}
+window.document.querySelector('#setClipboardButton').addEventListener('click', () => {
+    navigator.clipboard.readText().then(text => setClipboard(text));
+});
 
 getClipboard()
+
+})();
