@@ -3,7 +3,7 @@
  * 集成虚拟摇杆 UI 与 UHID 通信协议
  */
 
-(function() {
+(function () {
     // --- 1. UHID 协议常量与定义 ---
 
     const UHID_GAMEPAD_MSG_CREATE = 12;
@@ -50,7 +50,7 @@
         0x09, 0x05,        // Usage (Game Pad)
         0xA1, 0x01,        // Collection (Application)
         0xA1, 0x00,        //   Collection (Physical)
-        
+
         // Buttons (32 buttons)
         0x05, 0x09,        //     Usage Page (Button)
         0x19, 0x01,        //     Usage Minimum (0x01)
@@ -60,7 +60,7 @@
         0x75, 0x01,        //     Report Size (1)
         0x95, 0x20,        //     Report Count (32)         <--- 修改点
         0x81, 0x02,        //     Input (Data,Var,Abs)
-        
+
         // Axes (4 axes: X, Y, Z, Rz)
         0x05, 0x01,        //     Usage Page (Generic Desktop Ctrls)
         0x09, 0x30,        //     Usage (X)
@@ -72,7 +72,7 @@
         0x75, 0x08,        //     Report Size (8)
         0x95, 0x04,        //     Report Count (4)
         0x81, 0x02,        //     Input (Data,Var,Abs)
-        
+
         0xC0,              //   End Collection
         0xC0               // End Collection
     ]);
@@ -108,9 +108,9 @@
     }
 
     // 暴露给外部调用的开关函数
-    window.toggleUHIDGamepad = function() {
+    function toggleUHIDGamepad() {
         const btn = document.getElementById('uhidGamepadToggleBtn');
-        
+
         if (!uhidGamepadEnabled) {
             initUHIDGamepad();
             uhidGamepadEnabled = true;
@@ -125,6 +125,7 @@
             if (btn) btn.classList.remove('active');
         }
     };
+    document.querySelector("#uhidGamepadToggleBtn").addEventListener('click', toggleUHIDGamepad);
 
     function sendGamepadReport() {
         if (!uhidGamepadEnabled || !uhidGamepadInitialized) return;
@@ -155,7 +156,7 @@
         view.setUint16(offset, 0x18d1); offset += 2; // Vendor: Google
         view.setUint16(offset, 0x0001); offset += 2; // Product
         view.setUint8(offset, nameBytes.length); offset += 1;
-        
+
         if (nameBytes.length > 0) {
             uint8View.set(nameBytes, offset);
             offset += nameBytes.length;
@@ -180,8 +181,8 @@
 
         // HID Report Data
         // Buttons: 32 bits (4 bytes)
-        view.setUint32(offset, state.buttons, true); offset += 4; 
-        
+        view.setUint32(offset, state.buttons, true); offset += 4;
+
         // Axes: 4 bytes
         view.setInt8(offset, state.x); offset += 1;
         view.setInt8(offset, state.y); offset += 1;
@@ -211,9 +212,9 @@
 
         const gamepadDiv = document.createElement('div');
         gamepadDiv.id = 'virtual-gamepad';
-        
+
         // --- HTML 结构构建 ---
-        
+
         // 1. 左侧摇杆
         const leftControls = document.createElement('div');
         leftControls.className = 'gamepad-controls left';
@@ -226,11 +227,11 @@
         // 2. 中间功能键 (L3, MENU, R3)
         const centerControls = document.createElement('div');
         centerControls.className = 'gamepad-controls center';
-        
+
         const btnL3 = createButton('L3', 'gp-btn btn-stick', '50px', '50px', 'L3', true);
         const btnHome = createButton('MENU', 'gp-btn btn-home', '60px', '40px', 'HOME', true);
         const btnR3 = createButton('R3', 'gp-btn btn-stick', '50px', '50px', 'R3', true);
-        
+
         // 绑定事件
         setupActionButton(btnL3, BTN_THUMBL); // L3 -> THUMBL
         setupActionButton(btnHome, BTN_MODE);   // MENU -> MODE
@@ -247,13 +248,13 @@
         // 布局位置 (相对于 180x180 容器)
         const btnY = createButton('Y', 'gp-btn btn-y', '60px', '60px', 'Y');
         Object.assign(btnY.style, { top: '0', left: '60px' });
-        
+
         const btnA = createButton('A', 'gp-btn btn-a', '60px', '60px', 'A');
         Object.assign(btnA.style, { top: '120px', left: '60px' });
-        
+
         const btnX = createButton('X', 'gp-btn btn-x', '60px', '60px', 'X');
         Object.assign(btnX.style, { top: '60px', left: '0' });
-        
+
         const btnB = createButton('B', 'gp-btn btn-b', '60px', '60px', 'B');
         Object.assign(btnB.style, { top: '60px', left: '120px' });
 
@@ -286,7 +287,7 @@
         // 移除注入的样式? 通常没必要，留着也无妨
     }
 
-    function createButton(text, className, w, h, keyName, releativePosition=false) {
+    function createButton(text, className, w, h, keyName, releativePosition = false) {
         const btn = document.createElement('div');
         btn.innerText = text;
         btn.className = className;
@@ -361,14 +362,14 @@
             e.preventDefault();
             element.classList.add('active');
             if (navigator.vibrate) navigator.vibrate(10);
-            
+
             gamepadState.buttons |= (1 << btnIndex);
             sendGamepadReport();
         };
         const handleUp = (e) => {
             e.preventDefault();
             element.classList.remove('active');
-            
+
             gamepadState.buttons &= ~(1 << btnIndex);
             sendGamepadReport();
         };
@@ -393,21 +394,21 @@
             const coords = getCoords(e);
             let dx = coords.x - centerX;
             let dy = coords.y - centerY;
-            
+
             const distance = Math.sqrt(dx * dx + dy * dy);
             if (distance > maxDistance) {
                 const ratio = maxDistance / distance;
                 dx *= ratio;
                 dy *= ratio;
             }
-            
+
             stick.style.transform = `translate(${dx}px, ${dy}px)`;
-            
+
             // 转换为 -127 ~ 127
             // 注意: 游戏手柄通常 Y 轴向上为负，向下为正，与屏幕坐标一致
             gamepadState.x = Math.round((dx / maxDistance) * 127);
             gamepadState.y = Math.round((dy / maxDistance) * 127);
-            
+
             sendGamepadReport();
         }
 
@@ -433,7 +434,7 @@
             isDragging = false;
             stick.classList.remove('active');
             stick.style.transform = `translate(0px, 0px)`;
-            
+
             gamepadState.x = 0;
             gamepadState.y = 0;
             sendGamepadReport();
