@@ -88,7 +88,7 @@ Please notice that the ports in `pair` and `connect` are different. [See details
 ## License
 
     Webscreen, streaming your device in Web browser.
-    Copyright (C) 2025-2026  Hiroi
+    Copyright (C) 2026  Hiroi
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
