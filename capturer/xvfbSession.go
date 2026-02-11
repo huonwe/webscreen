@@ -197,7 +197,7 @@ func (s *XvfbSession) StartFFmpeg(codec string, resolution string, bitRate strin
 		return fmt.Errorf("不支持的编码格式: %s", codec)
 	}
 
-	log.Printf("使用的 H.264 编码器: %s\n", bestEncoder)
+	log.Printf("Encoder: %s\n", bestEncoder)
 	_preset := "ultrafast"
 	if strings.Contains(bestEncoder, "nvenc") {
 		_preset = "p1"
@@ -223,7 +223,7 @@ func (s *XvfbSession) StartFFmpeg(codec string, resolution string, bitRate strin
 		"-preset", _preset,
 		// "-tune", "zerolatency",
 
-		"-f", "h264",
+		"-f", codec,
 		"-",
 	)
 	// 注入 DISPLAY 变量
