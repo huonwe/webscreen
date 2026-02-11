@@ -113,7 +113,10 @@ func (wm *WebMaster) Serve(port string) {
 	// 	go wm.AndroidDevicesDiscovery()
 	// }
 	wm.setRouter()
-	wm.router.Run(":" + port)
+	err := wm.router.Run(":" + port)
+	if err != nil {
+		log.Fatalf("Failed to start server: %v", err)
+	}
 }
 
 func (wm *WebMaster) Close() {
