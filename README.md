@@ -2,6 +2,8 @@
 
 ## ℹ️ About
 
+[Watch Demo](https://youtu.be/6WtbwaIk2aY)
+
 Webscreen is a self-hosted screen streaming web application for Android and Linux devices, based on WebRTC.
 ![screenshot](doc/assets/screenshot.png)
 
