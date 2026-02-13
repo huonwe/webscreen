@@ -65,12 +65,9 @@ Or you can build by yourself. Normally, you can build simply by `go build`. But 
 You can also use docker:
 
 ```bash
-docker run -d \
-  --name webscreen \
-  --network host \
-  -e PORT=8079 \
-  -e PIN=123456 \
-  dukihiroi/webscreen:latest
+wget https://raw.githubusercontent.com/huonwe/webscreen/refs/heads/main/docker-compose.yml
+
+docker compose up -d
 ```
 
 `host` network mode is recommended because of UDP traffic.

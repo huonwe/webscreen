@@ -1,13 +1,13 @@
 services:
   webscreen:
     build: .
-    container_name: webscreen-service
-    network_mode: "host"
-    privileged: true
+    image: dukihiroi/webscreen:latest
+    container_name: webscreen
+    network_mode: host
+    restart: unless-stopped
     volumes:
       - /dev/bus/usb:/dev/bus/usb
     environment:
       - GIN_MODE=release
       - PORT=8079
       - PIN=123456
-    restart: unless-stopped
