@@ -41,8 +41,7 @@ type Agent struct {
 }
 
 // ========================
-// SAgent 主要负责从 sdriver 接收媒体流并通过 WebRTC 发送出去
-// 同时处理来自客户端的控制命令并传递给 sdriver
+// SAgent 负责接受来自sdriver的数据，并处理来自前端的控制命令。
 // ========================
 // 创建视频轨和音频轨，并初始化 Agent. 可以选择是否开启音视频同步.
 func NewAgent(config AgentConfig) (*Agent, error) {

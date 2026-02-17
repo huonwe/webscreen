@@ -19,7 +19,8 @@ var CONFIG = (function () {
                 audio_codec: "opus",
                 video_bit_rate: "4000000",
                 audio: "true",
-                file_path: "test/test.h265"
+                file_path: "test/test.h265",
+                deviceID: "emulator-5554",
                 // new_display: "1920x1080/60",
             }
         };
@@ -197,7 +198,7 @@ async function start() {
                                 let rect = remoteVideo.getBoundingClientRect();
                                 // console.log("Initial video size:", rect.width, "x", rect.height);
                                 // updateVideoCache();
-                                console.log(rect.width / rect.height, media_meta.width / media_meta.height);
+                                // console.log(rect.width / rect.height, media_meta.width / media_meta.height);
                                 if (rect.width / rect.height != media_meta.width / media_meta.height) {
                                     let p = createRequestKeyFramePacket();
                                     ws.send(p);
@@ -223,33 +224,7 @@ async function start() {
                 default:
                     console.warn("Unknown message status:", message.status);
             }
-        // } else {
-        //     const view = new Uint8Array(event.data);
-        //     const decoder = new TextDecoder();
-        //     // console.log("Received binary message, type:", view[0]);
-        //     switch (view[0]) {
-        //         case 0x17: // TYPE_CLIPBOARD_DATA
-        //             const text = decoder.decode(view.slice(1));
-        //             console.log("Clipboard from device:", text);
-        //             // Copy to browser clipboard
-        //             try {
-        //                 navigator.clipboard.writeText(text).catch(err => {
-        //                     console.error('Failed to write to clipboard:', err);
-        //                 });
-        //             } catch (e) {
-        //                 console.error('Clipboard API not available:', e);
-        //                 console.log("HTTPS is required for clipboard access.");
-        //             }
-        //             break;
-        //         case 0x64: // TYPE_TEXT_MSG
-        //             const textMsg = decoder.decode(view.slice(1));
-        //             console.log("Text message from agent:", textMsg);
-        //             showToast(textMsg, 3000);
-        //             break;
-        //         default:
-        //             console.warn("Unknown binary message type:", view[0]);
-        //     }
-        // }
+
     };
 }
 

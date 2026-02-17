@@ -8,11 +8,14 @@ import (
 
 type ScreenSession struct {
 	SessionID string
-	WSConn    *websocket.Conn
-	Agent     *agent.Agent
+	WSConn    []*websocket.Conn
+	// WebRTCConn *agent.WebRTCConnection
+	Agent *agent.Agent
 }
 
 func (sc *ScreenSession) Close() {
 	sc.Agent.Close()
-	sc.WSConn.Close()
+	for _, conn := range sc.WSConn {
+		conn.Close()
+	}
 }

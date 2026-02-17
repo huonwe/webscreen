@@ -19,7 +19,8 @@ const defaultScrcpyConfig = {
         audio_codec: 'opus',
         video_bit_rate: 8000000,
         video_codec_options: '',
-        new_display: ''
+        new_display: '',
+        deviceID: '', // For scrcpy driver to identify which device to connect to
     }
 };
 
@@ -335,7 +336,8 @@ function startStream(serial) {
                 video_bit_rate: String(drv.video_bit_rate || 8000000),
                 video_codec_options: drv.video_codec_options || '',
                 new_display: drv.new_display || '',
-                max_size: drv.max_size || ''
+                max_size: drv.max_size || '',
+                deviceID: config.device_ip || '', // Pass device IP as deviceID for scrcpy to identify which device to connect to
             }
         };
     }

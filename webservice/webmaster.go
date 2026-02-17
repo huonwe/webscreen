@@ -18,6 +18,7 @@ type WebMasterConfig struct {
 type WebMaster struct {
 	// WSConns []*websocket.Conn
 
+	WebRTCManager  *WebRTCManager
 	ScreenSessions map[string]ScreenSession
 
 	pin                  string
@@ -40,23 +41,16 @@ func New(config WebMasterConfig, staticFS fs.FS) *WebMaster {
 		devicesDiscovered:    make(map[string]Device),
 		staticFS:             staticFS,
 		UnlockAttemptRecords: make(map[string]UnlockAttemptRecord),
+		WebRTCManager:        NewWebRTCManager(),
 	}
 	wm.jwtSecret = []byte(time.Now().String())
-	wm.setRouter()
 	return wm
 }
 
 func Default(staticFS fs.FS) *WebMaster {
-	wm := &WebMaster{
-		ScreenSessions: make(map[string]ScreenSession),
-		config: WebMasterConfig{
-			EnableAndroidDiscover: true,
-		},
-		devicesDiscovered:    make(map[string]Device),
-		UnlockAttemptRecords: make(map[string]UnlockAttemptRecord),
-		staticFS:             staticFS,
-	}
-	wm.jwtSecret = []byte(time.Now().String())
+	wm := New(WebMasterConfig{
+		EnableAndroidDiscover: true,
+	}, staticFS)
 	return wm
 }
 

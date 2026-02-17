@@ -64,7 +64,7 @@ type ScrcpyDriver struct {
 }
 
 // 一个ScrcpyDriver对应一个scrcpy实例，通过本地端口建立三个连接：视频、音频、控制
-func New(config map[string]string, deviceID string) (*ScrcpyDriver, error) {
+func New(config map[string]string) (*ScrcpyDriver, error) {
 	var err error
 	da := &ScrcpyDriver{
 		VideoChan:   make(chan sdriver.AVBox, 10),
@@ -82,7 +82,7 @@ func New(config map[string]string, deviceID string) (*ScrcpyDriver, error) {
 		},
 	}
 	da.ctx, da.cancel = context.WithCancel(context.Background())
-	da.adbClient = NewADBClient(deviceID, da.scid, da.ctx)
+	da.adbClient = NewADBClient(config["deviceID"], da.scid, da.ctx)
 
 	data, err := scrcpyServerData.ReadFile("bin/scrcpy-server-master")
 	if err != nil {

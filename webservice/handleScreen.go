@@ -2,6 +2,7 @@ package webservice
 
 import (
 	"log"
+	"math/rand"
 	"net/http"
 	sagent "webscreen/streamAgent"
 
@@ -15,7 +16,16 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
-// /:device_type/:device_id/:device_ip/:device_port/ws
+func randomString(length int) string {
+	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	b := make([]byte, length)
+	for i := range b {
+		b[i] = charset[rand.Intn(len(charset))]
+	}
+	return string(b)
+}
+
+// /:id/ws
 func (wm *WebMaster) handleScreenWS(c *gin.Context) {
 	// Implement WebSocket handling for screen here
 	// Parse URL parameters
@@ -24,10 +34,7 @@ func (wm *WebMaster) handleScreenWS(c *gin.Context) {
 		log.Println("Failed to upgrade to websocket:", err)
 		return
 	}
-	// deviceType := c.Param("device_type")
-	// deviceID := c.Param("device_id")
-	// deviceIP := c.Param("device_ip")
-	// devicePort := c.Param("device_port")
+
 	config := sagent.AgentConfig{}
 	err = conn.ReadJSON(&config)
 	if err != nil {
@@ -36,16 +43,25 @@ func (wm *WebMaster) handleScreenWS(c *gin.Context) {
 		conn.Close()
 		return
 	}
-	// if config.DeviceType != deviceType || config.DeviceID != deviceID || config.DeviceIP != deviceIP || config.DevicePort != devicePort {
-	// 	log.Println("Connection options do not match URL parameters")
-	// 	// conn.Close()
-	// 	// return
-	// }
+
 	// Create a unique session ID
 	sessionID := config.DeviceType + "_" + config.DeviceID + "_" + config.DeviceIP + "_" + config.DevicePort
-	if _, exists := wm.ScreenSessions[sessionID]; exists {
-		wm.removeScreenSession(sessionID)
+	temporaryID := randomString(8)
+
+	finalSDP, err := wm.WebRTCManager.HandleNewConnection(sessionID, temporaryID, config.SDP)
+	if err != nil {
+		log.Println("Failed to handle new connection:", err)
+		conn.WriteJSON(map[string]any{"status": "error", "message": err.Error(), "stage": "webrtc_init"})
+		conn.Close()
+		return
 	}
+
+	if session, exists := wm.ScreenSessions[sessionID]; exists {
+		session.WSConn = append(session.WSConn, conn)
+		wm.ScreenSessions[sessionID] = session
+		log.Printf("Existing session found for %s, added new WebSocket connection", sessionID)
+	}
+
 	log.Printf("New WebSocket connection for session: %s", sessionID)
 	session := wm.ScreenSessions[sessionID]
 	session.WSConn = conn
@@ -67,15 +83,6 @@ func (wm *WebMaster) handleScreenWS(c *gin.Context) {
 		return
 	}
 	conn.WriteJSON(map[string]any{"status": "ok", "sdp": finalSDP, "stage": "webrtc_init"})
-	// bitrateInt, err := strconv.Atoi(config.DriverConfig["video_bit_rate"])
-	// if err != nil {
-	// 	bitrateInt = 8000000 // default to 8Mbps
-	// }
-	// if bitrateInt > 0 {
-	// 	finalSDP = sagent.SetSDPBandwidth(finalSDP, bitrateInt)
-	// }
-	// finalSDP = webrtcHelper.SetSDPBandwidth(finalSDP, 20_000_000)
-	// conn.WriteMessage(websocket.TextMessage, []byte(finalSDP))
 	err = agent.InitDriver()
 	if err != nil {
 		log.Println("Failed to initialize driver:", err)
