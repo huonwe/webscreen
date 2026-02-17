@@ -4,3 +4,5 @@ capturer_xvfb
 test
 
 bin/
+
+.vscode/
