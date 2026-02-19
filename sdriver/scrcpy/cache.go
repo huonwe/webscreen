@@ -80,6 +80,7 @@ func (da *ScrcpyDriver) updateCache(payload []byte, codec string) {
 
 func (da *ScrcpyDriver) sendCachedKeyFrame() {
 	da.cacheMutex.RLock()
+	log.Printf("Sending cached key frame with VPS/SPS/PPS: VPS=%d bytes, SPS=%d bytes, PPS=%d bytes, IDR=%d bytes\n", len(da.LastVPS), len(da.LastSPS), len(da.LastPPS), len(da.LastIDR))
 	cachedVPS := createCopy(da.LastVPS)
 	cachedSPS := createCopy(da.LastSPS)
 	cachedPPS := createCopy(da.LastPPS)

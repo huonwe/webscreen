@@ -5,12 +5,14 @@ import (
 	"io"
 	"log"
 	"time"
+	// "bytes"
 	"webscreen/sdriver"
 )
 
 func (da *ScrcpyDriver) convertVideoFrame() {
 	var headerBuf [12]byte
 	header := ScrcpyFrameHeader{}
+	var nalTypeF func(byte) byte
 	var nalType byte
 	for {
 		// read frame header
@@ -33,22 +35,29 @@ func (da *ScrcpyDriver) convertVideoFrame() {
 			log.Println("Failed to read video frame payload:", err)
 			return
 		}
-
-		// fmt.Printf("ScrcpyDriver: isKeyFrame=%v, nal Type=%v, Size=%d bytes\n", header.IsKeyFrame, nalType, len(payloadBuf))
-
-		if header.IsKeyFrame {
-			switch da.mediaMeta.VideoCodec {
+		switch da.mediaMeta.VideoCodec {
 			case "h265":
-				nalType = (payloadBuf[4] >> 1) & 0x3F
+				nalTypeF = func(payloadBuf byte) byte { return (payloadBuf >> 1) & 0x3F }
 			case "h264":
-				nalType = payloadBuf[4] & 0x1F
+				nalTypeF = func(payloadBuf byte) byte { return payloadBuf & 0x1F }
 			default:
 				log.Println("Unknown codec type for NALU parsing:", da.mediaMeta.VideoCodec)
 				continue
-			}
+		}
+		nalType = nalTypeF(payloadBuf[4]) // 注意：payloadBuf 前 4 字节是起始码
+		// log.Printf("ScrcpyDriver: isKeyFrame=%v, nal Type=%v, Size=%d bytes\n", header.IsKeyFrame, nalType, len(payloadBuf))
+		// parts := bytes.Split(payloadBuf, []byte{0x00, 0x00, 0x00, 0x01})
+		// for _, part := range parts {
+		// 	if len(part) == 0 {
+		// 		continue
+		// 	}
+		// 	log.Printf("NALU Part: nalType=%v, Size=%d bytes\n", nalTypeF(part[0]), len(part))
+		// }
+		if header.IsKeyFrame {
 			switch nalType {
-			case 5, 19: // H.264 IDR / H.265 IDR_W_RADL
+			case 5, 19, 20, 21: // H.264 IDR / H.265 IDR_W_RADL
 				da.sendWithCachedConfigFrame(da.LastPTS, payloadBuf)
+				da.LastIDR = createCopy(payloadBuf[4:]) // 去掉起始码
 				continue
 			case 6, 39, 40: // H.264 SEI / H.265 Prefix/Suffix SEI
 				payloadBuf = PruneSEI(payloadBuf, da.mediaMeta.VideoCodec)
@@ -63,7 +72,14 @@ func (da *ScrcpyDriver) convertVideoFrame() {
 					IsConfig:   false,
 				}
 				continue
+			default:
+				continue
 			}
+		}
+		switch nalType {
+		case 7, 32: // H.264 SPS / H.265 VPS
+			go da.updateCache(payloadBuf, da.mediaMeta.VideoCodec)
+			continue
 		}
 
 		select {

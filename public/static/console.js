@@ -343,7 +343,7 @@ function startStream(serial) {
     }
 
     console.log('Starting stream with config:', finalConfig);
-    sessionStorage.setItem('webscreen_device_configs', JSON.stringify(finalConfig));
+    sessionStorage.setItem('webscreen_device_configs_now', JSON.stringify(finalConfig));
     showToast(i18n.t('starting_stream'));
 
     id = `${finalConfig.device_type}_${finalConfig.device_id}_${finalConfig.device_ip}_${finalConfig.device_port}`;

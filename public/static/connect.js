@@ -27,14 +27,14 @@ var CONFIG = (function () {
     }
 
     // Try to load from sessionStorage first (set by console.js)
-    const stored = sessionStorage.getItem('webscreen_device_configs');
+    const stored = sessionStorage.getItem('webscreen_device_configs_now');
     console.log("Stored config:", stored);
     if (stored) {
         try {
             const parsed = JSON.parse(stored);
             console.log("Using stored config:", parsed);
             // Clear it after reading to avoid stale data
-            sessionStorage.removeItem('webscreen_device_configs');
+            // sessionStorage.removeItem('webscreen_device_configs_now');
             return parsed;
         } catch (e) {
             console.warn('Failed to parse stored config:', e);
@@ -43,7 +43,7 @@ var CONFIG = (function () {
 
     // Fallback to hardcoded defaults for testing
     return {
-        device_type: "android",
+        device_type: "none",
         device_id: "emulator-5554",
         device_ip: "0",
         device_port: "0",
@@ -58,6 +58,11 @@ var CONFIG = (function () {
 })();
 
 async function start() {
+    if (CONFIG.device_type === "none") {
+        console.error("No device configuration found. Please set up the device configuration in the console.");
+        showToast(i18n.t('error_no_device_config'), 3000);
+        return;
+    }
     console.log("Starting WebRTC connection...");
     const pc = new RTCPeerConnection();
 
