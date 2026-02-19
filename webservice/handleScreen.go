@@ -4,10 +4,12 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"time"
 	sagent "webscreen/streamAgent"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"github.com/pion/webrtc/v4"
 )
 
 var upgrader = websocket.Upgrader{
@@ -62,6 +64,28 @@ func (wm *WebMaster) handleScreenWS(c *gin.Context) {
 	}
 	log.Println("deviceIdentifier:", deviceIdentifier, "receiptNo:", receiptNo)
 	conn.WriteJSON(map[string]any{"status": "ok", "sdp": finalSDP, "stage": "webrtc_init"})
+
+	sub, exists := wm.WebRTCManager.getSubscriber(deviceIdentifier, receiptNo)
+	if !exists {
+		log.Printf("Failed to get subscriber for device %s", deviceIdentifier)
+		conn.WriteJSON(map[string]any{"status": "error", "message": "Failed to get subscriber", "stage": "webrtc_init"})
+		conn.Close()
+		return
+	}
+Loop:
+	for {
+		switch sub.PeerConnection.ConnectionState() {
+		case webrtc.PeerConnectionStateFailed, webrtc.PeerConnectionStateClosed:
+			log.Printf("Peer connection for device %s is in state %s, closing WebSocket", deviceIdentifier, sub.PeerConnection.ConnectionState())
+			conn.Close()
+			return
+		case webrtc.PeerConnectionStateConnected:
+			break Loop
+		default:
+			time.Sleep(1 * time.Second)
+		}
+	}
+
 	err = wm.WebRTCManager.Start(deviceIdentifier, receiptNo, config)
 	if err != nil {
 		log.Printf("Failed to start WebRTC session for device %s: %v", deviceIdentifier, err)
@@ -82,12 +106,12 @@ func (wm *WebMaster) handleScreenWS(c *gin.Context) {
 	conn.WriteJSON(map[string]interface{}{"status": "ok", "capabilities": capabilities, "media_meta": media_meta, "stage": "webrtc_metainfo"})
 }
 
-func (wm *WebMaster) removeScreenSession(deviceIdentifier string) {
-	log.Printf("Removing screen session: %s", deviceIdentifier)
-	if session, exists := wm.ScreenSessions[deviceIdentifier]; exists {
-		if session.WSConn != nil {
-			session.WSConn.Close()
-		}
-	}
-	delete(wm.ScreenSessions, deviceIdentifier)
-}
+// func (wm *WebMaster) removeScreenSession(deviceIdentifier string) {
+// 	log.Printf("Removing screen session: %s", deviceIdentifier)
+// 	if session, exists := wm.ScreenSessions[deviceIdentifier]; exists {
+// 		if session.WSConn != nil {
+// 			session.WSConn.Close()
+// 		}
+// 	}
+// 	delete(wm.ScreenSessions, deviceIdentifier)
+// }

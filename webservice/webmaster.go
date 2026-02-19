@@ -3,7 +3,6 @@ package webservice
 import (
 	"io/fs"
 	"log"
-	"maps"
 	"net/http"
 	"sync"
 	"time"
@@ -18,8 +17,8 @@ type WebMasterConfig struct {
 type WebMaster struct {
 	// WSConns []*websocket.Conn
 
-	WebRTCManager  *WebRTCManager
-	ScreenSessions map[string]ScreenSession
+	WebRTCManager *WebRTCManager
+	// ScreenSessions map[string]ScreenSession
 
 	pin                  string
 	UnlockAttemptRecords map[string]UnlockAttemptRecord
@@ -36,7 +35,7 @@ type WebMaster struct {
 
 func New(config WebMasterConfig, staticFS fs.FS) *WebMaster {
 	wm := &WebMaster{
-		ScreenSessions:       make(map[string]ScreenSession),
+		// ScreenSessions:       make(map[string]ScreenSession),
 		config:               config,
 		devicesDiscovered:    make(map[string]Device),
 		staticFS:             staticFS,
@@ -114,8 +113,8 @@ func (wm *WebMaster) Serve(port string) {
 }
 
 func (wm *WebMaster) Close() {
-	for k, v := range maps.All(wm.ScreenSessions) {
-		log.Printf("closing session %v", k)
-		v.Close()
-	}
+	// for k, v := range maps.All(wm.ScreenSessions) {
+	// 	log.Printf("closing session %v", k)
+	// 	v.Close()
+	// }
 }

@@ -32,14 +32,14 @@ type Subscriber struct {
 	PeerConnection       *webrtc.PeerConnection
 	dataChannelUnordered *webrtc.DataChannel
 	dataChannelOrdered   *webrtc.DataChannel
-	dataChannelReady     bool
-	rtpSenderVideo       *webrtc.RTPSender
-	rtpSenderAudio       *webrtc.RTPSender
-	videoTrack           *webrtc.TrackLocalStaticSample
-	audioTrack           *webrtc.TrackLocalStaticSample
-	videoChan            chan media.Sample
-	audioChan            chan media.Sample
-	eventChan            chan []byte // sdriver -> Agent -> WebMaster -> 前端
+	// dataChannelReady     bool
+	rtpSenderVideo *webrtc.RTPSender
+	rtpSenderAudio *webrtc.RTPSender
+	videoTrack     *webrtc.TrackLocalStaticSample
+	audioTrack     *webrtc.TrackLocalStaticSample
+	videoChan      chan media.Sample
+	audioChan      chan media.Sample
+	eventChan      chan []byte // sdriver -> Agent -> WebMaster -> 前端
 }
 
 type WebRTCManager struct {
@@ -172,15 +172,15 @@ func (manager *WebRTCManager) NewSubscriber(deviceIdentifier string, clientSDP s
 		manager.subscribers[deviceIdentifier][receiptNo].PeerConnection.Close()
 	}
 	sub := &Subscriber{
-		PeerConnection:   peerConnection,
-		dataChannelReady: false,
-		rtpSenderVideo:   rtpSenderVideo,
-		rtpSenderAudio:   rtpSenderAudio,
-		videoTrack:       videoTrack,
-		audioTrack:       audioTrack,
-		videoChan:        make(chan media.Sample, 30),
-		audioChan:        make(chan media.Sample, 30),
-		eventChan:        make(chan []byte, 30),
+		PeerConnection: peerConnection,
+		// dataChannelReady: false,
+		rtpSenderVideo: rtpSenderVideo,
+		rtpSenderAudio: rtpSenderAudio,
+		videoTrack:     videoTrack,
+		audioTrack:     audioTrack,
+		videoChan:      make(chan media.Sample, 30),
+		audioChan:      make(chan media.Sample, 30),
+		eventChan:      make(chan []byte, 30),
 	}
 	manager.subscribers[deviceIdentifier][receiptNo] = sub
 	manager.currentReceiptNumber[deviceIdentifier] = (manager.currentReceiptNumber[deviceIdentifier] + 1) % MAX_CLIENTS_PER_DEVICE
@@ -237,6 +237,13 @@ func (manager *WebRTCManager) GetAgent(deviceIdentifier string) (*sagent.Agent, 
 	defer manager.RUnlock()
 	agent, exists := manager.agents[deviceIdentifier]
 	return agent, exists
+}
+
+func (manager *WebRTCManager) getSubscriber(deviceIdentifier string, receiptNo uint32) (*Subscriber, bool) {
+	manager.RLock()
+	defer manager.RUnlock()
+	sub, exists := manager.subscribers[deviceIdentifier][receiptNo]
+	return sub, exists
 }
 
 func createMediaEngine(mimeTypes []string) *webrtc.MediaEngine {
@@ -508,32 +515,24 @@ func (sub *Subscriber) setDataChannel() {
 			})
 			log.Printf("Unknown DataChannel label: %s\n", d.Label())
 		}
-		sub.dataChannelReady = true
+		// sub.dataChannelReady = true
 	})
 
 }
 
 func (sub *Subscriber) setDataChannelCallback(callback func([]byte) error) {
-	go func() {
-		for {
-			if sub.dataChannelReady {
-				sub.dataChannelOrdered.OnMessage(func(msg webrtc.DataChannelMessage) {
-					// log.Printf("DataChannel '%s'-'%d' message: %s\n", sub.dataChannelOrdered.Label(), sub.dataChannelOrdered.ID(), string(msg.Data))
-					if err := callback(msg.Data); err != nil {
-						log.Printf("Error handling data channel message: %v", err)
-					}
-				})
-				sub.dataChannelUnordered.OnMessage(func(msg webrtc.DataChannelMessage) {
-					// log.Printf("DataChannel '%s'-'%d' message: %s\n", sub.dataChannelUnordered.Label(), sub.dataChannelUnordered.ID(), string(msg.Data))
-					if err := callback(msg.Data); err != nil {
-						log.Printf("Error handling data channel message: %v", err)
-					}
-				})
-				return
-			}
-			time.Sleep(100 * time.Millisecond)
+	sub.dataChannelOrdered.OnMessage(func(msg webrtc.DataChannelMessage) {
+		// log.Printf("DataChannel '%s'-'%d' message: %s\n", sub.dataChannelOrdered.Label(), sub.dataChannelOrdered.ID(), string(msg.Data))
+		if err := callback(msg.Data); err != nil {
+			log.Printf("Error handling data channel message: %v", err)
 		}
-	}()
+	})
+	sub.dataChannelUnordered.OnMessage(func(msg webrtc.DataChannelMessage) {
+		// log.Printf("DataChannel '%s'-'%d' message: %s\n", sub.dataChannelUnordered.Label(), sub.dataChannelUnordered.ID(), string(msg.Data))
+		if err := callback(msg.Data); err != nil {
+			log.Printf("Error handling data channel message: %v", err)
+		}
+	})
 
 }
 

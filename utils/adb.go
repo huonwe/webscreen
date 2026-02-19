@@ -4,7 +4,6 @@ import (
 	"archive/zip"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -29,13 +28,10 @@ func GetADBPath() (string, error) {
 			return localPath, nil
 		}
 	}
-	log.Println(err)
-
 	// 2. Check PATH
 	if path, err := exec.LookPath("adb"); err == nil {
 		return path, nil
 	}
-	log.Println(err)
 
 	// 3. Download
 	fmt.Println("ADB not found. Downloading...")
