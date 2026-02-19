@@ -11,7 +11,6 @@ import (
 	"github.com/pion/rtcp"
 	pionSDP "github.com/pion/sdp/v3"
 	"github.com/pion/webrtc/v4"
-	"github.com/pion/webrtc/v4/pkg/media"
 )
 
 const (
@@ -35,50 +34,50 @@ type Subscriber struct {
 	// dataChannelReady     bool
 	rtpSenderVideo *webrtc.RTPSender
 	rtpSenderAudio *webrtc.RTPSender
-	videoTrack     *webrtc.TrackLocalStaticSample
-	audioTrack     *webrtc.TrackLocalStaticSample
-	videoChan      chan media.Sample
-	audioChan      chan media.Sample
-	eventChan      chan []byte // sdriver -> Agent -> WebMaster -> 前端
+
+	// Callback for incoming messages
+	onMessageCallback func([]byte) error
+}
+
+type DeviceBroadcaster struct {
+	VideoTrack  *webrtc.TrackLocalStaticSample
+	AudioTrack  *webrtc.TrackLocalStaticSample
+	Agent       *sagent.Agent
+	Subscribers map[uint32]*Subscriber
+	Lock        sync.RWMutex
 }
 
 type WebRTCManager struct {
 	sync.RWMutex
-	subscribers map[string]map[uint32]*Subscriber // deviceIdentifier -> ReceiptNo -> Subscriber
-	agents      map[string]*sagent.Agent
+	broadcasters map[string]*DeviceBroadcaster // deviceIdentifier -> Broadcaster
 
 	currentReceiptNumber map[string]uint32
 }
 
 func NewWebRTCManager() *WebRTCManager {
 	wm := &WebRTCManager{
-		subscribers:          make(map[string]map[uint32]*Subscriber),
-		agents:               make(map[string]*sagent.Agent),
+		broadcasters:         make(map[string]*DeviceBroadcaster),
 		currentReceiptNumber: make(map[string]uint32),
 	}
 	go func() {
 		for {
 			time.Sleep(30 * time.Second)
-			log.Printf("WebRTCManager status: %d devices, %d agents\n", len(wm.subscribers), len(wm.agents))
-			for deviceID, subs := range wm.subscribers {
-				log.Printf("Device %s has %d subscribers\n", deviceID, len(subs))
-				for receiptNo, sub := range subs {
-					log.Printf("Device %s, ReceiptNo %d, Subscriber: %+v\n", deviceID, receiptNo, sub)
-					if sub.PeerConnection.ConnectionState() == webrtc.PeerConnectionStateFailed {
-						log.Printf("Removing failed subscriber for device %s, receiptNo %d", deviceID, receiptNo)
-						wm.Lock()
-						delete(wm.subscribers[deviceID], receiptNo)
-						wm.Unlock()
-					}
+			wm.RLock()
+			log.Printf("WebRTCManager status: %d broadcasters\n", len(wm.broadcasters))
+			for deviceID, broadcaster := range wm.broadcasters {
+				broadcaster.Lock.RLock()
+				log.Printf("Device %s has %d subscribers\n", deviceID, len(broadcaster.Subscribers))
+				for receiptNo, sub := range broadcaster.Subscribers {
+					log.Printf("Device %s, ReceiptNo %d, Subscriber state: %s\n", deviceID, receiptNo, sub.PeerConnection.ConnectionState())
 				}
+				broadcaster.Lock.RUnlock()
 			}
+			wm.RUnlock()
 		}
 	}()
 	return wm
 }
 
-// 接受设备标识号，客户端的 SDP Offer，返回最终的 SDP Answer，以及对应Connection的ReceiptNo，对应数组中的位置（因为可能有多个浏览器连接同一个设备）。如果发生错误，返回错误信息。
-// 不添加 Track
 func (manager *WebRTCManager) NewSubscriber(deviceIdentifier string, clientSDP string, AgentConfig sagent.AgentConfig) (string, uint32, error) {
 	offer := webrtc.SessionDescription{
 		Type: webrtc.SDPTypeOffer,
@@ -120,17 +119,34 @@ func (manager *WebRTCManager) NewSubscriber(deviceIdentifier string, clientSDP s
 		log.Println("Create PeerConnection failed:", err)
 		return "", 0, err
 	}
-	videoTrack, audioTrack := createAVTrack(videoMimeType, audioMimeType, AgentConfig)
-	if videoTrack == nil && audioTrack == nil {
-		log.Printf("Failed to create both video and audio tracks")
-		return "", 0, fmt.Errorf("failed to create media tracks")
+
+	// 1. Get or Create Broadcaster (and its tracks)
+	manager.Lock()
+	broadcaster, exists := manager.broadcasters[deviceIdentifier]
+	if !exists {
+		videoTrack, audioTrack := createAVTrack(videoMimeType, audioMimeType, AgentConfig)
+		if videoTrack == nil && audioTrack == nil {
+			manager.Unlock()
+			log.Printf("Failed to create both video and audio tracks")
+			return "", 0, fmt.Errorf("failed to create media tracks")
+		}
+
+		broadcaster = &DeviceBroadcaster{
+			VideoTrack:  videoTrack,
+			AudioTrack:  audioTrack,
+			Subscribers: make(map[uint32]*Subscriber),
+		}
+		manager.broadcasters[deviceIdentifier] = broadcaster
 	}
-	rtpSenderVideo, err := peerConnection.AddTrack(videoTrack)
+	manager.Unlock()
+
+	// 2. Add SHARED tracks to PeerConnection
+	rtpSenderVideo, err := peerConnection.AddTrack(broadcaster.VideoTrack)
 	if err != nil {
 		log.Printf("Failed to add video track: %v", err)
 		return "", 0, err
 	}
-	rtpSenderAudio, err := peerConnection.AddTrack(audioTrack)
+	rtpSenderAudio, err := peerConnection.AddTrack(broadcaster.AudioTrack)
 	if err != nil {
 		log.Printf("Failed to add audio track: %v", err)
 		return "", 0, err
@@ -150,8 +166,6 @@ func (manager *WebRTCManager) NewSubscriber(deviceIdentifier string, clientSDP s
 	}
 
 	// 设置 Local Description 并等待 ICE 收集完成
-	// 这一步是为了生成一个包含所有网络路径信息的完整 SDP，
-	// 这样我们就不需要写复杂的 Trickle ICE 逻辑了。
 	gatherComplete := webrtc.GatheringCompletePromise(peerConnection)
 
 	if err := peerConnection.SetLocalDescription(answer); err != nil {
@@ -162,27 +176,22 @@ func (manager *WebRTCManager) NewSubscriber(deviceIdentifier string, clientSDP s
 	// 阻塞等待 ICE 收集完成 (通常几百毫秒)
 	<-gatherComplete
 	finalSDP := peerConnection.LocalDescription().SDP
+
 	manager.Lock()
 	receiptNo := manager.currentReceiptNumber[deviceIdentifier]
-	if manager.subscribers[deviceIdentifier] == nil {
-		manager.subscribers[deviceIdentifier] = make(map[uint32]*Subscriber)
-	}
-	if manager.subscribers[deviceIdentifier][receiptNo] != nil {
+	broadcaster.Lock.Lock()
+	if broadcaster.Subscribers[receiptNo] != nil {
 		log.Printf("Warning: Overwriting existing subscriber for device %s, receiptNo %d", deviceIdentifier, receiptNo)
-		manager.subscribers[deviceIdentifier][receiptNo].PeerConnection.Close()
+		broadcaster.Subscribers[receiptNo].PeerConnection.Close()
 	}
 	sub := &Subscriber{
 		PeerConnection: peerConnection,
-		// dataChannelReady: false,
 		rtpSenderVideo: rtpSenderVideo,
 		rtpSenderAudio: rtpSenderAudio,
-		videoTrack:     videoTrack,
-		audioTrack:     audioTrack,
-		videoChan:      make(chan media.Sample, 30),
-		audioChan:      make(chan media.Sample, 30),
-		eventChan:      make(chan []byte, 30),
 	}
-	manager.subscribers[deviceIdentifier][receiptNo] = sub
+	broadcaster.Subscribers[receiptNo] = sub
+	broadcaster.Lock.Unlock()
+
 	manager.currentReceiptNumber[deviceIdentifier] = (manager.currentReceiptNumber[deviceIdentifier] + 1) % MAX_CLIENTS_PER_DEVICE
 	manager.Unlock()
 
@@ -197,37 +206,121 @@ func (manager *WebRTCManager) Start(deviceIdentifier string, receiptNo uint32, a
 		log.Printf("Failed to ensure agent for device %s: %v", deviceIdentifier, err)
 		return err
 	}
-	agent := manager.agents[deviceIdentifier]
-	sub := manager.subscribers[deviceIdentifier][receiptNo]
-	go ListenRTPVideo(sub.rtpSenderVideo, manager.agents[deviceIdentifier])
-	go ListenRTPAudio(sub.rtpSenderAudio, manager.agents[deviceIdentifier])
+	manager.RLock()
+	broadcaster, exists := manager.broadcasters[deviceIdentifier]
+	manager.RUnlock()
+
+	if !exists {
+		return fmt.Errorf("broadcaster not found")
+	}
+
+	broadcaster.Lock.RLock()
+	sub := broadcaster.Subscribers[receiptNo]
+	agent := broadcaster.Agent
+	broadcaster.Lock.RUnlock()
+
+	if sub == nil {
+		return fmt.Errorf("subscriber not found")
+	}
+
+	// PLI handling
+	go ListenRTPVideo(sub.rtpSenderVideo, agent)
+	go ListenRTPAudio(sub.rtpSenderAudio, agent)
+
 	manager.setCleanup(sub.PeerConnection, deviceIdentifier, receiptNo)
 
-	// log.Println("Sub: ", sub)
+	// Data Channel
 	sub.setDataChannelCallback(agent.SendEvent)
-	sub.startPushAVSample()
-	sub.startPushEvent()
+
+	// No need to startPushAVSample / startPushEvent loops anymore
+	// The tracks are shared and filled by the Agent loop started in ensureAgent
+
 	return nil
 }
 
 func (manager *WebRTCManager) ensureAgent(deviceIdentifier string, receiptNo uint32, agentConfig sagent.AgentConfig) error {
 	manager.Lock()
-	defer manager.Unlock()
-	agent, exists := manager.agents[deviceIdentifier]
+	broadcaster, exists := manager.broadcasters[deviceIdentifier]
 	if !exists {
-		agent = sagent.New(agentConfig)
-		finalCodec, err := WaitAndGetFinalCodecParams(manager.subscribers[deviceIdentifier][receiptNo].PeerConnection)
+		manager.Unlock()
+		return fmt.Errorf("broadcaster should exist at this point")
+	}
+
+	if broadcaster.Agent == nil {
+		agent := sagent.New(agentConfig)
+
+		// Need temporary unlock to wait on PC? No, PC is async.
+		// WaitAndGetFinalCodecParams might block, but we need meaningful codec params.
+		// However, all subscribers are added to the SAME track, so the codec is negotiated once?
+		// Actually, Pion's LocalTrack handles multiple encodings if configured, or just one.
+		// We assume all browsers support H.264/H.265.
+
+		broadcaster.Lock.RLock()
+		sub := broadcaster.Subscribers[receiptNo]
+		// In case subscriber disconnected while waiting for lock?
+		if sub == nil {
+			broadcaster.Lock.RUnlock()
+			manager.Unlock()
+			return fmt.Errorf("subscriber disconnected before agent init")
+		}
+		pc := sub.PeerConnection
+		broadcaster.Lock.RUnlock()
+
+		manager.Unlock()
+
+		finalCodec, err := WaitAndGetFinalCodecParams(pc)
 		if err != nil {
 			log.Printf("Failed to get final codec parameters for device %s: %v", deviceIdentifier, err)
 			return err
 		}
-		manager.agents[deviceIdentifier] = agent
 
+		// Re-lock to set Agent
+		manager.Lock()
+		// Double check if agent was created by another thread
+		if broadcaster.Agent != nil {
+			manager.Unlock()
+			return nil
+		}
+
+		broadcaster.Agent = agent
 		agent.InitDriver(finalCodec)
 		agent.Start()
-		manager.startBroadcastAVToSubscribers(deviceIdentifier)
-		manager.startBroadcastEventToSubscribers(deviceIdentifier)
+
+		// START THE SHARED BROADCAST LOOP
+		// Video Loop
+		go func() {
+			for videoSample := range agent.VideoStream() {
+				if err := broadcaster.VideoTrack.WriteSample(videoSample); err != nil {
+					// log.Printf("Error writing video to track: %v", err)
+				}
+			}
+		}()
+		// Audio Loop
+		go func() {
+			for audioSample := range agent.AudioStream() {
+				if err := broadcaster.AudioTrack.WriteSample(audioSample); err != nil {
+					// log.Printf("Error writing audio to track: %v", err)
+				}
+			}
+		}()
+
+		// Event Loop (Agent -> Browser)
+		go func() {
+			for event := range agent.FeedbackEvents() {
+				broadcaster.Lock.RLock()
+				for _, sub := range broadcaster.Subscribers {
+					if sub.dataChannelUnordered != nil {
+						// Send directly
+						sub.dataChannelUnordered.Send(event)
+					}
+				}
+				broadcaster.Lock.RUnlock()
+			}
+		}()
+
+		broadcaster.Agent = agent
 	}
+	manager.Unlock()
 
 	return nil
 }
@@ -235,14 +328,23 @@ func (manager *WebRTCManager) ensureAgent(deviceIdentifier string, receiptNo uin
 func (manager *WebRTCManager) GetAgent(deviceIdentifier string) (*sagent.Agent, bool) {
 	manager.RLock()
 	defer manager.RUnlock()
-	agent, exists := manager.agents[deviceIdentifier]
-	return agent, exists
+	b, exists := manager.broadcasters[deviceIdentifier]
+	if !exists || b.Agent == nil {
+		return nil, false
+	}
+	return b.Agent, true
 }
 
 func (manager *WebRTCManager) getSubscriber(deviceIdentifier string, receiptNo uint32) (*Subscriber, bool) {
 	manager.RLock()
 	defer manager.RUnlock()
-	sub, exists := manager.subscribers[deviceIdentifier][receiptNo]
+	b, exists := manager.broadcasters[deviceIdentifier]
+	if !exists {
+		return nil, false
+	}
+	b.Lock.RLock()
+	defer b.Lock.RUnlock()
+	sub, exists := b.Subscribers[receiptNo]
 	return sub, exists
 }
 
@@ -507,33 +609,43 @@ func (sub *Subscriber) setDataChannel() {
 		switch d.Label() {
 		case "control-ordered":
 			sub.dataChannelOrdered = d
+			d.OnMessage(func(msg webrtc.DataChannelMessage) {
+				if sub.onMessageCallback != nil {
+					if err := sub.onMessageCallback(msg.Data); err != nil {
+						log.Printf("Error handling ordered data channel message: %v", err)
+					}
+				}
+			})
 		case "control-unordered":
 			sub.dataChannelUnordered = d
+			d.OnMessage(func(msg webrtc.DataChannelMessage) {
+				if sub.onMessageCallback != nil {
+					if err := sub.onMessageCallback(msg.Data); err != nil {
+						log.Printf("Error handling unordered data channel message: %v", err)
+					}
+				}
+			})
 		default:
+			log.Printf("Unknown DataChannel label: %s\n", d.Label())
 			d.OnMessage(func(msg webrtc.DataChannelMessage) {
 				log.Printf("DataChannel '%s'-'%d' message: %s\n", d.Label(), d.ID(), string(msg.Data))
 			})
-			log.Printf("Unknown DataChannel label: %s\n", d.Label())
 		}
-		// sub.dataChannelReady = true
 	})
-
 }
 
 func (sub *Subscriber) setDataChannelCallback(callback func([]byte) error) {
-	sub.dataChannelOrdered.OnMessage(func(msg webrtc.DataChannelMessage) {
-		// log.Printf("DataChannel '%s'-'%d' message: %s\n", sub.dataChannelOrdered.Label(), sub.dataChannelOrdered.ID(), string(msg.Data))
-		if err := callback(msg.Data); err != nil {
-			log.Printf("Error handling data channel message: %v", err)
-		}
-	})
-	sub.dataChannelUnordered.OnMessage(func(msg webrtc.DataChannelMessage) {
-		// log.Printf("DataChannel '%s'-'%d' message: %s\n", sub.dataChannelUnordered.Label(), sub.dataChannelUnordered.ID(), string(msg.Data))
-		if err := callback(msg.Data); err != nil {
-			log.Printf("Error handling data channel message: %v", err)
-		}
-	})
+	sub.onMessageCallback = callback
 
+	// If channels are already open, attach handlers now?
+	// Since we set OnMessage in setDataChannel (which sets up the OnDataChannel handler),
+	// we just need to update the callback reference, which is what we did above.
+	// However, if the channel was ALREADY opened (before setDataChannel ran?? unlikely),
+	// or if we want to ensure any buffered logic...
+
+	// Actually, the closure in setDataChannel captures `sub`.
+	// So `sub.onMessageCallback` will be read dynamically.
+	// No further action needed here unless we want to support changing callbacks on existing open channels that somehow missed the initial setup (which shouldn't happen).
 }
 
 func (manager *WebRTCManager) setCleanup(pc *webrtc.PeerConnection, deviceIdentifier string, receiptNo uint32) {
@@ -543,12 +655,21 @@ func (manager *WebRTCManager) setCleanup(pc *webrtc.PeerConnection, deviceIdenti
 			log.Printf("PeerConnection is in state %s, cleaning up resources\n", state.String())
 			pc.Close()
 			manager.Lock()
-			delete(manager.subscribers[deviceIdentifier], receiptNo)
-			if len(manager.subscribers[deviceIdentifier]) == 0 {
-				manager.agents[deviceIdentifier].Close()
-				delete(manager.agents, deviceIdentifier)
-				delete(manager.subscribers, deviceIdentifier)
-				delete(manager.currentReceiptNumber, deviceIdentifier)
+			broadcaster, exists := manager.broadcasters[deviceIdentifier]
+			if exists {
+				broadcaster.Lock.Lock()
+				delete(broadcaster.Subscribers, receiptNo)
+				subCount := len(broadcaster.Subscribers)
+				broadcaster.Lock.Unlock()
+
+				if subCount == 0 {
+					log.Printf("No more subscribers for device %s, closing agent", deviceIdentifier)
+					if broadcaster.Agent != nil {
+						broadcaster.Agent.Close()
+					}
+					delete(manager.broadcasters, deviceIdentifier)
+					delete(manager.currentReceiptNumber, deviceIdentifier)
+				}
 			}
 			manager.Unlock()
 		}
@@ -580,98 +701,23 @@ func ListenRTPVideo(rtpSender *webrtc.RTPSender, agent *sagent.Agent) {
 func ListenRTPAudio(rtpSender *webrtc.RTPSender, agent *sagent.Agent) {
 	rtcpBuf := make([]byte, 1500)
 	for {
-		n, _, err := rtpSender.Read(rtcpBuf)
+		_, _, err := rtpSender.Read(rtcpBuf)
 		if err != nil {
 			log.Printf("Error reading RTCP: %v", err)
 			return
 		}
-		packets, err := rtcp.Unmarshal(rtcpBuf[:n])
-		if err != nil {
-			continue
-		}
-		for _, p := range packets {
-			log.Printf("Received RTCP packet on audio track: %T\n", p)
-			// 目前不处理音频相关的 RTCP 包
-		}
+		// packets, err := rtcp.Unmarshal(rtcpBuf[:n])
+		// if err != nil {
+		// 	continue
+		// }
+		// for _, p := range packets {
+		// 	log.Printf("Received RTCP packet on audio track: %T\n", p)
+		// 	// 目前不处理音频相关的 RTCP 包
+		// }
 	}
 }
 
-func (manager *WebRTCManager) startBroadcastAVToSubscribers(deviceIdentifier string) {
-	agent := manager.agents[deviceIdentifier]
-	go func() {
-		for videoSample := range agent.VideoStream() {
-			manager.RLock()
-			for _, sub := range manager.subscribers[deviceIdentifier] {
-				select {
-				case sub.videoChan <- videoSample:
-				default:
-					log.Printf("Dropping video sample for subscriber (device %s) due to full channel buffer", deviceIdentifier)
-				}
-			}
-			manager.RUnlock()
-		}
-	}()
-	go func() {
-		for audioSample := range agent.AudioStream() {
-			manager.RLock()
-			for _, sub := range manager.subscribers[deviceIdentifier] {
-				select {
-				case sub.audioChan <- audioSample:
-				default:
-					// log.Printf("Dropping audio sample for subscriber (device %s) due to full channel buffer", deviceIdentifier)
-				}
-			}
-			manager.RUnlock()
-		}
-	}()
-}
-
-func (sub *Subscriber) startPushAVSample() {
-	go func() {
-		for videoSample := range sub.videoChan {
-			if sub.videoTrack != nil {
-				if err := sub.videoTrack.WriteSample(videoSample); err != nil {
-					log.Printf("Error writing video sample to track: %v", err)
-				}
-			}
-		}
-	}()
-	go func() {
-		for audioSample := range sub.audioChan {
-			if sub.audioTrack != nil {
-				if err := sub.audioTrack.WriteSample(audioSample); err != nil {
-					log.Printf("Error writing audio sample to track: %v", err)
-				}
-			}
-		}
-	}()
-}
-
-func (manager *WebRTCManager) startBroadcastEventToSubscribers(deviceIdentifier string) {
-	go func() {
-		for event := range manager.agents[deviceIdentifier].FeedbackEvents() {
-			manager.RLock()
-			for _, sub := range manager.subscribers[deviceIdentifier] {
-				select {
-				case sub.eventChan <- event:
-				default:
-					log.Printf("Dropping event for subscriber (device %s) due to full channel buffer", deviceIdentifier)
-				}
-			}
-			manager.RUnlock()
-		}
-	}()
-}
-
-func (sub *Subscriber) startPushEvent() {
-	go func() {
-		for event := range sub.eventChan {
-			if sub.dataChannelOrdered != nil {
-				err := sub.dataChannelUnordered.Send(event)
-				if err != nil {
-					log.Printf("Error sending event on unordered data channel: %v", err)
-				}
-			}
-		}
-	}()
-}
+const (
+	// Default STUN server
+	STUN_SERVER = "stun:stun.l.google.com:19302"
+)
