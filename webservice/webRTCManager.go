@@ -1,12 +1,17 @@
 package webservice
 
 import (
+	"fmt"
 	"log"
 	"sync"
+	"time"
+	sagent "webscreen/streamAgent"
 
 	"github.com/pion/interceptor"
+	"github.com/pion/rtcp"
 	pionSDP "github.com/pion/sdp/v3"
 	"github.com/pion/webrtc/v4"
+	"github.com/pion/webrtc/v4/pkg/media"
 )
 
 const (
@@ -23,56 +28,73 @@ const (
 	MAX_CLIENTS_PER_DEVICE = 4
 )
 
+type Subscriber struct {
+	PeerConnection       *webrtc.PeerConnection
+	dataChannelUnordered *webrtc.DataChannel
+	dataChannelOrdered   *webrtc.DataChannel
+	dataChannelReady     bool
+	rtpSenderVideo       *webrtc.RTPSender
+	rtpSenderAudio       *webrtc.RTPSender
+	videoTrack           *webrtc.TrackLocalStaticSample
+	audioTrack           *webrtc.TrackLocalStaticSample
+	videoChan            chan media.Sample
+	audioChan            chan media.Sample
+	eventChan            chan []byte // sdriver -> Agent -> WebMaster -> 前端
+}
+
 type WebRTCManager struct {
 	sync.RWMutex
-	PeerConnections map[string]map[uint32]*webrtc.PeerConnection
+	subscribers map[string]map[uint32]*Subscriber // deviceIdentifier -> ReceiptNo -> Subscriber
+	agents      map[string]*sagent.Agent
 
-	VideoTracks map[string]map[uint32]*webrtc.TrackLocalStaticSample
-	AudioTracks map[string]map[uint32]*webrtc.TrackLocalStaticSample
-
-	currentReceiptNumber uint32
+	currentReceiptNumber map[string]uint32
 }
 
 func NewWebRTCManager() *WebRTCManager {
-	return &WebRTCManager{
-		PeerConnections:      make(map[string]map[uint32]*webrtc.PeerConnection),
-		VideoTracks:          make(map[string]map[uint32]*webrtc.TrackLocalStaticSample),
-		AudioTracks:          make(map[string]map[uint32]*webrtc.TrackLocalStaticSample),
-		currentReceiptNumber: 0,
+	wm := &WebRTCManager{
+		subscribers:          make(map[string]map[uint32]*Subscriber),
+		agents:               make(map[string]*sagent.Agent),
+		currentReceiptNumber: make(map[string]uint32),
 	}
-}
-
-// 0 -> 1 -> 2 -> 3 -> 0
-func (manager *WebRTCManager) AfterReceiptFinished() {
-	manager.currentReceiptNumber++
-	manager.currentReceiptNumber = manager.currentReceiptNumber % MAX_CLIENTS_PER_DEVICE
+	go func() {
+		for {
+			time.Sleep(30 * time.Second)
+			log.Printf("WebRTCManager status: %d devices, %d agents\n", len(wm.subscribers), len(wm.agents))
+			for deviceID, subs := range wm.subscribers {
+				log.Printf("Device %s has %d subscribers\n", deviceID, len(subs))
+				for receiptNo, sub := range subs {
+					log.Printf("Device %s, ReceiptNo %d, Subscriber: %+v\n", deviceID, receiptNo, sub)
+					if sub.PeerConnection.ConnectionState() == webrtc.PeerConnectionStateFailed {
+						log.Printf("Removing failed subscriber for device %s, receiptNo %d", deviceID, receiptNo)
+						wm.Lock()
+						delete(wm.subscribers[deviceID], receiptNo)
+						wm.Unlock()
+					}
+				}
+			}
+		}
+	}()
+	return wm
 }
 
 // 接受设备标识号，客户端的 SDP Offer，返回最终的 SDP Answer，以及对应Connection的ReceiptNo，对应数组中的位置（因为可能有多个浏览器连接同一个设备）。如果发生错误，返回错误信息。
-func (manager *WebRTCManager) HandleNewConnection(DeviceIdentifier string, clientSDP string) (string, uint32, error) {
+// 不添加 Track
+func (manager *WebRTCManager) NewSubscriber(deviceIdentifier string, clientSDP string, AgentConfig sagent.AgentConfig) (string, uint32, error) {
 	offer := webrtc.SessionDescription{
 		Type: webrtc.SDPTypeOffer,
 		SDP:  clientSDP,
 	}
 	// log.Println("Handling SDP Offer", sdp)
+	videoMimeType, audioMimeType := getMimeTypeFromConfig(AgentConfig)
 	// Create MediaEngine
-	mimeTypes := []string{}
-	if manager.VideoTracks[DeviceIdentifier] != nil {
-		for _, track := range manager.VideoTracks[DeviceIdentifier] {
-			mimeTypes = append(mimeTypes, track.Codec().MimeType)
-		}
-	}
-	if manager.AudioTracks[DeviceIdentifier] != nil {
-		for _, track := range manager.AudioTracks[DeviceIdentifier] {
-			mimeTypes = append(mimeTypes, track.Codec().MimeType)
-		}
-	}
+	mimeTypes := []string{videoMimeType, audioMimeType}
 	m := createMediaEngine(mimeTypes)
 	if err := m.RegisterHeaderExtension(
 		webrtc.RTPHeaderExtensionCapability{URI: pionSDP.TransportCCURI},
 		webrtc.RTPCodecTypeVideo,
 	); err != nil {
-		panic(err)
+		log.Printf("RegisterHeaderExtension failed: %v", err)
+		return "", 0, err
 	}
 	// if err := m.RegisterHeaderExtension(
 	// 	webrtc.RTPHeaderExtensionCapability{URI: "http://www.webrtc.org/experiments/rtp-hdrext/playout-delay"},
@@ -82,7 +104,8 @@ func (manager *WebRTCManager) HandleNewConnection(DeviceIdentifier string, clien
 	// }
 	i := &interceptor.Registry{}
 	if err := webrtc.RegisterDefaultInterceptors(m, i); err != nil {
-		panic(err)
+		log.Printf("RegisterDefaultInterceptors failed: %v", err)
+		return "", 0, err
 	}
 	api := webrtc.NewAPI(webrtc.WithMediaEngine(m), webrtc.WithInterceptorRegistry(i))
 	// Configure ICE servers (STUN) for NAT traversal
@@ -97,37 +120,21 @@ func (manager *WebRTCManager) HandleNewConnection(DeviceIdentifier string, clien
 		log.Println("Create PeerConnection failed:", err)
 		return "", 0, err
 	}
-
-	// Add Tracks
-	if manager.VideoTracks[DeviceIdentifier] != nil {
-		_, err = peerConnection.AddTrack(manager.VideoTracks[DeviceIdentifier][0])
-		if err != nil {
-			log.Println("add Track failed:", err)
-		}
+	videoTrack, audioTrack := createAVTrack(videoMimeType, audioMimeType, AgentConfig)
+	if videoTrack == nil && audioTrack == nil {
+		log.Printf("Failed to create both video and audio tracks")
+		return "", 0, fmt.Errorf("failed to create media tracks")
 	}
-	if manager.AudioTracks[DeviceIdentifier] != nil {
-		_, err = peerConnection.AddTrack(manager.AudioTracks[DeviceIdentifier][0])
-		if err != nil {
-			log.Println("add Audio Track failed:", err)
-		}
+	rtpSenderVideo, err := peerConnection.AddTrack(videoTrack)
+	if err != nil {
+		log.Printf("Failed to add video track: %v", err)
+		return "", 0, err
 	}
-
-	// peerConnection.OnDataChannel(func(d *webrtc.DataChannel) {
-	// 	log.Printf("Have DataChannel: Label '%s', ID: %d\n", d.Label(), d.ID())
-	// 	switch d.Label() {
-	// 	case "control-ordered", "control-unordered":
-	// 		d.OnMessage(func(msg webrtc.DataChannelMessage) {
-	// 			// log.Printf("DataChannel '%s'-'%d' message: %s\n", d.Label(), d.ID(), string(msg.Data))
-	// 			sa.SendEvent(msg.Data)
-	// 		})
-	// 	default:
-	// 		// d.OnMessage(func(msg webrtc.DataChannelMessage) {
-	// 		// 	log.Printf("DataChannel '%s'-'%d' message: %s\n", d.Label(), d.ID(), string(msg.Data))
-	// 		// 	// sa.SendEvent(msg.Data)
-	// 		// })
-	// 		log.Printf("Unknown DataChannel label: %s\n", d.Label())
-	// 	}
-	// })
+	rtpSenderAudio, err := peerConnection.AddTrack(audioTrack)
+	if err != nil {
+		log.Printf("Failed to add audio track: %v", err)
+		return "", 0, err
+	}
 
 	// Set Remote Description (Offer from browser)
 	if err := peerConnection.SetRemoteDescription(offer); err != nil {
@@ -142,32 +149,6 @@ func (manager *WebRTCManager) HandleNewConnection(DeviceIdentifier string, clien
 		return "", 0, err
 	}
 
-	negotiatedCodecLevel := make(chan webrtc.RTPCodecParameters, 1)
-	peerConnection.OnConnectionStateChange(func(s webrtc.PeerConnectionState) {
-		log.Printf("webrtc Connection State: %s", s)
-		if s == webrtc.PeerConnectionStateFailed || s == webrtc.PeerConnectionStateClosed {
-			// Do some cleanup, like removing references
-			peerConnection.Close()
-
-		}
-		if s == webrtc.PeerConnectionStateConnected {
-			for _, sender := range peerConnection.GetSenders() {
-				if sender.Track() == nil {
-					continue
-				}
-				if sender.Track().Kind() != webrtc.RTPCodecTypeVideo {
-					continue
-				}
-				params := sender.GetParameters()
-				selectedCodec := params.Codecs[0] // 通常只有一个活跃的 codec
-				log.Printf("Negotiation result: %v", selectedCodec)
-				// 根据 PayloadType 决定 scrcpy 参数
-				negotiatedCodecLevel <- selectedCodec
-				break
-			}
-		}
-	})
-
 	// 设置 Local Description 并等待 ICE 收集完成
 	// 这一步是为了生成一个包含所有网络路径信息的完整 SDP，
 	// 这样我们就不需要写复杂的 Trickle ICE 逻辑了。
@@ -181,14 +162,81 @@ func (manager *WebRTCManager) HandleNewConnection(DeviceIdentifier string, clien
 	// 阻塞等待 ICE 收集完成 (通常几百毫秒)
 	<-gatherComplete
 	finalSDP := peerConnection.LocalDescription().SDP
-	receiptNo := manager.currentReceiptNumber
 	manager.Lock()
-	manager.PeerConnections[DeviceIdentifier][receiptNo] = peerConnection
-	manager.VideoTracks[DeviceIdentifier][receiptNo] = nil // 占位，实际 Track 由 Agent 创建后替换
-	manager.AudioTracks[DeviceIdentifier][receiptNo] = nil // 占位，实际 Track 由 Agent 创建后替换
+	receiptNo := manager.currentReceiptNumber[deviceIdentifier]
+	if manager.subscribers[deviceIdentifier] == nil {
+		manager.subscribers[deviceIdentifier] = make(map[uint32]*Subscriber)
+	}
+	if manager.subscribers[deviceIdentifier][receiptNo] != nil {
+		log.Printf("Warning: Overwriting existing subscriber for device %s, receiptNo %d", deviceIdentifier, receiptNo)
+		manager.subscribers[deviceIdentifier][receiptNo].PeerConnection.Close()
+	}
+	sub := &Subscriber{
+		PeerConnection:   peerConnection,
+		dataChannelReady: false,
+		rtpSenderVideo:   rtpSenderVideo,
+		rtpSenderAudio:   rtpSenderAudio,
+		videoTrack:       videoTrack,
+		audioTrack:       audioTrack,
+		videoChan:        make(chan media.Sample, 30),
+		audioChan:        make(chan media.Sample, 30),
+		eventChan:        make(chan []byte, 30),
+	}
+	manager.subscribers[deviceIdentifier][receiptNo] = sub
+	manager.currentReceiptNumber[deviceIdentifier] = (manager.currentReceiptNumber[deviceIdentifier] + 1) % MAX_CLIENTS_PER_DEVICE
 	manager.Unlock()
-	defer manager.AfterReceiptFinished()
+
+	sub.setDataChannel()
+
 	return finalSDP, receiptNo, nil
+}
+
+func (manager *WebRTCManager) Start(deviceIdentifier string, receiptNo uint32, agentConfig sagent.AgentConfig) error {
+	err := manager.ensureAgent(deviceIdentifier, receiptNo, agentConfig)
+	if err != nil {
+		log.Printf("Failed to ensure agent for device %s: %v", deviceIdentifier, err)
+		return err
+	}
+	agent := manager.agents[deviceIdentifier]
+	sub := manager.subscribers[deviceIdentifier][receiptNo]
+	go ListenRTPVideo(sub.rtpSenderVideo, manager.agents[deviceIdentifier])
+	go ListenRTPAudio(sub.rtpSenderAudio, manager.agents[deviceIdentifier])
+	manager.setCleanup(sub.PeerConnection, deviceIdentifier, receiptNo)
+
+	// log.Println("Sub: ", sub)
+	sub.setDataChannelCallback(agent.SendEvent)
+	sub.startPushAVSample()
+	sub.startPushEvent()
+	return nil
+}
+
+func (manager *WebRTCManager) ensureAgent(deviceIdentifier string, receiptNo uint32, agentConfig sagent.AgentConfig) error {
+	manager.Lock()
+	defer manager.Unlock()
+	agent, exists := manager.agents[deviceIdentifier]
+	if !exists {
+		agent = sagent.New(agentConfig)
+		finalCodec, err := WaitAndGetFinalCodecParams(manager.subscribers[deviceIdentifier][receiptNo].PeerConnection)
+		if err != nil {
+			log.Printf("Failed to get final codec parameters for device %s: %v", deviceIdentifier, err)
+			return err
+		}
+		manager.agents[deviceIdentifier] = agent
+
+		agent.InitDriver(finalCodec)
+		agent.Start()
+		manager.startBroadcastAVToSubscribers(deviceIdentifier)
+		manager.startBroadcastEventToSubscribers(deviceIdentifier)
+	}
+
+	return nil
+}
+
+func (manager *WebRTCManager) GetAgent(deviceIdentifier string) (*sagent.Agent, bool) {
+	manager.RLock()
+	defer manager.RUnlock()
+	agent, exists := manager.agents[deviceIdentifier]
+	return agent, exists
 }
 
 func createMediaEngine(mimeTypes []string) *webrtc.MediaEngine {
@@ -367,4 +415,264 @@ func batchRegisterCodecH265(m *webrtc.MediaEngine) {
 		log.Println("RegisterCodec H265 failed:", err)
 	}
 	log.Println("Registered H265 codec")
+}
+
+func WaitAndGetFinalCodecParams(pc *webrtc.PeerConnection) (webrtc.RTPCodecParameters, error) {
+	// startTime := time.Now()
+	for {
+		if pc.ConnectionState() == webrtc.PeerConnectionStateFailed {
+			return webrtc.RTPCodecParameters{}, fmt.Errorf("peer connection failed")
+		}
+		if pc.ConnectionState() == webrtc.PeerConnectionStateClosed {
+			return webrtc.RTPCodecParameters{}, fmt.Errorf("peer connection closed")
+		}
+		if pc.ConnectionState() == webrtc.PeerConnectionStateConnected {
+			for _, sender := range pc.GetSenders() {
+				if sender.Track() == nil {
+					continue
+				}
+				if sender.Track().Kind() != webrtc.RTPCodecTypeVideo {
+					continue
+				}
+				params := sender.GetParameters()
+				selectedCodec := params.Codecs[0] // 通常只有一个活跃的 codec
+				// log.Printf("Negotiation result: %v", selectedCodec)
+				// 根据 PayloadType 决定 scrcpy 参数
+				return selectedCodec, nil
+			}
+		}
+		// if time.Since(startTime) > 10*time.Second {
+		// 	return webrtc.RTPCodecParameters{}, fmt.Errorf("timeout waiting for final codec parameters")
+		// }
+		time.Sleep(500 * time.Millisecond)
+	}
+}
+
+func getMimeTypeFromConfig(config sagent.AgentConfig) (string, string) {
+	var videoMimeType, audioMimeType string
+	switch config.DriverConfig["video_codec"] {
+	case "h264":
+		videoMimeType = webrtc.MimeTypeH264
+	case "h265":
+		videoMimeType = webrtc.MimeTypeH265
+	case "av1":
+		videoMimeType = webrtc.MimeTypeAV1
+	default:
+		log.Printf("Unsupported video codec: %s", config.DriverConfig["video_codec"])
+	}
+	switch config.DriverConfig["audio_codec"] {
+	case "opus":
+		audioMimeType = webrtc.MimeTypeOpus
+	default:
+		log.Printf("Unsupported audio codec: %s", config.DriverConfig["audio_codec"])
+		audioMimeType = webrtc.MimeTypeOpus
+	}
+	log.Printf("Creating tracks with MIME types - Video: %s, Audio: %s", videoMimeType, audioMimeType)
+	return videoMimeType, audioMimeType
+}
+
+func createAVTrack(videoMimeType, audioMimeType string, config sagent.AgentConfig) (*webrtc.TrackLocalStaticSample, *webrtc.TrackLocalStaticSample) {
+	trackID := fmt.Sprintf("%s-%s", "webscreen-track", randomString(8))
+	trackIDVideo := trackID + "-" + config.DeviceID + "-video"
+	trackIDAudio := trackID + "-" + config.DeviceID + "-audio"
+	streamID := fmt.Sprintf("%s-%s", "webscreen-stream", randomString(8))
+	streamIDVideo := streamID + "-" + config.DeviceID + "-video"
+	streamIDAudio := streamID + "-" + config.DeviceID + "-audio"
+	if !config.AVSync {
+		streamIDVideo = streamID + "-" + config.DeviceID
+		streamIDAudio = streamID + "-" + config.DeviceID
+	}
+
+	trackVideo, err := webrtc.NewTrackLocalStaticSample(webrtc.RTPCodecCapability{MimeType: videoMimeType}, trackIDVideo, streamIDVideo)
+	if err != nil {
+		log.Printf("Failed to create track for MIME type %s: %v", videoMimeType, err)
+	}
+	trackAudio, err := webrtc.NewTrackLocalStaticSample(webrtc.RTPCodecCapability{MimeType: audioMimeType}, trackIDAudio, streamIDAudio)
+	if err != nil {
+		log.Printf("Failed to create audio track for MIME type %s: %v", audioMimeType, err)
+	}
+	return trackVideo, trackAudio
+}
+
+func (sub *Subscriber) setDataChannel() {
+	sub.PeerConnection.OnDataChannel(func(d *webrtc.DataChannel) {
+		log.Printf("Have DataChannel: Label '%s', ID: %d\n", d.Label(), d.ID())
+		switch d.Label() {
+		case "control-ordered":
+			sub.dataChannelOrdered = d
+		case "control-unordered":
+			sub.dataChannelUnordered = d
+		default:
+			d.OnMessage(func(msg webrtc.DataChannelMessage) {
+				log.Printf("DataChannel '%s'-'%d' message: %s\n", d.Label(), d.ID(), string(msg.Data))
+			})
+			log.Printf("Unknown DataChannel label: %s\n", d.Label())
+		}
+		sub.dataChannelReady = true
+	})
+
+}
+
+func (sub *Subscriber) setDataChannelCallback(callback func([]byte) error) {
+	go func() {
+		for {
+			if sub.dataChannelReady {
+				sub.dataChannelOrdered.OnMessage(func(msg webrtc.DataChannelMessage) {
+					// log.Printf("DataChannel '%s'-'%d' message: %s\n", sub.dataChannelOrdered.Label(), sub.dataChannelOrdered.ID(), string(msg.Data))
+					if err := callback(msg.Data); err != nil {
+						log.Printf("Error handling data channel message: %v", err)
+					}
+				})
+				sub.dataChannelUnordered.OnMessage(func(msg webrtc.DataChannelMessage) {
+					// log.Printf("DataChannel '%s'-'%d' message: %s\n", sub.dataChannelUnordered.Label(), sub.dataChannelUnordered.ID(), string(msg.Data))
+					if err := callback(msg.Data); err != nil {
+						log.Printf("Error handling data channel message: %v", err)
+					}
+				})
+				return
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+	}()
+
+}
+
+func (manager *WebRTCManager) setCleanup(pc *webrtc.PeerConnection, deviceIdentifier string, receiptNo uint32) {
+	pc.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
+		log.Printf("PeerConnection state changed: %s\n", state.String())
+		if state == webrtc.PeerConnectionStateFailed || state == webrtc.PeerConnectionStateClosed {
+			log.Printf("PeerConnection is in state %s, cleaning up resources\n", state.String())
+			pc.Close()
+			manager.Lock()
+			delete(manager.subscribers[deviceIdentifier], receiptNo)
+			if len(manager.subscribers[deviceIdentifier]) == 0 {
+				manager.agents[deviceIdentifier].Close()
+				delete(manager.agents, deviceIdentifier)
+				delete(manager.subscribers, deviceIdentifier)
+				delete(manager.currentReceiptNumber, deviceIdentifier)
+			}
+			manager.Unlock()
+		}
+	})
+}
+
+func ListenRTPVideo(rtpSender *webrtc.RTPSender, agent *sagent.Agent) {
+	rtcpBuf := make([]byte, 1500)
+	for {
+		n, _, err := rtpSender.Read(rtcpBuf)
+		if err != nil {
+			log.Printf("Error reading RTCP: %v", err)
+			return
+		}
+		packets, err := rtcp.Unmarshal(rtcpBuf[:n])
+		if err != nil {
+			continue
+		}
+		for _, p := range packets {
+			switch p.(type) {
+			case *rtcp.PictureLossIndication:
+				log.Println("IDR requested via RTCP PLI")
+				agent.PLIRequest()
+			}
+		}
+	}
+}
+
+func ListenRTPAudio(rtpSender *webrtc.RTPSender, agent *sagent.Agent) {
+	rtcpBuf := make([]byte, 1500)
+	for {
+		n, _, err := rtpSender.Read(rtcpBuf)
+		if err != nil {
+			log.Printf("Error reading RTCP: %v", err)
+			return
+		}
+		packets, err := rtcp.Unmarshal(rtcpBuf[:n])
+		if err != nil {
+			continue
+		}
+		for _, p := range packets {
+			log.Printf("Received RTCP packet on audio track: %T\n", p)
+			// 目前不处理音频相关的 RTCP 包
+		}
+	}
+}
+
+func (manager *WebRTCManager) startBroadcastAVToSubscribers(deviceIdentifier string) {
+	agent := manager.agents[deviceIdentifier]
+	go func() {
+		for videoSample := range agent.VideoStream() {
+			manager.RLock()
+			for _, sub := range manager.subscribers[deviceIdentifier] {
+				select {
+				case sub.videoChan <- videoSample:
+				default:
+					log.Printf("Dropping video sample for subscriber (device %s) due to full channel buffer", deviceIdentifier)
+				}
+			}
+			manager.RUnlock()
+		}
+	}()
+	go func() {
+		for audioSample := range agent.AudioStream() {
+			manager.RLock()
+			for _, sub := range manager.subscribers[deviceIdentifier] {
+				select {
+				case sub.audioChan <- audioSample:
+				default:
+					// log.Printf("Dropping audio sample for subscriber (device %s) due to full channel buffer", deviceIdentifier)
+				}
+			}
+			manager.RUnlock()
+		}
+	}()
+}
+
+func (sub *Subscriber) startPushAVSample() {
+	go func() {
+		for videoSample := range sub.videoChan {
+			if sub.videoTrack != nil {
+				if err := sub.videoTrack.WriteSample(videoSample); err != nil {
+					log.Printf("Error writing video sample to track: %v", err)
+				}
+			}
+		}
+	}()
+	go func() {
+		for audioSample := range sub.audioChan {
+			if sub.audioTrack != nil {
+				if err := sub.audioTrack.WriteSample(audioSample); err != nil {
+					log.Printf("Error writing audio sample to track: %v", err)
+				}
+			}
+		}
+	}()
+}
+
+func (manager *WebRTCManager) startBroadcastEventToSubscribers(deviceIdentifier string) {
+	go func() {
+		for event := range manager.agents[deviceIdentifier].FeedbackEvents() {
+			manager.RLock()
+			for _, sub := range manager.subscribers[deviceIdentifier] {
+				select {
+				case sub.eventChan <- event:
+				default:
+					log.Printf("Dropping event for subscriber (device %s) due to full channel buffer", deviceIdentifier)
+				}
+			}
+			manager.RUnlock()
+		}
+	}()
+}
+
+func (sub *Subscriber) startPushEvent() {
+	go func() {
+		for event := range sub.eventChan {
+			if sub.dataChannelOrdered != nil {
+				err := sub.dataChannelUnordered.Send(event)
+				if err != nil {
+					log.Printf("Error sending event on unordered data channel: %v", err)
+				}
+			}
+		}
+	}()
 }

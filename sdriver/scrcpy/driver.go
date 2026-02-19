@@ -138,7 +138,7 @@ func New(config map[string]string) (*ScrcpyDriver, error) {
 	if err != nil {
 		video_bit_rate = 8000000
 	}
-	codecConfigStr := config["webrtc_codec"]
+	codecConfigStr := config["webrtc_codec_level"]
 	if codecConfigStr != "" {
 		parts := strings.Split(codecConfigStr, "||")
 		mimeType := parts[1]
