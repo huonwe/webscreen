@@ -70,13 +70,17 @@ wget https://raw.githubusercontent.com/huonwe/webscreen/refs/heads/main/docker-c
 docker compose up -d
 ```
 
-`host` network mode is recommended because of UDP traffic.
+`host` network mode is recommended because of UDP traffic and device connection.
 
 You might need to pair Android device first. `Pair device with pairing code` is supported. Once you finished pairing, type `Connect` button and enter necessary information.
 
 After you start streaming, you might need to manually make the scene a little changed, to get the screen. You can simply click volume button to make it.
 
 Please notice that the ports in `pair` and `connect` are different. [See details here](https://developer.android.com/studio/debug/dev-options#enable)
+
+### Others
+
+[Quick Start with Redroid](https://github.com/huonwe/webscreen/blob/main/doc/quick-start-redroid.md)
 
 ## Known Issues
 
