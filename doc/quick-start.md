@@ -2,22 +2,6 @@
 
 This guide helps you set up **WebScreen** alongside **Redroid** (Remote Android) using `docker-compose`. This allows you to run a virtual Android instance and control it via your browser without needing a physical device.
 
-## Prerequisites
-
-1.  **Docker** and **Docker Compose** installed.
-2.  **Linux Kernel Modules** (Required for Redroid):
-    Redroid container requires `binder_linux` and `ashmem_linux` kernel modules.
-    
-    On most Linux distributions (e.g., Ubuntu):
-    ```bash
-    # Install required modules
-    sudo apt install linux-modules-extra-$(uname -r)
-    
-    # Load the modules
-    sudo modprobe binder_linux devices="binder,hwbinder,vndbinder"
-    sudo modprobe ashmem_linux
-    ```
-
 ## Docker Compose Configuration
 
 Create a file named `docker-compose.yml` with the following content:
@@ -58,7 +42,7 @@ services:
         ./webscreen -port 8079 -pin 123456
 
   redroid:
-    image: redroid/redroid:11.0.0-latest
+    image: redroid/redroid:16.0.0-latest
     container_name: redroid
     privileged: true
     restart: unless-stopped
