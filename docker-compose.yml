@@ -3,10 +3,12 @@ services:
     build: .
     image: dukihiroi/webscreen:latest
     container_name: webscreen
-    network_mode: bridge
-    ports:
-      - "8079:8079"
-      - "51200-51299:51200-51299/udp"
+    network_mode: host
+    # If you want to use bridge network:
+    # You need to ensure that your device is accessible from the container
+    # ports:
+    #   - "8079:8079"
+    #   - "51200-51299:51200-51299/udp"
     restart: unless-stopped
     volumes:
       - /dev/bus/usb:/dev/bus/usb
