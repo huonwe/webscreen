@@ -12,10 +12,11 @@ services:
     image: dukihiroi/webscreen:latest
     container_name: webscreen
     restart: unless-stopped
-    ports:
-      - "8079:8079"
-      # udp range for WebRTC if needed, currently using host network is easier for webrtc
-      # - "51200-51299:51200-51299/udp"
+    network-mode: host
+    # ports:
+    #   - "8079:8079"
+    # udp range for WebRTC if needed, currently using host network is easier for webrtc. If you face problems, please try host network mode.
+    # - "51200-51299:51200-51299/udp"
     environment:
       - GIN_MODE=release
       - PIN=123456
@@ -31,18 +32,11 @@ services:
       - "5555:5555"
 ```
 
-## Running the Stack
+## Start the Service
 
-1.  Start the services:
-    ```bash
-    docker-compose up -d
-    ```
-
-2.  Check the logs to ensure connection:
-    ```bash
-    docker-compose logs -f webscreen
-    ```
-    You should see `Connected to redroid!` eventually.
+```bash
+docker-compose up -d
+```
 
 ## Accessing the Interface
 
