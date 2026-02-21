@@ -1,199 +1,273 @@
 package sunshine
 
 import (
+	"bytes"
+	"crypto"
 	"crypto/aes"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
-	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/hex"
 	"encoding/pem"
+	"encoding/xml"
 	"fmt"
 	"io"
-	"log"
 	"math/big"
 	"net/http"
-	"net/url"
 	"os"
+	"path/filepath"
 	"time"
 )
 
-// --- 配置区域 ---
 const (
 	SunshineIP   = "192.168.0.61" // 请修改为你的 Sunshine IP
-	SunshinePort = "47984"        // 默认端口
+	SunshinePort = "47989"        // 配对通常使用 HTTP 47989 端口
 	DeviceName   = "GoClient"     // 设备名称
-	PIN          = "1234"         // PIN 码
+	AuthDir      = "sunshine_auth"
 )
 
+// 解析服务器返回的 XML
+type Root struct {
+	XMLName           xml.Name `xml:"root"`
+	StatusCode        int      `xml:"status_code,attr"`
+	Paired            int      `xml:"paired"`
+	PlainCert         string   `xml:"plaincert"`
+	ChallengeResponse string   `xml:"challengeresponse"`
+	PairingSecret     string   `xml:"pairingsecret"`
+}
+
+type PairingManager struct {
+	IP         string
+	Port       string
+	DeviceName string
+	PrivateKey *rsa.PrivateKey
+	ClientCert *x509.Certificate
+	ClientPEM  []byte
+	ServerCert *x509.Certificate
+}
+
+// AES ECB 加密 (Java 中的 AESLightEngine 默认行为)
+func ecbEncrypt(key, input []byte) []byte {
+	block, _ := aes.NewCipher(key)
+	out := make([]byte, len(input))
+	for i := 0; i < len(input); i += 16 {
+		block.Encrypt(out[i:i+16], input[i:i+16])
+	}
+	return out
+}
+
+// AES ECB 解密
+func ecbDecrypt(key, input []byte) []byte {
+	block, _ := aes.NewCipher(key)
+	out := make([]byte, len(input))
+	for i := 0; i < len(input); i += 16 {
+		block.Decrypt(out[i:i+16], input[i:i+16])
+	}
+	return out
+}
+
+// HTTP 请求辅助函数
+func (pm *PairingManager) doPairReq(query string) (*Root, error) {
+	// 组合请求 URL, 固定 uniqueid 并在请求中包含 phrase
+	url := fmt.Sprintf("http://%s:%s/pair?uniqueid=0123456789ABCDEF&uuid=12345678-1234-1234-1234-123456789012&devicename=%s&updateState=1&%s",
+		pm.IP, pm.Port, pm.DeviceName, query)
+
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	var root Root
+	if err := xml.Unmarshal(body, &root); err != nil {
+		return nil, err
+	}
+	if root.StatusCode != 200 && root.StatusCode != 0 {
+		return nil, fmt.Errorf("服务器返回错误状态码: %d", root.StatusCode)
+	}
+	return &root, nil
+}
+
+// 执行配对流程
+func (pm *PairingManager) Pair(pin string) error {
+	fmt.Println("开始与 Sunshine 进行配对...")
+
+	// 1. 获取服务器证书 (getservercert)
+	salt := make([]byte, 16)
+	rand.Read(salt)
+
+	// 生成 AES Key: SHA256(salt + PIN) 取前 16 字节
+	saltPin := append(salt, []byte(pin)...)
+	aesKeyHash := sha256.Sum256(saltPin)
+	aesKey := aesKeyHash[:16]
+
+	clientCertHex := hex.EncodeToString(pm.ClientPEM)
+	req1 := fmt.Sprintf("phrase=getservercert&salt=%x&clientcert=%s", salt, clientCertHex)
+
+	resp1, err := pm.doPairReq(req1)
+	if err != nil || resp1.Paired != 1 {
+		return fmt.Errorf("步骤1失败: 无法获取服务端证书或配对状态异常")
+	}
+
+	serverCertBytes, _ := hex.DecodeString(resp1.PlainCert)
+	pm.ServerCert, err = x509.ParseCertificate(serverCertBytes)
+	if err != nil {
+		return fmt.Errorf("解析服务端证书失败: %v", err)
+	}
+	fmt.Println("成功获取服务端证书.")
+
+	// 2. 客户端挑战 (clientchallenge)
+	randomChallenge := make([]byte, 16)
+	rand.Read(randomChallenge)
+	encChallenge := ecbEncrypt(aesKey, randomChallenge)
+
+	req2 := fmt.Sprintf("phrase=clientchallenge&clientchallenge=%x", encChallenge)
+	resp2, err := pm.doPairReq(req2)
+	if err != nil || resp2.Paired != 1 {
+		return fmt.Errorf("步骤2失败: 客户端挑战未通过")
+	}
+
+	encResp, _ := hex.DecodeString(resp2.ChallengeResponse)
+	decResp := ecbDecrypt(aesKey, encResp)
+
+	// 前 32 字节为 serverResponse (SHA256 哈希长度)，后 16 字节为 serverChallenge
+	serverResponse := decResp[:32]
+	serverChallenge := decResp[32:48]
+
+	// 3. 服务端挑战响应 (serverchallengeresp)
+	clientSecret := make([]byte, 16)
+	rand.Read(clientSecret)
+
+	// 计算哈希: SHA256(serverChallenge + clientCertSignature + clientSecret)
+	hashInput := append(serverChallenge, pm.ClientCert.Signature...)
+	hashInput = append(hashInput, clientSecret...)
+	challengeRespHash := sha256.Sum256(hashInput)
+
+	encHash := ecbEncrypt(aesKey, challengeRespHash[:])
+	req3 := fmt.Sprintf("phrase=serverchallengeresp&serverchallengeresp=%x", encHash)
+	resp3, err := pm.doPairReq(req3)
+	if err != nil || resp3.Paired != 1 {
+		return fmt.Errorf("步骤3失败: 服务端验证客户端挑战失败")
+	}
+
+	// 4. 验证服务端签名并检查 PIN
+	serverSecretResp, _ := hex.DecodeString(resp3.PairingSecret)
+	serverSecret := serverSecretResp[:16]
+	serverSignature := serverSecretResp[16:]
+
+	// 验证服务端证书的签名机制是否无被篡改
+	hashedSecret := sha256.Sum256(serverSecret)
+	err = rsa.VerifyPKCS1v15(pm.ServerCert.PublicKey.(*rsa.PublicKey), crypto.SHA256, hashedSecret[:], serverSignature)
+	if err != nil {
+		return fmt.Errorf("严重错误: 无法验证服务端的签名, 可能存在中间人攻击 (MITM)")
+	}
+
+	// 验证 PIN 码是否正确
+	pinHashInput := append(randomChallenge, pm.ServerCert.Signature...)
+	pinHashInput = append(pinHashInput, serverSecret...)
+	serverChallengeRespHash := sha256.Sum256(pinHashInput)
+
+	if !bytes.Equal(serverChallengeRespHash[:], serverResponse) {
+		return fmt.Errorf("配对失败: PIN 码错误")
+	}
+	fmt.Println("PIN 码验证通过.")
+
+	// 5. 客户端配对密钥 (clientpairingsecret)
+	clientSecretHash := sha256.Sum256(clientSecret)
+	clientSignature, _ := rsa.SignPKCS1v15(rand.Reader, pm.PrivateKey, crypto.SHA256, clientSecretHash[:])
+	clientPairingSecret := append(clientSecret, clientSignature...)
+
+	req4 := fmt.Sprintf("phrase=clientpairingsecret&clientpairingsecret=%x", clientPairingSecret)
+	resp4, err := pm.doPairReq(req4)
+	if err != nil || resp4.Paired != 1 {
+		return fmt.Errorf("步骤5失败: 发送客户端私钥信息失败")
+	}
+
+	// 6. 最终配对确认 (pairchallenge)
+	req5 := "phrase=pairchallenge"
+	resp5, err := pm.doPairReq(req5)
+	if err != nil || resp5.Paired != 1 {
+		return fmt.Errorf("步骤6失败: 最终配对确认未通过")
+	}
+
+	fmt.Println("配对成功！保存服务端证书...")
+
+	// 保存服务端证书到 AuthDir
+	serverCertPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: pm.ServerCert.Raw})
+	os.WriteFile(filepath.Join(AuthDir, "server_cert.pem"), serverCertPEM, 0644)
+
+	return nil
+}
+
+// 初始化/加载本地证书
+func initCerts() (*PairingManager, error) {
+	os.MkdirAll(AuthDir, 0755)
+	keyPath := filepath.Join(AuthDir, "client_key.pem")
+	certPath := filepath.Join(AuthDir, "client_cert.pem")
+
+	pm := &PairingManager{
+		IP:         SunshineIP,
+		Port:       SunshinePort,
+		DeviceName: DeviceName,
+	}
+
+	// 检查是否已存在证书
+	if _, err := os.Stat(keyPath); os.IsNotExist(err) {
+		fmt.Println("生成新的客户端证书和私钥...")
+		// 生成 RSA 2048 密钥
+		priv, _ := rsa.GenerateKey(rand.Reader, 2048)
+		pm.PrivateKey = priv
+		keyBytes := x509.MarshalPKCS1PrivateKey(priv)
+		pem.Encode(os.Stdout, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: keyBytes})
+		os.WriteFile(keyPath, pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: keyBytes}), 0600)
+
+		// 生成自签名证书
+		template := x509.Certificate{
+			SerialNumber:          big.NewInt(1),
+			Subject:               pkix.Name{CommonName: "Moonlight Client"},
+			NotBefore:             time.Now(),
+			NotAfter:              time.Now().AddDate(10, 0, 0),
+			KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+			ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+			BasicConstraintsValid: true,
+		}
+		derBytes, _ := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
+		pm.ClientPEM = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
+		os.WriteFile(certPath, pm.ClientPEM, 0644)
+		pm.ClientCert, _ = x509.ParseCertificate(derBytes)
+	} else {
+		// 加载现有证书
+		keyData, _ := os.ReadFile(keyPath)
+		keyBlock, _ := pem.Decode(keyData)
+		pm.PrivateKey, _ = x509.ParsePKCS1PrivateKey(keyBlock.Bytes)
+
+		certData, _ := os.ReadFile(certPath)
+		certBlock, _ := pem.Decode(certData)
+		pm.ClientPEM = certData
+		pm.ClientCert, _ = x509.ParseCertificate(certBlock.Bytes)
+	}
+
+	return pm, nil
+}
+
 func SSTest() {
-	log.SetFlags(log.Ltime)
-	log.Printf("=== Sunshine 配对工具 ===")
-	log.Printf("目标: https://%s:%s", SunshineIP, SunshinePort)
-	log.Printf("PIN码: %s", PIN)
-
-	// 1. 生成标准的 UUID (伪随机)
-	uuid := generateUUID()
-	log.Printf("生成设备ID: %s", uuid)
-
-	// 2. 生成证书
-	certPEM, keyPEM, certDER, err := generateCert()
+	pm, err := initCerts()
 	if err != nil {
-		log.Fatalf("证书生成失败: %v", err)
+		fmt.Printf("初始化证书失败: %v\n", err)
+		return
 	}
-	// 计算证书指纹 (用于调试)
-	certHash := sha256.Sum256(certDER)
-	log.Printf("证书指纹(SHA256): %x", certHash)
 
-	// 3. 准备 TLS 客户端
-	clientCert, err := tls.X509KeyPair(certPEM, keyPEM)
+	// 在 Sunshine UI 上可以查看到该 PIN 或者在终端中输入生成的 PIN
+	pin := "1234" // 请替换为 Sunshine 界面中显示的 4 位配对码
+	fmt.Printf("正在使用 PIN 码 [%s] 请求配对...\n", pin)
+
+	err = pm.Pair(pin)
 	if err != nil {
-		log.Fatalf("加载证书失败: %v", err)
+		fmt.Printf("错误: %v\n", err)
+	} else {
+		fmt.Println("与 Sunshine 服务端配对完成！")
 	}
-	client := &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: true,                          // 忽略 Sunshine 自签名证书错误
-				Certificates:       []tls.Certificate{clientCert}, // 必须携带客户端证书
-			},
-		},
-		Timeout: 5 * time.Second,
-	}
-
-	// 4. 生成挑战 (Salt + Challenge)
-	saltBytes := make([]byte, 16)
-	rand.Read(saltBytes)
-	// Moonlight 使用大写 Hex
-	saltHex := fmt.Sprintf("%X", saltBytes)
-
-	// 计算 Challenge: AES(Key=SHA256(Salt+PIN), Data=SHA256(Cert))
-	challenge, err := calculateChallenge(certDER, saltBytes, PIN)
-	if err != nil {
-		log.Fatalf("挑战计算失败: %v", err)
-	}
-	log.Printf("生成挑战数据: %s", challenge)
-
-	// 转换 PEM 证书为 Hex 字符串 (关键缺失步骤!)
-	clientCertHex := fmt.Sprintf("%X", certPEM)
-
-	// 5. 构造请求 URL
-	params := url.Values{}
-	params.Add("uniqueid", uuid)
-	params.Add("devicename", DeviceName)
-	params.Add("updateState", "1")
-	params.Add("phrase", PIN)
-	params.Add("salt", saltHex)
-	params.Add("clientchallenge", challenge)
-	params.Add("clientcert", clientCertHex) // 【修复】必须发送证书给服务端
-
-	// 注意：url.Values Encode 会对内容进行 URL 编码，这通常是正确的
-	// 但如果 Sunshine 对 Hex 字符串的解析极其严格，可能需要手动拼接
-	// 这里先用 Encode()，通常标准库没问题
-	targetURL := fmt.Sprintf("https://%s:%s/pair?%s", SunshineIP, SunshinePort, params.Encode())
-
-	// 6. 循环发送请求
-	log.Println(">>> 正在发送配对请求...")
-	log.Println(">>> 请现在去 Sunshine WebUI -> PIN 页面输入: " + PIN)
-
-	for {
-		resp, err := client.Get(targetURL)
-		if err != nil {
-			log.Printf("请求错误 (Sunshine未启动?): %v", err)
-			time.Sleep(3 * time.Second)
-			continue
-		}
-
-		body, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
-		bodyStr := string(body)
-
-		if resp.StatusCode == 200 {
-			if contains(bodyStr, "paired") && contains(bodyStr, "1") {
-				log.Println("✅ 配对成功！")
-				log.Println("请保存以下证书和私钥，后续连接必须使用它们：")
-				saveFile("client_cert.pem", certPEM)
-				saveFile("client_key.pem", keyPEM)
-				return
-			} else if contains(bodyStr, "The client is not authorized") {
-				log.Println("❌ 验证失败：请检查 PIN 码是否输入正确，或尝试刷新 Sunshine 页面")
-			} else {
-				log.Printf("等待中... 服务端状态: %s", bodyStr)
-			}
-		} else {
-			log.Printf("HTTP %d: %s", resp.StatusCode, bodyStr)
-		}
-
-		time.Sleep(2 * time.Second)
-	}
-}
-
-// --- 核心加密逻辑 ---
-
-func calculateChallenge(certDER []byte, salt []byte, pin string) (string, error) {
-	// 1. 计算 AES Key = SHA256(Salt + PIN) 的前 16 字节
-	// 关键点：Salt 是原始字节，PIN 是字符串字节
-	keyBase := append(salt, []byte(pin)...)
-	keyHash := sha256.Sum256(keyBase)
-	aesKey := keyHash[:16]
-
-	// 2. 计算数据 Data = SHA256(CertDER)
-	certSig := sha256.Sum256(certDER)
-
-	// 3. AES-128-ECB 加密
-	block, err := aes.NewCipher(aesKey)
-	if err != nil {
-		return "", err
-	}
-
-	encrypted := make([]byte, len(certSig)) // 32 bytes
-	blockSize := block.BlockSize()          // 16 bytes
-
-	// 手动执行 ECB 模式 (分块加密)
-	for i := 0; i < len(certSig); i += blockSize {
-		block.Encrypt(encrypted[i:i+blockSize], certSig[i:i+blockSize])
-	}
-
-	// Moonlight 使用大写 Hex
-	return fmt.Sprintf("%X", encrypted), nil
-}
-
-// --- 辅助函数 ---
-
-func generateCert() ([]byte, []byte, []byte, error) {
-	priv, _ := rsa.GenerateKey(rand.Reader, 2048)
-	template := x509.Certificate{
-		SerialNumber: big.NewInt(1),
-		Subject:      pkix.Name{CommonName: "NVIDIA GameStream Client"},
-		NotBefore:    time.Now(),
-		NotAfter:     time.Now().Add(time.Hour * 24 * 3650),
-		KeyUsage:     x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
-		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
-	}
-	der, err := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	certOut := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
-	keyOut := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(priv)})
-
-	return certOut, keyOut, der, nil
-}
-
-func generateUUID() string {
-	b := make([]byte, 16)
-	rand.Read(b)
-	b[6] = (b[6] & 0x0f) | 0x40 // Version 4
-	b[8] = (b[8] & 0x3f) | 0x80 // Variant is 10
-	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
-}
-
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && s[0:len(substr)] == substr || (len(s) > len(substr) && contains(s[1:], substr))
-}
-
-func saveFile(name string, data []byte) {
-	os.WriteFile(name, data, 0644)
-	log.Printf("已保存: %s", name)
 }
