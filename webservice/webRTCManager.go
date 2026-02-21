@@ -14,6 +14,11 @@ import (
 )
 
 const (
+	UDP_PORT_START = 51200
+	UDP_PORT_END   = 51299
+)
+
+const (
 	PAYLOAD_TYPE_AV1_PROFILE_MAIN_5_1            = 100 // 2560x1440 @ 60fps
 	PAYLOAD_TYPE_H265_PROFILE_MAIN_TIER_MAIN_5_1 = 102 // 2560x1440 @ 60fps 40Mbps Max
 	PAYLOAD_TYPE_H265_PROFILE_MAIN_TIER_MAIN_4_1 = 103 // 1920x1080 @ 60fps 20Mbps Max
@@ -106,7 +111,12 @@ func (manager *WebRTCManager) NewSubscriber(deviceIdentifier string, clientSDP s
 		log.Printf("RegisterDefaultInterceptors failed: %v", err)
 		return "", 0, err
 	}
-	api := webrtc.NewAPI(webrtc.WithMediaEngine(m), webrtc.WithInterceptorRegistry(i))
+	settingEngine := webrtc.SettingEngine{}
+	err := settingEngine.SetEphemeralUDPPortRange(UDP_PORT_START, UDP_PORT_END)
+	if err != nil {
+		return "", 0, err
+	}
+	api := webrtc.NewAPI(webrtc.WithMediaEngine(m), webrtc.WithInterceptorRegistry(i), webrtc.WithSettingEngine(settingEngine))
 	// Configure ICE servers (STUN) for NAT traversal
 	config := webrtc.Configuration{
 		ICEServers: []webrtc.ICEServer{

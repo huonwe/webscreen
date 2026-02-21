@@ -3,11 +3,14 @@ services:
     build: .
     image: dukihiroi/webscreen:latest
     container_name: webscreen
-    network_mode: host
+    network_mode: bridge
+    ports:
+      - "8079:8079"
+      - "51200-51299:51200-51299/udp"
     restart: unless-stopped
     volumes:
       - /dev/bus/usb:/dev/bus/usb
     environment:
       - GIN_MODE=release
-      - PORT=8079
+      # - PORT=8079
       - PIN=123456
