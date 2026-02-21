@@ -21,25 +21,6 @@ services:
       - PIN=123456
     depends_on:
       - redroid
-    entrypoint:
-      - /bin/sh
-      - -c
-      - |
-        # Start ADB server
-        adb start-server
-        
-        # Try to connect to redroid in the background
-        # We loop until successful because redroid might take a moment to boot
-        (
-          while ! adb connect redroid:5555; do
-            echo "Waiting for redroid..."
-            sleep 5
-          done
-          echo "Connected to redroid!"
-        ) &
-        
-        # Start the webscreen application
-        ./webscreen -port 8079 -pin 123456
 
   redroid:
     image: redroid/redroid:16.0.0-latest
@@ -70,7 +51,7 @@ services:
     
 2.  Enter the PIN configured in the docker-compose file (default: `123456`).
 
-3.  Inside the console, you should see the `redroid` device listed. Click to connect and control.
+3.  Inside the console, you should see the `redroid` device listed. Click to connect and control. If you can't see it, connect the device (ip: `redroid`, port: `5555`) manually.
 
 ## TroubleShooting
 
