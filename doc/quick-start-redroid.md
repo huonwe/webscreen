@@ -1,6 +1,6 @@
 # Quick Start with Redroid and Docker Compose
 
-This guide helps you set up **WebScreen** alongside **Redroid** (Remote Android) using `docker-compose`. This allows you to run a virtual Android instance and control it via your browser without needing a physical device.
+This guide helps you set up **Webscreen** alongside **Redroid** (Remote Android) using `docker-compose`. This allows you to run a virtual Android instance and control it via your browser.
 
 ## Docker Compose Configuration
 
@@ -35,7 +35,7 @@ services:
 ## Start the Service
 
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 ## Accessing the Interface
