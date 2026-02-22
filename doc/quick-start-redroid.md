@@ -45,7 +45,7 @@ docker compose up -d
     
 2.  Enter the PIN configured in the docker-compose file (default: `123456`).
 
-3.  Inside the console, you should see the `redroid` device listed. Click to connect and control. If you can't see it, connect the device (ip: `redroid`, port: `5555`) manually.
+3.  Inside the console, you should see the `redroid` device listed. Click to connect and control. If you can't see it, connect the device (ip: `127.0.0.1` if host mode, else 'redroid', port: `5555`) manually.
 
 ## TroubleShooting
 
