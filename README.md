@@ -1,10 +1,13 @@
 # Webscreen
 
+[简体中文](README.zh.md)
+[日本語](README.ja.md)
+
 ## ℹ️ About
 
 [Watch Demo](https://youtu.be/6WtbwaIk2aY)
 
-Webscreen is a self-hosted screen streaming web application for Android and Linux devices, based on WebRTC.
+Webscreen is a self-hosted screen streaming web application for Android and Linux devices, based on WebRTC. Might support more device in the future!
 ![screenshot](doc/assets/screenshot.png)
 
 It can run on:
@@ -14,7 +17,7 @@ It can run on:
 - Windows
 - MacOS
 
-at both `amd64` and `arm64`
+on both `amd64` and `arm64`
 
 Android supports ([scrcpy](https://github.com/Genymobile/scrcpy)):
 
