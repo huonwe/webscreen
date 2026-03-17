@@ -64,22 +64,22 @@ func NewWebRTCManager() *WebRTCManager {
 		broadcasters:         make(map[string]*DeviceBroadcaster),
 		currentReceiptNumber: make(map[string]uint32),
 	}
-	go func() {
-		for {
-			time.Sleep(30 * time.Second)
-			wm.RLock()
-			// log.Printf("WebRTCManager status: %d broadcasters\n", len(wm.broadcasters))
-			for deviceID, broadcaster := range wm.broadcasters {
-				broadcaster.Lock.RLock()
-				log.Printf("Device %s has %d subscribers\n", deviceID, len(broadcaster.Subscribers))
-				for receiptNo, sub := range broadcaster.Subscribers {
-					log.Printf("Device %s, ReceiptNo %d, Subscriber state: %s\n", deviceID, receiptNo, sub.PeerConnection.ConnectionState())
-				}
-				broadcaster.Lock.RUnlock()
-			}
-			wm.RUnlock()
-		}
-	}()
+	// go func() {
+	// 	for {
+	// 		time.Sleep(30 * time.Second)
+	// 		wm.RLock()
+	// 		// log.Printf("WebRTCManager status: %d broadcasters\n", len(wm.broadcasters))
+	// 		for deviceID, broadcaster := range wm.broadcasters {
+	// 			broadcaster.Lock.RLock()
+	// 			log.Printf("Device %s has %d subscribers\n", deviceID, len(broadcaster.Subscribers))
+	// 			for receiptNo, sub := range broadcaster.Subscribers {
+	// 				log.Printf("Device %s, ReceiptNo %d, Subscriber state: %s\n", deviceID, receiptNo, sub.PeerConnection.ConnectionState())
+	// 			}
+	// 			broadcaster.Lock.RUnlock()
+	// 		}
+	// 		wm.RUnlock()
+	// 	}
+	// }()
 	return wm
 }
 
