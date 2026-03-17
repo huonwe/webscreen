@@ -59,7 +59,7 @@ apt install xvfb ffmpeg xfce4
 
 ## Usage
 
-Download the latest [release](https://github.com/huonwe/webscreen/releases), execute the program. The default port is `8079`, but you can specifiy it by `-port 8080`. 6-digit PIN is also needed (default to '123456'). An example command: `./webscreen -port 8080 -pin 555555`
+Download the latest [release](https://github.com/huonwe/webscreen/releases), execute the program. The default port is `8079`, but you can specifiy it by `-port 8080`. 6-digit PIN is also needed (default to '123456'). An example command: `./webscreen -host 0.0.0.0 -port 8080 -pin 555555`
 Then open your favorite browser and visit `<your ip>:<your port>`
 
 Or you can build by yourself. Normally, you can build simply by `go build`. But if you want to build by yourself on `Termux`, you need to run `go build -ldflags "-checklinkname=0"`.
