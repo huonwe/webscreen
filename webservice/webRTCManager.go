@@ -68,7 +68,7 @@ func NewWebRTCManager() *WebRTCManager {
 		for {
 			time.Sleep(30 * time.Second)
 			wm.RLock()
-			log.Printf("WebRTCManager status: %d broadcasters\n", len(wm.broadcasters))
+			// log.Printf("WebRTCManager status: %d broadcasters\n", len(wm.broadcasters))
 			for deviceID, broadcaster := range wm.broadcasters {
 				broadcaster.Lock.RLock()
 				log.Printf("Device %s has %d subscribers\n", deviceID, len(broadcaster.Subscribers))
