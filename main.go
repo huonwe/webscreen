@@ -15,6 +15,7 @@ import (
 var publicFS embed.FS
 
 func main() {
+	host := flag.String("host", "0.0.0.0", "host to bind the server to")
 	port := flag.String("port", "8079", "server port")
 	pin := flag.String("pin", "123456", "initial PIN for web access")
 	flag.Parse()
@@ -39,7 +40,7 @@ func main() {
 	webMaster := webservice.Default(pub)
 	webMaster.SetPIN(*pin)
 
-	go webMaster.Serve(*port)
+	go webMaster.Serve(*host, *port)
 
 	<-ctx.Done()
 	log.Println("Gracefully closing")

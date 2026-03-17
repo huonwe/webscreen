@@ -101,12 +101,12 @@ func (wm *WebMaster) SetPIN(pin string) {
 	wm.pin = pin
 }
 
-func (wm *WebMaster) Serve(port string) {
+func (wm *WebMaster) Serve(host, port string) {
 	// if wm.config.EnableAndroidDiscover {
 	// 	go wm.AndroidDevicesDiscovery()
 	// }
 	wm.setRouter()
-	err := wm.router.Run(":" + port)
+	err := wm.router.Run(host + ":" + port)
 	if err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}
