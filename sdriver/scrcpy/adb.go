@@ -90,25 +90,28 @@ func (c *ADBClient) adb(args ...string) error {
 	return ExecADB(c.ctx, append([]string{"-s", c.deviceSerial}, args...)...)
 }
 
-func (c *ADBClient) SupportOpusAudio(version, scid string) bool {
-	// 1. 确定 scrcpy-server 的远程路径
-	// 如果尚未设置 remotePath，则使用默认值
-	serverPath := c.remotePath
-	if serverPath == "" {
-		serverPath = "/data/local/tmp/scrcpy-server"
-	}
+func (c *ADBClient) SupportOpusAudio() bool {
+	// 1. 构造 shell 命令
+	cmdStr := "grep -i 'opus.encoder' " +
+		"/system/etc/media_codecs*.xml " +
+		"/system_ext/etc/media_codecs*.xml " +
+		"/vendor/etc/media_codecs*.xml " + //常见安卓真机
+		"/vendor/odm/etc/media_codecs*.xml " +
+		"/odm/etc/media_codecs*.xml " +
+		"/product/etc/media_codecs*.xml " +
+		"/apex/com.android.media.swcodec/etc/media_codecs*.xml " + //通用
+		"/apex/com.android.media/etc/media_codecs*.xml " +
+		" 2>/dev/null || true"
+	//扩展路径，编码器的参数文件路径不同设备不同，不添加"||true" 会导致返回状态码2无法正常返回stdout
 
-	// 2. 构造 shell 命令
-	cmdStr := fmt.Sprintf("CLASSPATH=%s app_process / com.genymobile.scrcpy.Server %s scid=%s list_encoders=true", serverPath, version, scid)
-
-	// 3. 准备 adb 参数
+	// 2. 准备 adb 参数
 	var args []string
 	if c.deviceSerial != "" {
 		args = append(args, "-s", c.deviceSerial)
 	}
 	args = append(args, "shell", cmdStr)
 
-	// 4. 执行命令并捕获输出
+	// 3. 执行命令并捕获输出
 	// 使用 c.ctx 以便在父 Context 取消时能够中止命令
 	cmd := exec.CommandContext(c.ctx, "adb", args...)
 
@@ -119,11 +122,11 @@ func (c *ADBClient) SupportOpusAudio(version, scid string) bool {
 		return false
 	}
 
-	// 5. 检查输出中是否包含 "opus"
+	// 4. 检查输出中是否包含 "opus.encoder"
 	outputStr := string(output)
 
 	// 调试日志：可选，查看设备实际返回了什么
-	log.Printf("Encoder list output: %s", outputStr)
+	log.Printf("opus Encoder : %s", outputStr)
 
-	return strings.Contains(outputStr, "opus")
+	return strings.Contains(outputStr, "opus.encoder")
 }

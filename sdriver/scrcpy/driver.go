@@ -94,11 +94,6 @@ func New(config map[string]string) (*ScrcpyDriver, error) {
 		log.Printf("[scrcpy] write scrcpy-server to local file failed: %v", err)
 		return nil, err
 	}
-	err = da.adbClient.PushScrcpyServer(SCRCPY_SERVER_LOCAL_PATH, SCRCPY_SERVER_ANDROID_DST)
-	if err != nil {
-		log.Printf("[scrcpy] Push scrcpy-server failed: %v", err)
-		return nil, err
-	}
 
 	localPort := SCRCPY_PROXY_PORT_DEFAULT
 
@@ -111,12 +106,16 @@ func New(config map[string]string) (*ScrcpyDriver, error) {
 	}
 	log.Printf("[scrcpy] set up reverse tunnel success: localabstract:scrcpy_%s -> tcp:%s", da.scid, localPort)
 
-	if !da.adbClient.SupportOpusAudio(SCRCPY_VERSION, da.scid) {
+	if !da.adbClient.SupportOpusAudio() {
 		config["audio"] = "false"
 		log.Println("[scrcpy] Device does not support Opus audio encoding, disabling audio.")
 		da.ControlChan <- sdriver.TextMsgEvent{Msg: "[scrcpy] Device does not support Opus audio encoding, disabling audio."}
 	}
-	da.adbClient.PushScrcpyServer(SCRCPY_SERVER_LOCAL_PATH, SCRCPY_SERVER_ANDROID_DST)
+	err = da.adbClient.PushScrcpyServer(SCRCPY_SERVER_LOCAL_PATH, SCRCPY_SERVER_ANDROID_DST)
+	if err != nil {
+		log.Printf("[scrcpy] Push scrcpy-server failed: %v", err)
+		return nil, err
+	}
 	os.Remove(SCRCPY_SERVER_LOCAL_PATH)
 	listener, err := net.Listen("tcp", ":"+localPort)
 	if err != nil {
