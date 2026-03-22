@@ -7,7 +7,7 @@
     const UHID_KEYBOARD_ID = 1;
     const UHID_KEYBOARD_NAME = "Virtual Keyboard";
 
-    var uhidKeyboardEnabled = false;
+    window.uhidKeyboardEnabled = false;
     let uhidKeyboardInitialized = false;
 
     // 记录当前按下的键 (HID Usage IDs)
@@ -97,20 +97,20 @@
         const packet = createUHIDKeyboardDestroyPacket();
         sendDataChannelMessage(window.dataChannelOrdered, packet);
         uhidKeyboardInitialized = false;
-        uhidKeyboardEnabled = false;
+        window.uhidKeyboardEnabled = false;
         console.log("UHID Keyboard device destroyed");
     }
 
     function toggleUHIDKeyboard() {
         const btn = document.getElementById('uhidKeyboardToggleBtn');
-        if (!uhidKeyboardEnabled) {
+        if (!window.uhidKeyboardEnabled) {
             initUHIDKeyboard();
-            uhidKeyboardEnabled = true;
+            window.uhidKeyboardEnabled = true;
             console.log("UHID Keyboard enabled");
             if (btn) btn.classList.add('active');
         } else {
             destroyUHIDKeyboard();
-            uhidKeyboardEnabled = false;
+            window.uhidKeyboardEnabled = false;
             console.log("UHID Keyboard disabled");
             if (btn) btn.classList.remove('active');
         }
@@ -119,7 +119,7 @@
     document.querySelector('#uhidKeyboardToggleBtn').addEventListener('click', toggleUHIDKeyboard);
 
     function sendKeyboardReport() {
-        if (!uhidKeyboardEnabled || !uhidKeyboardInitialized) return;
+        if (!window.uhidKeyboardEnabled || !uhidKeyboardInitialized) return;
 
         const packet = createUHIDKeyboardInputPacket(currentModifiers, Array.from(pressedKeys));
         // if (window.ws && window.ws.readyState === WebSocket.OPEN) {
@@ -130,7 +130,7 @@
 
     // 事件监听
     window.addEventListener('keydown', (event) => {
-        if (!uhidKeyboardEnabled) return;
+        if (!window.uhidKeyboardEnabled) return;
 
         // 阻止默认行为 (拦截所有按键，包括 F1-F12)
         event.preventDefault();
@@ -160,7 +160,7 @@
     });
 
     window.addEventListener('keyup', (event) => {
-        if (!uhidKeyboardEnabled) return;
+        if (!window.uhidKeyboardEnabled) return;
 
         event.preventDefault();
 
@@ -190,7 +190,7 @@
 
     // 窗口失去焦点时重置所有按键
     window.addEventListener('blur', () => {
-        if (uhidKeyboardEnabled && (pressedKeys.size > 0 || currentModifiers !== 0)) {
+        if (window.uhidKeyboardEnabled && (pressedKeys.size > 0 || currentModifiers !== 0)) {
             pressedKeys.clear();
             currentModifiers = 0;
             sendKeyboardReport();

@@ -117,6 +117,9 @@ function sendKeyboardEvent(action, keyCode) {
     //     const packet = createKeyPacket(action, keyCode);
     //     window.ws.send(packet);
     // }
+    if (typeof window.uhidKeyboardEnabled !== 'undefined' && window.uhidKeyboardEnabled) {
+        return;
+    }
     const packet = createKeyPacket(action, keyCode);
     sendDataChannelMessage(window.dataChannelOrdered, packet);
 }

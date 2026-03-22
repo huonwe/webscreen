@@ -204,7 +204,7 @@ func (da *ScrcpyDriver) SendUHIDCreateEvent(e *sdriver.UHIDCreateEvent) {
 	// 8. Desc Data
 	copy(buf[offset:], e.ReportDesc)
 
-	log.Printf("Sending UHID_CREATE (Final Fix): ID=%d NameLen=%d", e.ID, nameSize)
+	// log.Printf("Sending UHID_CREATE (Final Fix): ID=%d NameLen=%d", e.ID, nameSize)
 
 	_, err := da.controlConn.Write(buf)
 	if err != nil {
