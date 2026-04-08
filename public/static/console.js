@@ -4,8 +4,54 @@
  * ----------------------------------------
  */
 const STORAGE_KEY = 'webscreen_device_configs';
+const IGNORED_STORAGE_KEY = 'webscreen_ignored_devices';
 let knownDevices = [];
 let activeConfigSerial = null;
+let ignoredDevices = loadIgnoredDevices();
+let showIgnored = false;
+
+function loadIgnoredDevices() {
+    try {
+        const stored = localStorage.getItem(IGNORED_STORAGE_KEY);
+        return stored ? JSON.parse(stored) : [];
+    } catch(e) { return []; }
+}
+
+function saveIgnoredDevices() {
+    localStorage.setItem(IGNORED_STORAGE_KEY, JSON.stringify(ignoredDevices));
+}
+
+function toggleShowIgnored() {
+    showIgnored = !showIgnored;
+    const btn = document.getElementById('toggleIgnoredBtn');
+    const icon = document.getElementById('toggleIgnoredIcon');
+    if (btn) {
+        if (showIgnored) {
+            btn.classList.add('bg-[#333]', 'text-white');
+            if (icon) icon.textContent = 'visibility';
+        } else {
+            btn.classList.remove('bg-[#333]', 'text-white');
+            if (icon) icon.textContent = 'visibility_off';
+        }
+    }
+    renderDeviceList();
+}
+
+function ignoreDevice(serial) {
+    if (!ignoredDevices.includes(serial)) {
+        ignoredDevices.push(serial);
+        saveIgnoredDevices();
+        renderDeviceList();
+        showToast(i18n.t('device_ignored') || '设备已忽略');
+    }
+}
+
+function unignoreDevice(serial) {
+    ignoredDevices = ignoredDevices.filter(s => s !== serial);
+    saveIgnoredDevices();
+    renderDeviceList();
+    showToast(i18n.t('device_unignored') || '设备已取消忽略');
+}
 
 // Refactored structure to match new requirements (all in driver_config)
 const defaultScrcpyConfig = {
@@ -128,22 +174,43 @@ function renderDeviceList() {
     const grid = document.getElementById('deviceGrid');
     grid.innerHTML = '';
 
-    if (!knownDevices.length) {
+    const visibleDevices = knownDevices.filter(device => {
+        const serial = typeof device === 'string' ? device : device.device_id;
+        return showIgnored || !ignoredDevices.includes(serial);
+    });
+
+    const toggleBtn = document.getElementById('toggleIgnoredBtn');
+    if (toggleBtn) {
+        if (ignoredDevices.length > 0) {
+            toggleBtn.classList.remove('!hidden');
+            toggleBtn.style.display = '';
+        } else {
+            toggleBtn.style.display = 'none';
+            if (showIgnored) {
+                showIgnored = false;
+                toggleBtn.classList.remove('bg-[#333]', 'text-white');
+                const icon = document.getElementById('toggleIgnoredIcon');
+                if (icon) icon.textContent = 'visibility_off';
+            }
+        }
+    }
+
+    if (!visibleDevices.length) {
         grid.innerHTML = `
                     <div class="col-span-full flex flex-col items-center justify-center py-20 text-gray-500 bg-[#1e1f20]/50 rounded-3xl border border-dashed border-gray-700">
                         <span class="material-symbols-rounded text-5xl mb-4 opacity-50">phonelink_off</span>
-                        <p class="text-lg">${i18n.t('no_devices')}</p>
-                        <button onclick="openModal('connectModal')" class="mt-4 text-[var(--md-sys-color-primary)] hover:underline">${i18n.t('connect_device')}</button>
+                        <p class="text-lg">${i18n.t('no_devices') || '没有设备'}</p>
+                        <button onclick="openModal('connectModal')" class="mt-4 text-[var(--md-sys-color-primary)] hover:underline">${i18n.t('connect_device') || '连接设备'}</button>
                     </div>
                 `;
         return;
     }
 
-    knownDevices.forEach(device => {
+    visibleDevices.forEach(device => {
         const serial = typeof device === 'string' ? device : device.device_id;
         const config = ensureDeviceConfig(device);
-        // Access nested driver_config now
         const drv = config.driver_config || {};
+        const isIgnored = ignoredDevices.includes(serial);
 
         // Construct config tags
         let tagsHtml = '';
@@ -162,7 +229,15 @@ function renderDeviceList() {
         }
 
         const card = document.createElement('div');
-        card.className = 'card rounded-[24px] p-5 flex flex-col justify-between h-full border border-transparent hover:border-[#444] group';
+        card.className = `card ${isIgnored ? 'opacity-40 grayscale' : ''} rounded-[24px] p-5 flex flex-col justify-between h-full border border-transparent hover:border-[#444] group transition-all`;
+
+        let ignoreBtnHtml = isIgnored ? 
+            `<button onclick="unignoreDevice('${serial}')" class="p-2 rounded-full hover:bg-white/10 text-orange-400 transition-colors" title="Unignore">
+                <span class="material-symbols-rounded">visibility</span>
+            </button>` :
+            `<button onclick="ignoreDevice('${serial}')" class="p-2 rounded-full hover:bg-white/10 text-gray-400 transition-colors" title="Ignore">
+                <span class="material-symbols-rounded">visibility_off</span>
+            </button>`;
 
         card.innerHTML = `
                     <div>
@@ -175,13 +250,16 @@ function renderDeviceList() {
                                     <h3 class="font-medium text-lg leading-tight text-[#e3e3e3] truncate max-w-[140px] md:max-w-[180px]" title="${serial}">${serial}</h3>
                                 </div>
                             </div>
-                            <button onclick="showConfigModal('${serial}')" class="p-2 rounded-full hover:bg-white/10 text-gray-400 transition-colors" title="Settings">
-                                <span class="material-symbols-rounded">settings</span>
-                            </button>
+                            <div class="flex items-center">
+                                ${ignoreBtnHtml}
+                                <button onclick="showConfigModal('${serial}')" class="p-2 rounded-full hover:bg-white/10 text-gray-400 transition-colors" title="Settings">
+                                    <span class="material-symbols-rounded">settings</span>
+                                </button>
+                            </div>
                         </div>
 
                         <div class="flex flex-wrap gap-2 mb-6">
-                            ${tagsHtml || `<span class="text-xs text-gray-500 italic">${i18n.t('default_config')}</span>`}
+                            ${tagsHtml || `<span class="text-xs text-gray-500 italic">${i18n.t('default_config') || 'Default Config'}</span>`}
                         </div>
                     </div>
 
