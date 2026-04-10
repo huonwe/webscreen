@@ -85,6 +85,8 @@ After you start streaming, you might need to manually make the scene a little ch
 ## Known Issues
 
 - Xvfb wouldn't work in docker and termux
+- Crash: MediaCodec 0x80001001 Exception on custom Android devices due to hardcoded H.264 High Profile (profile=8) [#11](https://github.com/huonwe/webscreen/issues/11)
+  - set **profile=1** to **video_codec_options**
 
 ## [For Developers](doc/dev)
 
