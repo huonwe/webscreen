@@ -43,7 +43,7 @@ func (sa *Agent) VideoStream() iter.Seq[media.Sample] {
 				// 计算与上一帧的时间差
 				delta := vBox.PTS - sa.lastVideoPTS
 
-				if delta <= 0 {
+				if delta <= 0 || delta > defaultDuration<<3 {
 					duration = defaultDuration
 				} else {
 					duration = delta
