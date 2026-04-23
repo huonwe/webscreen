@@ -64,7 +64,7 @@ output HEADLESS-1 resolution %dx%d@%sHz position 0 0
 # 关键配置：允许所有输入设备作用于 seat0
 seat seat0 attach *
 # 强制所有输入映射到虚拟屏幕
-input "*" map_to_output HEADLESS-1
+# input "*" map_to_output HEADLESS-1
 
 `, width, height, frameRate)
 	os.WriteFile(swayConfig, []byte(configContent), 0600)
