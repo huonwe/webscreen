@@ -72,8 +72,8 @@ func (d *LinuxDriver) SendEvent(event sdriver.Event) error {
 		buf.WriteByte(PacketTypeKey) // Header: 0x00
 
 		// Payload (5 bytes)
-		buf.WriteByte(v.Action)                                             // [0] Action
-		binary.Write(buf, binary.BigEndian, AndroidKeyCodeToX11(v.KeyCode)) // [1-4] KeyCode
+		buf.WriteByte(v.Action)                        // [0] Action
+		binary.Write(buf, binary.BigEndian, v.KeyCode) // [1-4] KeyCode
 
 	// 其他事件直接忽略
 	default:

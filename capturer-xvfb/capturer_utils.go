@@ -27,30 +27,25 @@ func WaitTCP(port string) net.Conn {
 
 // GetBestH264Encoder 自动检测最佳 H.264 编码器
 func GetBestH264Encoder() string {
+	// 1. 检查是否存在瑞芯微硬件编码器 (Rockchip)
+	if hasEncoder("h264_rkmpp") {
+		return "h264_rkmpp"
+	}
 
-	// if hasEncoder("h264_v4l2m2m") {
-	// 	return "h264_v4l2m2m"
-	// }
+	// 2. 检查是否存在 NVIDIA 硬件编码器 (PC N卡)
+	if hasEncoder("h264_nvenc") {
+		return "h264_nvenc"
+	}
 
-	// // 1. 检查是否存在瑞芯微硬件编码器 (Rockchip)
-	// if hasEncoder("h264_rkmpp") {
-	// 	return "h264_rkmpp"
-	// }
+	// 3. 检查是否存在 Intel 硬件编码器 (PC 核显)
+	if hasEncoder("h264_qsv") {
+		return "h264_qsv"
+	}
 
-	// // 2. 检查是否存在 NVIDIA 硬件编码器 (PC N卡)
-	// if hasEncoder("h264_nvenc") {
-	// 	return "h264_nvenc"
-	// }
-
-	// // 3. 检查是否存在 Intel 硬件编码器 (PC 核显)
-	// if hasEncoder("h264_qsv") {
-	// 	return "h264_qsv"
-	// }
-
-	// // 4. Android Termux 下常用的硬件编码 (MediaCodec)
-	// if hasEncoder("h264_mediacodec") {
-	// 	return "h264_mediacodec"
-	// }
+	// 4. Android Termux 下常用的硬件编码 (MediaCodec)
+	if hasEncoder("h264_mediacodec") {
+		return "h264_mediacodec"
+	}
 
 	// 5. 默认回退到软件编码 (通用)
 	return "libx264"
@@ -111,11 +106,10 @@ func hasEncoder(name string) bool {
 // splitNALU 是 bufio.SplitFunc 的实现，用于切分 H.264 Annex B 流
 // 它会返回包含起始码（00 00 00 01）在内的完整 NALU
 func splitNALU(data []byte, atEOF bool) (advance int, token []byte, err error) {
-	// log.Println("NALU Data:", string(data))
-
 	if atEOF && len(data) == 0 {
 		return 0, nil, nil
 	}
+
 	// 查找起始码前缀 00 00 01
 	// H.264 起始码可能是 00 00 01 (3 bytes) 或 00 00 00 01 (4 bytes)
 	// 我们主要查找 00 00 01，然后判断前面是否还有一个 0

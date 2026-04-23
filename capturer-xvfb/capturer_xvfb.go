@@ -64,13 +64,54 @@ func main() {
 
 	header := make([]byte, 12)
 
+	var currentPts uint64 = uint64(time.Now().UnixNano() / 1e3)
+	var frameStarted bool = false
+
 	for scanner.Scan() {
 		nalData := scanner.Bytes()
 		if len(nalData) == 0 {
 			continue
 		}
 
-		pts := uint64(time.Now().UnixNano() / 1e3)
+		isVCL := false
+		isFirstSlice := false
+		isNonVCLFrameStart := false
+
+		if *codec == "h265" {
+			nalTypeHevc := (nalData[0] >> 1) & 0x3F
+			if nalTypeHevc == 35 || nalTypeHevc == 32 || nalTypeHevc == 33 || nalTypeHevc == 34 || nalTypeHevc == 39 || nalTypeHevc == 40 {
+				isNonVCLFrameStart = true
+			} else if nalTypeHevc <= 31 {
+				isVCL = true
+				if len(nalData) > 2 && (nalData[2]&0x80) != 0 {
+					isFirstSlice = true
+				}
+			}
+		} else {
+			nalTypeH264 := nalData[0] & 0x1F
+			if nalTypeH264 == 9 || nalTypeH264 == 6 || nalTypeH264 == 7 || nalTypeH264 == 8 {
+				isNonVCLFrameStart = true
+			} else if nalTypeH264 >= 1 && nalTypeH264 <= 5 {
+				isVCL = true
+				if len(nalData) > 1 && (nalData[1]&0x80) != 0 {
+					isFirstSlice = true
+				}
+			}
+		}
+
+		if isNonVCLFrameStart {
+			if !frameStarted {
+				currentPts = uint64(time.Now().UnixNano() / 1e3)
+				frameStarted = true
+			}
+		} else if isVCL {
+			if isFirstSlice && !frameStarted {
+				currentPts = uint64(time.Now().UnixNano() / 1e3)
+			}
+			frameStarted = false
+		}
+
+		pts := currentPts
 		binary.BigEndian.PutUint64(header[0:8], pts)
 		binary.BigEndian.PutUint32(header[8:12], uint32(len(nalData)))
 

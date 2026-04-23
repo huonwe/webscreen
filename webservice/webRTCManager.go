@@ -701,7 +701,7 @@ func ListenRTPVideo(rtpSender *webrtc.RTPSender, agent *sagent.Agent) {
 		for _, p := range packets {
 			switch p.(type) {
 			case *rtcp.PictureLossIndication:
-				log.Println("IDR requested via RTCP PLI")
+				// log.Println("IDR requested via RTCP PLI")
 				agent.PLIRequest()
 			}
 		}

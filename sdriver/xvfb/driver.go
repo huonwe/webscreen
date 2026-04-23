@@ -29,6 +29,10 @@ type LinuxDriver struct {
 	frameRate   string
 	bitRate     string
 	video_codec string
+
+	lastSPS []byte
+	lastPPS []byte
+	lastIDR []byte
 }
 
 // 简单的 Header 定义，对应发送端的结构
@@ -49,6 +53,7 @@ func New(cfg map[string]string) (*LinuxDriver, error) {
 
 		videoBuffer: comm.NewLinearBuffer(16 * 1024 * 1024),
 	}
+
 	data, err := capturerXvfbData.ReadFile("bin/capturer_xvfb")
 	if err != nil {
 		log.Printf("[xvfb] 读取 capturer_xvfb 失败: %v", err)
@@ -104,7 +109,7 @@ func (d *LinuxDriver) UpdateDriverConfig(config map[string]string) error {
 
 func (d *LinuxDriver) handleConnection() {
 	headerBuf := make([]byte, 12)
-
+	waitForKeyFrame := true
 	for {
 		// 1. 读取固定长度的 Header (12 bytes)
 		if _, err := io.ReadFull(d.conn, headerBuf); err != nil {
@@ -141,6 +146,7 @@ func (d *LinuxDriver) handleConnection() {
 			log.Printf("Warning: Invalid start code in NALU of size %d", size)
 			continue
 		}
+		// log.Println("startCodeEnd:", startCodeEnd)
 
 		// 真正的 NAL 数据（不含起始码）
 		nalData := payloadBuf[startCodeEnd:]
@@ -154,26 +160,67 @@ func (d *LinuxDriver) handleConnection() {
 		nalType := nalHeader & 0x1F
 
 		isKeyFrame := false
-		isConfig := false
+		// log.Printf("Processing NALU Type: %d", nalType)
 
 		switch nalType {
+		case 6, 9: // SEI, AUD
+			// log.Printf("Received SEI, PTS=%d, Size=%d bytes", pts, len(nalData))
+			log.Println("Received SEI/AUD:", string(nalData))
+			continue
 		case 7: // SPS
-			isConfig = true
+			// log.Printf("Received SPS, PTS=%d, Size=%d bytes", pts, len(nalData))
+			d.lastSPS = make([]byte, len(nalData))
+			copy(d.lastSPS, nalData)
+			continue
 		case 8: // PPS
-			isConfig = true
+			// log.Printf("Received PPS, PTS=%d, Size=%d bytes", pts, len(nalData))
+			d.lastPPS = make([]byte, len(nalData))
+			copy(d.lastPPS, nalData)
+			// log.Println("PPS Data:", nalData)
+			continue
 		case 5: // IDR (关键帧)
+			// log.Printf("Received IDR frame, PTS=%d, Size=%d bytes", pts, len(nalData))
+			d.lastIDR = make([]byte, len(nalData))
+			copy(d.lastIDR, nalData)
 			isKeyFrame = true
+			waitForKeyFrame = false // 【重点新增】成功捕获首个关键帧，解除拦截状态！
+		default:
+			// log.Printf("Received non-key frame (NALU Type=%d), PTS=%d, Size=%d bytes", nalType, pts, len(nalData))
+		}
+		if waitForKeyFrame {
+			log.Printf("Dropping non-key frame (NALU Type=%d) before first IDR", nalType)
+			continue
 		}
 
-		// log.Printf("Recv NAL: type=%d, len=%d, isKey=%v", nalType, len(nalData), isKeyFrame)
+		var sendData []byte
+		if isKeyFrame {
+			startCode := []byte{0x00, 0x00, 0x00, 0x01}
+			sendData = make([]byte, 0, len(d.lastSPS)+len(d.lastPPS)+len(payloadBuf)+12)
+			if len(d.lastSPS) > 0 {
+				sendData = append(sendData, startCode...)
+				sendData = append(sendData, d.lastSPS...)
+			}
+			if len(d.lastPPS) > 0 {
+				sendData = append(sendData, startCode...)
+				sendData = append(sendData, d.lastPPS...)
+			}
+			sendData = append(sendData, startCode...)
+			sendData = append(sendData, nalData...)
+		} else {
+			// 保留 payloadBuf 原始的 Annex-B Start Code
+			sendData = payloadBuf
+		}
 
 		// 4. 发送 AVBox
 		d.videoChan <- sdriver.AVBox{
-			Data:       nalData, // 这里的切片引用的是 videoBuffer 的底层数组，注意生命周期
+			Data:       sendData,
 			PTS:        time.Duration(pts) * time.Microsecond,
 			IsKeyFrame: isKeyFrame,
-			IsConfig:   isConfig,
+			IsConfig:   false,
 		}
+		// naltype := nalData[0] & 0x1F
+		// log.Printf("Sent AVBox: NALU Type=%d, PTS=%d, Size=%d bytes, IsKeyFrame=%v\n", naltype, pts, len(sendData), isKeyFrame)
+		// log.Println(nalData)
 	}
 }
 
@@ -187,6 +234,32 @@ func (d *LinuxDriver) GetReceivers() (<-chan sdriver.AVBox, <-chan sdriver.AVBox
 func (d *LinuxDriver) Pause() {}
 
 func (d *LinuxDriver) RequestIDR(firstFrame bool) {
+	// send cache key frame if available
+	// if len(d.lastSPS) > 0 && len(d.lastPPS) > 0 {
+	// 	startCode := []byte{0x00, 0x00, 0x00, 0x01}
+	// 	keyFrameData := make([]byte, 0, len(d.lastSPS)+len(d.lastPPS)+8)
+	// 	keyFrameData = append(keyFrameData, startCode...)
+	// 	keyFrameData = append(keyFrameData, d.lastSPS...)
+	// 	keyFrameData = append(keyFrameData, startCode...)
+	// 	keyFrameData = append(keyFrameData, d.lastPPS...)
+
+	// 	keyFrameData = append(keyFrameData, startCode...)
+	// 	if len(d.lastIDR) > 0 {
+	// 		keyFrameData = append(keyFrameData, d.lastIDR...)
+	// 	} else {
+	// 		log.Println("Warning: No cached IDR frame available, sending SPS/PPS only")
+	// 	}
+
+	// 	d.videoChan <- sdriver.AVBox{
+	// 		Data:       keyFrameData,
+	// 		PTS:        time.Now().Sub(time.Unix(0, 0)),
+	// 		IsKeyFrame: true,
+	// 		IsConfig:   false,
+	// 	}
+	// 	log.Println("Sent cached key frame (SPS+PPS) in response to IDR request")
+	// } else {
+	// 	log.Println("No cached SPS/PPS available to send for IDR request")
+	// }
 }
 
 func (d *LinuxDriver) Capabilities() sdriver.DriverCaps {
@@ -209,6 +282,7 @@ func (d *LinuxDriver) MediaMeta() sdriver.MediaMeta {
 		AudioCodec: "",
 	}
 }
+
 func (d *LinuxDriver) Stop() {
 	if d.conn != nil {
 		d.conn.Close()
