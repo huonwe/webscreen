@@ -1,6 +1,7 @@
 package sagent
 
 import (
+	"bytes"
 	"iter"
 	"log"
 	"time"
@@ -43,7 +44,7 @@ func (sa *Agent) VideoStream() iter.Seq[media.Sample] {
 				// 计算与上一帧的时间差
 				delta := vBox.PTS - sa.lastVideoPTS
 
-				if delta <= 0 || delta > defaultDuration<<3 {
+				if delta <= 0 || delta > defaultDuration<<2 {
 					duration = defaultDuration
 				} else {
 					duration = delta
@@ -51,6 +52,22 @@ func (sa *Agent) VideoStream() iter.Seq[media.Sample] {
 			}
 			sa.lastVideoPTS = vBox.PTS
 			// }
+
+			debug := false
+			if debug {
+				parts := bytes.Split(vBox.Data, []byte{0x00, 0x00, 0x00, 0x01})
+				log.Println("--- Debug: Video Frame NALU Parts ---")
+				for i, part := range parts {
+					if len(part) == 0 {
+						continue
+					}
+					nalType := part[0] & 0x1F
+					log.Printf("NALU Part %d: Type=%d, Size=%d bytes\n", i, nalType, len(part))
+				}
+				log.Println("--- End of Frame ---")
+				log.Println(timestamp)
+				log.Println(duration)
+			}
 
 			if !yield(media.Sample{
 				Data:      vBox.Data,
