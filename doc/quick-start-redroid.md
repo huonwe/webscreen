@@ -12,7 +12,7 @@ services:
     image: dukihiroi/webscreen:latest
     container_name: webscreen
     restart: unless-stopped
-    network-mode: host
+    network_mode: host
     # ports:
     #   - "8079:8079"
     # udp range for WebRTC if needed, currently using host network is easier for webrtc. If you face problems, please try host network mode.
