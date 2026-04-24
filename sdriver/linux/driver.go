@@ -13,7 +13,7 @@ import (
 	"webscreen/sdriver/comm"
 )
 
-//go:embed bin/capturer_xvfb
+//go:embed bin/capturer_wf-recorder
 var capturerXvfbData embed.FS
 
 // sudo killall Xvfb
@@ -54,9 +54,9 @@ func New(cfg map[string]string) (*LinuxDriver, error) {
 		videoBuffer: comm.NewLinearBuffer(16 * 1024 * 1024),
 	}
 
-	data, err := capturerXvfbData.ReadFile("bin/capturer_xvfb")
+	data, err := capturerXvfbData.ReadFile("bin/capturer_wf-recorder")
 	if err != nil {
-		log.Printf("[xvfb] 读取 capturer_xvfb 失败: %v", err)
+		log.Printf("[wf-recorder] 读取 capturer_wf-recorder 失败: %v", err)
 		return nil, err
 	}
 	err = os.WriteFile("capturer_xvfb", data, 0755)
