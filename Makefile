@@ -24,8 +24,10 @@ endif
 # 1. Capturer 输出路径 (必须固定！为了配合 go:embed)
 CAPTURER_DIR := sdriver/linux/bin
 CAPTURER_XVFB_BIN := capturer_xvfb
+CAPTURER_XORG_BIN := capturer_xorg
 CAPTURER_WL_BIN := capturer_wl-recorder
 CAPTURER_XVFB_OUT := $(CAPTURER_DIR)/$(CAPTURER_XVFB_BIN)
+CAPTURER_XORG_OUT := $(CAPTURER_DIR)/$(CAPTURER_XORG_BIN)
 CAPTURER_WL_OUT := $(CAPTURER_DIR)/$(CAPTURER_WL_BIN)
 
 # 2. Main 程序输出路径 (可变)
@@ -45,6 +47,7 @@ build-capturers:
 	@echo "   Output Directory (for embed): $(CAPTURER_DIR)"
 	@mkdir -p $(CAPTURER_DIR)
 	go build -v -ldflags "$(LDFLAGS)" -o "$(CAPTURER_XVFB_OUT)" ./linuxCapturer/xvfb
+	go build -v -ldflags "$(LDFLAGS)" -o "$(CAPTURER_XORG_OUT)" ./linuxCapturer/xorg
 	go build -v -ldflags "$(LDFLAGS)" -o "$(CAPTURER_WL_OUT)" ./linuxCapturer/wl-recorder
 
 # 构建主程序

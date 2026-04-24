@@ -222,6 +222,10 @@ func (s *XvfbSession) StartFFmpeg(codec string, resolution string, bitRate strin
 		"-bf", "0",
 		"-preset", _preset,
 		// "-tune", "zerolatency",
+		// "-p", "x264-params=sliced-threads=0:slices=1", // 【关键修复】禁用多线程切片，确保每帧只有一个 VCL NALU
+		// "-p", "slices=1", // 【关键修复】禁用多 slice 编码，确保每帧只有一个 VCL NALU
+		"-x", "yuv420p",
+		// "-D",
 
 		"-f", codec,
 		"-",

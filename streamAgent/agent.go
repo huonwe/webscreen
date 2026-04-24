@@ -59,7 +59,7 @@ func (sa *Agent) InitDriver(finalCodec webrtc.RTPCodecParameters) error {
 			return err
 		}
 		sa.driver = androidDriver
-	case DEVICE_TYPE_LINUX:
+	case DEVICE_TYPE_LINUX, "xvfb":
 		// 初始化 Linux Driver
 		driver, err := linuxDriver.New(sa.config.DriverConfig)
 		if err != nil {
