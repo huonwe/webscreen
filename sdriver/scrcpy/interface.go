@@ -2,6 +2,7 @@ package scrcpy
 
 import (
 	"log"
+	"strings"
 	"time"
 	"webscreen/sdriver"
 )
@@ -103,4 +104,27 @@ func (sd *ScrcpyDriver) Stop() {
 	// sd.adbClient.ReverseRemove(fmt.Sprintf("localabstract:scrcpy_%s", sd.scid))
 	sd.adbClient.Stop()
 	sd.cancel()
+}
+
+func (sd *ScrcpyDriver) ConfigDescription() map[string]string {
+	encoderList := sd.EncoderList()
+	encoderListStr := strings.Join(encoderList, ",")
+
+	return map[string]string{
+		// "KeyName": "{ValueType, DefaultValue, isOptional, [Options...]} Description",
+		"video":   "{Boolean, True, Non-Optional, []}enable video stream",
+		"audio":   "{Boolean, True, Non-Optional, []}enable audio stream",
+		"control": "{Boolean, True, Non-Optional, []}enable control stream",
+
+		"video_codec":         "{String, h264, Optional, [h264, h265]}Video codec to use",
+		"video_encoder":       "{String, , Optional, [" + encoderListStr + "]}Video encoder to use, e.g. 'omx' for hardware encoding on Raspberry Pi",
+		"video_codec_options": "{String, , Optional, []}Additional options for the video codec, e.g. 'profile=1' for h264",
+		"max_size":            "{Integer, 0, Optional, []}Maximum video dimension (width or height) in pixels, e.g. 1920",
+		"max_fps":             "{Integer, 0, Optional, []}Maximum video frames per second, e.g. 60",
+		"resolution":          "{String, , Optional, []}Video resolution, e.g. 1920x1080",
+		"frame_rate":          "{String, , Optional, []}Video frame rate, e.g. 60",
+		"bit_rate":            "{String, , Optional, []}Video bit rate in bits per second, e.g. 20000000 for 20Mbps",
+
+		"new_display": "{Boolean, False, Optional, []}Whether to create a new virtual display for the session (Android 10+)",
+	}
 }

@@ -5,10 +5,9 @@ import (
 	"log"
 	"time"
 	"webscreen/sdriver"
-	"webscreen/sdriver/dummy"
+	linuxDriver "webscreen/sdriver/linux"
 	"webscreen/sdriver/scrcpy"
 	"webscreen/sdriver/sunshine"
-	linuxXvfbDriver "webscreen/sdriver/xvfb"
 
 	"github.com/pion/webrtc/v4"
 )
@@ -43,14 +42,14 @@ func New(config AgentConfig) *Agent {
 func (sa *Agent) InitDriver(finalCodec webrtc.RTPCodecParameters) error {
 	sa.config.DriverConfig["webrtc_codec_level"] = fmt.Sprintf("%d||%s||%s", finalCodec.PayloadType, finalCodec.MimeType, finalCodec.SDPFmtpLine)
 	switch sa.config.DeviceType {
-	case DEVICE_TYPE_DUMMY:
-		// 初始化 Dummy Driver
-		dummyDriver, err := dummy.New(sa.config.DriverConfig)
-		if err != nil {
-			log.Printf("Failed to initialize dummy driver: %v", err)
-			return err
-		}
-		sa.driver = dummyDriver
+	// case DEVICE_TYPE_DUMMY:
+	// 	// 初始化 Dummy Driver
+	// 	dummyDriver, err := dummy.New(sa.config.DriverConfig)
+	// 	if err != nil {
+	// 		log.Printf("Failed to initialize dummy driver: %v", err)
+	// 		return err
+	// 	}
+	// 	sa.driver = dummyDriver
 	case DEVICE_TYPE_ANDROID:
 		// 初始化 Android Driver
 		sa.config.DriverConfig["deviceID"] = sa.config.DeviceID
@@ -60,14 +59,14 @@ func (sa *Agent) InitDriver(finalCodec webrtc.RTPCodecParameters) error {
 			return err
 		}
 		sa.driver = androidDriver
-	case DEVICE_TYPE_XVFB:
+	case DEVICE_TYPE_LINUX:
 		// 初始化 Linux Driver
-		linuxDriver, err := linuxXvfbDriver.New(sa.config.DriverConfig)
+		driver, err := linuxDriver.New(sa.config.DriverConfig)
 		if err != nil {
 			log.Printf("Failed to initialize Linux driver: %v", err)
 			return err
 		}
-		sa.driver = linuxDriver
+		sa.driver = driver
 	case DEVICE_TYPE_SUNSHINE:
 		sunshine.SSTest()
 	default:

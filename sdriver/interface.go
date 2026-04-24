@@ -12,4 +12,6 @@ type SDriver interface {
 	// CodecInfo() (videoCodec string, audioCodec string)
 	MediaMeta() MediaMeta
 	Stop()
+
+	ConfigDescription() map[string]string
 }

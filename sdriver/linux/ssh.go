@@ -1,4 +1,4 @@
-package linuxXvfbDriver
+package linuxDriver
 
 import (
 	"os"

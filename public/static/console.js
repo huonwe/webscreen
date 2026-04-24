@@ -471,8 +471,7 @@ function showConfigModal(serial) {
         androidSettings.classList.add('hidden');
         xvfbSettings.classList.remove('hidden');
 
-        document.getElementById('xvfbIp').value = drv.ip || '';
-        document.getElementById('xvfbUser').value = drv.user || '';
+        document.getElementById('ldBackend').value = drv.backend || 'xvfb';
         document.getElementById('xvfbResolution').value = drv.resolution || '1920x1080';
         document.getElementById('xvfbFrameRate').value = drv.frameRate || '60';
         document.getElementById('xvfbBitRate').value = drv.bitRate || '20000000';
@@ -508,8 +507,7 @@ function saveDeviceConfig() {
     const drv = config.driver_config;
 
     if (config.device_type === 'xvfb') {
-        drv.ip = document.getElementById('xvfbIp').value.trim();
-        drv.user = document.getElementById('xvfbUser').value.trim();
+        drv.backend = document.getElementById('ldBackend').value;
         drv.resolution = document.getElementById('xvfbResolution').value.trim();
         drv.frameRate = document.getElementById('xvfbFrameRate').value.trim();
         drv.bitRate = document.getElementById('xvfbBitRate').value.trim();

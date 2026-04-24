@@ -130,3 +130,56 @@ func (c *ADBClient) SupportOpusAudio() bool {
 
 	return strings.Contains(outputStr, "opus.encoder")
 }
+
+func (c *ADBClient) GetSupportedEncoders() []string {
+	// 1. 构造 shell 命令
+	cmdStr := "grep -E '<MediaCodec name=\"[^\"]*encoder[^\"]*\"' " +
+		"/system/etc/media_codecs*.xml " +
+		"/system_ext/etc/media_codecs*.xml " +
+		"/vendor/etc/media_codecs*.xml " +
+		"/vendor/odm/etc/media_codecs*.xml " +
+		"/odm/etc/media_codecs*.xml " +
+		"/product/etc/media_codecs*.xml " +
+		"/apex/com.android.media.swcodec/etc/media_codecs*.xml " +
+		"/apex/com.android.media/etc/media_codecs*.xml " +
+		" 2>/dev/null || true"
+
+	var args []string
+	if c.deviceSerial != "" {
+		args = append(args, "-s", c.deviceSerial)
+	}
+	args = append(args, "shell", cmdStr)
+
+	cmd := exec.CommandContext(c.ctx, "adb", args...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Printf("Failed to get supported encoders: %v", err)
+		return nil
+	}
+
+	outputStr := string(output)
+	var encoders []string
+	lines := strings.Split(outputStr, "\n")
+	for _, line := range lines {
+		// Example: <MediaCodec name="c2.rk.hevc.encoder" type="video/hevc" ...>
+		if idx := strings.Index(line, "name=\""); idx != -1 {
+			start := idx + 6
+			if end := strings.Index(line[start:], "\""); end != -1 {
+				name := line[start : start+end]
+				// 可以在这里只保留 video 相关的 encoder，比如包含 video 或 hevc/avc 的等，
+				// 这里做个简单过滤以避免重复和非 encoder 实体
+				found := false
+				for _, e := range encoders {
+					if e == name {
+						found = true
+						break
+					}
+				}
+				if !found && strings.Contains(strings.ToLower(name), "encoder") {
+					encoders = append(encoders, name)
+				}
+			}
+		}
+	}
+	return encoders
+}

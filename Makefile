@@ -22,9 +22,11 @@ endif
 # --- 路径配置 ---
 
 # 1. Capturer 输出路径 (必须固定！为了配合 go:embed)
-CAPTURER_DIR := sdriver/xvfb/bin
-CAPTURER_BIN := capturer_xvfb
-CAPTURER_OUT := $(CAPTURER_DIR)/$(CAPTURER_BIN)
+CAPTURER_DIR := sdriver/linux/bin
+CAPTURER_XVFB_BIN := capturer_xvfb
+CAPTURER_WL_BIN := capturer_wl-recorder
+CAPTURER_XVFB_OUT := $(CAPTURER_DIR)/$(CAPTURER_XVFB_BIN)
+CAPTURER_WL_OUT := $(CAPTURER_DIR)/$(CAPTURER_WL_BIN)
 
 # 2. Main 程序输出路径 (可变)
 DIST_DIR ?= .
@@ -33,19 +35,20 @@ MAIN_OUT := $(DIST_DIR)/webscreen$(SUFFIX)$(EXE)
 
 # --- 构建目标 ---
 
-all: build-capturer build-main
+all: build-capturers build-main
 
 ci: all
 
-# 构建 capturer
-build-capturer:
-	@echo ">> [1/2] Building Capturer for $(GOOS)/$(GOARCH)..."
-	@echo "   Fixed Path (for embed): $(CAPTURER_OUT)"
+# 构建 capturers
+build-capturers:
+	@echo ">> [1/2] Building Capturers for $(GOOS)/$(GOARCH)..."
+	@echo "   Output Directory (for embed): $(CAPTURER_DIR)"
 	@mkdir -p $(CAPTURER_DIR)
-	go build -v -ldflags "$(LDFLAGS)" -o "$(CAPTURER_OUT)" ./capturer
+	go build -v -ldflags "$(LDFLAGS)" -o "$(CAPTURER_XVFB_OUT)" ./linuxCapturer/xvfb
+	go build -v -ldflags "$(LDFLAGS)" -o "$(CAPTURER_WL_OUT)" ./linuxCapturer/wl-recorder
 
 # 构建主程序
-build-main: build-capturer
+build-main: build-capturers
 	@echo ">> [2/2] Building Main App for $(GOOS)/$(GOARCH)..."
 	@echo "   LDFLAGS: $(LDFLAGS)"
 	@echo "   Output: $(MAIN_OUT)"
@@ -54,5 +57,5 @@ build-main: build-capturer
 
 # 清理
 clean:
-	rm -f webscreen* sdriver/xvfb/bin/capturer_xvfb*
+	rm -f webscreen* $(CAPTURER_DIR)/*
 	rm -rf dist

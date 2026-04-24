@@ -359,6 +359,10 @@ func (da *ScrcpyDriver) ShowDeviceInfo() {
 	log.Printf("[scrcpy] media Meta: %v", da.mediaMeta)
 }
 
+func (da *ScrcpyDriver) EncoderList() []string {
+	return da.adbClient.GetSupportedEncoders()
+}
+
 // Please Ensure the input conn is not Control conn
 func (da *ScrcpyDriver) assignConn(conn net.Conn) error {
 	codecID := readCodecID(conn)

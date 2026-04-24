@@ -1,4 +1,4 @@
-package linuxXvfbDriver
+package linuxDriver
 
 import (
 	"embed"
@@ -288,4 +288,10 @@ func (d *LinuxDriver) Stop() {
 		d.conn.Close()
 	}
 	os.Remove("capturer_xvfb")
+}
+
+func (d *LinuxDriver) ConfigDescription() map[string]string {
+	return map[string]string{
+		"test": "{String, defaultValue, isOptional, [options...]}Description of the config parameter",
+	}
 }
