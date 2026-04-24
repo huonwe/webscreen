@@ -19,6 +19,7 @@ func main() {
 	bitRate := flag.String("bitrate", "8M", "streaming bitrate in Mbps")
 	frameRate := flag.String("framerate", "60", "frame rate for capturing")
 	codec := flag.String("codec", "h264", "video codec: h264 or hevc")
+	cpuSet := flag.String("cpu_set", "5-7", "optional CPU affinity for wf-recorder, for example 0 or 0-1")
 	flag.Parse()
 	log.Printf("Starting Wayland capturer with resolution %s, bitrate %s, framerate %s, codec %s\n", *resolution, *bitRate, *frameRate, *codec)
 
@@ -34,7 +35,7 @@ func main() {
 		return
 	}
 
-	session, err := NewWaylandSession(*tcpPort, width, height, *frameRate)
+	session, err := NewWaylandSession(*tcpPort, width, height, *frameRate, *cpuSet)
 	if err != nil {
 		log.Printf("无法启动 Sway/Wayland: %v", err)
 		return

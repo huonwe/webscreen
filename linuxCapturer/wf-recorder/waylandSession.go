@@ -29,6 +29,7 @@ type WaylandSession struct {
 	Display    string
 	SwaySock   string
 	X11Display string
+	CPUSet     string
 	Cmd        *os.Process
 	Conn       net.Conn
 	Width      int
@@ -39,7 +40,7 @@ type WaylandSession struct {
 	cleanupOnce  sync.Once
 }
 
-func NewWaylandSession(tcpPort string, width int, height int, frameRate string) (*WaylandSession, error) {
+func NewWaylandSession(tcpPort string, width int, height int, frameRate string, cpuSet string) (*WaylandSession, error) {
 	xdgRuntimeDir := os.Getenv("XDG_RUNTIME_DIR")
 	if xdgRuntimeDir == "" {
 		xdgRuntimeDir = fmt.Sprintf("/run/user/%d", os.Getuid())
@@ -90,6 +91,7 @@ seat seat0 attach *
 		Cmd:    swayCmd.Process,
 		Width:  width,
 		Height: height,
+		CPUSet: cpuSet,
 	}
 
 	err := session.waitLaunchFinished(xdgRuntimeDir)
@@ -291,6 +293,10 @@ func (s *WaylandSession) StartWfRecorder(codec string, resolution string, bitRat
 
 	_preset := "ultrafast"
 	bitRate = "1M"
+	threadArgs := make([]string, 0, 2)
+	if encoder == "libx264" || encoder == "libx265" {
+		threadArgs = append(threadArgs, "-p", "threads=1")
+	}
 
 	// 2. 构造参数
 	args := []string{
@@ -303,20 +309,35 @@ func (s *WaylandSession) StartWfRecorder(codec string, resolution string, bitRat
 		"-D",
 		"-p", "preset=" + _preset,
 		"-p", "tune=zerolatency",
+	}
+	args = append(args, threadArgs...)
+	args = append(args,
 		// --- 以下是针对 WebRTC 的关键优化 ---
 		// "-p", "profile=baseline", // 强制使用 Baseline Profile，这是 WebRTC 的最爱
 		// "-p", "level=3.1", // 限制 Level，避免超出浏览器硬解能力上限
-		"-p", "g=60", // 缩短 GOP，强制每 30 帧（0.5秒）出一个关键帧
+		// "-p", "g=60", // 缩短 GOP，强制每 30 帧（0.5秒）出一个关键帧
 		"-p", "x264-params=sliced-threads=0:slices=1", // 【关键修复】禁用多线程切片，确保每帧只有一个 VCL NALU
 		"-p", "slices=1", // 【关键修复】禁用多 slice 编码，确保每帧只有一个 VCL NALU
 		// "-p", "keyint_min=60", // 最小关键帧间隔
 		// "-p", "scenecut=0", // 关闭场景切换检测，确保 GOP 长度绝对固定
 		// "-p", "intra-refresh=1", // 【重点】开启周期内帧刷新，WebRTC 最爱，能消除 I 帧带来的瞬间带宽波动
 		"-p", "bf=0", // 禁用 B 帧
-		"-p", "b=" + bitRate,
+		"-p", "b="+bitRate,
+	)
+
+	commandName := "wf-recorder"
+	commandArgs := args
+	if s.CPUSet != "" {
+		if _, err := exec.LookPath("taskset"); err == nil {
+			commandName = "taskset"
+			commandArgs = append([]string{"-c", s.CPUSet, "wf-recorder"}, args...)
+			log.Printf("启用 CPU 绑定: %s", s.CPUSet)
+		} else {
+			log.Printf("taskset 不可用，跳过 CPU 绑定: %s", s.CPUSet)
+		}
 	}
 
-	ffmpegCmd := exec.Command("wf-recorder", args...)
+	ffmpegCmd := exec.Command(commandName, commandArgs...)
 
 	// 3. 设置子进程环境
 	xdgRuntimeDir := os.Getenv("XDG_RUNTIME_DIR")
