@@ -2,6 +2,8 @@
 
 # --- 变量定义 ---
 
+#  export PATH=$PATH:/usr/local/go/bin
+PATH := /usr/local/go/bin:$(PATH)
 # 获取当前目标 OS/ARCH
 GOOS ?= $(shell go env GOOS)
 GOARCH ?= $(shell go env GOARCH)
@@ -25,7 +27,7 @@ endif
 CAPTURER_DIR := sdriver/linux/bin
 CAPTURER_XVFB_BIN := capturer_xvfb
 CAPTURER_XORG_BIN := capturer_xorg
-CAPTURER_WL_BIN := capturer_wl-recorder
+CAPTURER_WL_BIN := capturer_wf-recorder
 CAPTURER_XVFB_OUT := $(CAPTURER_DIR)/$(CAPTURER_XVFB_BIN)
 CAPTURER_XORG_OUT := $(CAPTURER_DIR)/$(CAPTURER_XORG_BIN)
 CAPTURER_WL_OUT := $(CAPTURER_DIR)/$(CAPTURER_WL_BIN)
@@ -48,7 +50,7 @@ build-capturers:
 	@mkdir -p $(CAPTURER_DIR)
 	go build -v -ldflags "$(LDFLAGS)" -o "$(CAPTURER_XVFB_OUT)" ./linuxCapturer/xvfb
 	go build -v -ldflags "$(LDFLAGS)" -o "$(CAPTURER_XORG_OUT)" ./linuxCapturer/xorg
-	go build -v -ldflags "$(LDFLAGS)" -o "$(CAPTURER_WL_OUT)" ./linuxCapturer/wl-recorder
+	go build -v -ldflags "$(LDFLAGS)" -o "$(CAPTURER_WL_OUT)" ./linuxCapturer/wf-recorder
 
 # 构建主程序
 build-main: build-capturers

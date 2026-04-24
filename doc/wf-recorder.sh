@@ -1,4 +1,3 @@
-```
 #!/bin/bash
 
 # Exit immediately if a command exits with a non-zero status
@@ -38,22 +37,21 @@ udevadm control --reload-rules
 udevadm trigger
 
 # ==========================================
-# 2. Install and configure seatd
+# 2. Install core dependencies (Sway, wf-recorder, seatd)
 # ==========================================
-echo -e "\n[3/4] Checking and installing seatd..."
-if ! command -v seatd &> /dev/null; then
-    if command -v apt &> /dev/null; then
-        apt update && apt install -y seatd
-    elif command -v pacman &> /dev/null; then
-        pacman -S --noconfirm seatd
-    else
-        echo "⚠️ No apt or pacman package manager detected. Please install seatd manually!"
-        exit 1
-    fi
+echo -e "\n[3/4] Checking and installing core packages (sway, wf-recorder, seatd)..."
+if command -v apt &> /dev/null; then
+    apt update && apt install -y sway wf-recorder seatd
+elif command -v pacman &> /dev/null; then
+    pacman -S --noconfirm sway wf-recorder seatd
 else
-    echo "✅ seatd is already installed, skipping download."
+    echo "⚠️ No apt or pacman package manager detected. Please install sway, wf-recorder, and seatd manually!"
+    exit 1
 fi
 
+# ==========================================
+# 3. Configure seatd service
+# ==========================================
 echo -e "\n[4/4] Configuring seatd system service..."
 # Different Linux distributions use different default groups for seatd 
 # (Debian uses _seatd, Arch uses seat). We add the user to both for compatibility.
@@ -75,4 +73,3 @@ echo "================================================================="
 echo "💡 After reconnecting/rebooting, ensure the Sway environment variables in your Go program include:"
 echo "   export SEATD_SOCK=/run/seatd.sock"
 echo "================================================================="
-```

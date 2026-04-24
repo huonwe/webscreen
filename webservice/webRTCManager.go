@@ -537,7 +537,7 @@ func batchRegisterCodecH265(m *webrtc.MediaEngine) {
 }
 
 func WaitAndGetFinalCodecParams(pc *webrtc.PeerConnection) (webrtc.RTPCodecParameters, error) {
-	// startTime := time.Now()
+	startTime := time.Now()
 	for {
 		if pc.ConnectionState() == webrtc.PeerConnectionStateFailed {
 			return webrtc.RTPCodecParameters{}, fmt.Errorf("peer connection failed")
@@ -560,9 +560,9 @@ func WaitAndGetFinalCodecParams(pc *webrtc.PeerConnection) (webrtc.RTPCodecParam
 				return selectedCodec, nil
 			}
 		}
-		// if time.Since(startTime) > 10*time.Second {
-		// 	return webrtc.RTPCodecParameters{}, fmt.Errorf("timeout waiting for final codec parameters")
-		// }
+		if time.Since(startTime) > 10*time.Second {
+			return webrtc.RTPCodecParameters{}, fmt.Errorf("timeout waiting for final codec parameters")
+		}
 		time.Sleep(500 * time.Millisecond)
 	}
 }

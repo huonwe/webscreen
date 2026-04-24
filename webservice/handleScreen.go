@@ -77,6 +77,7 @@ Loop:
 		switch sub.PeerConnection.ConnectionState() {
 		case webrtc.PeerConnectionStateFailed, webrtc.PeerConnectionStateClosed:
 			log.Printf("Peer connection for device %s is in state %s, closing WebSocket", deviceIdentifier, sub.PeerConnection.ConnectionState())
+			conn.WriteJSON(map[string]any{"status": "error", "message": "Peer connection failed or closed", "stage": "webrtc_connection"})
 			conn.Close()
 			return
 		case webrtc.PeerConnectionStateConnected:
