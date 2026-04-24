@@ -57,6 +57,7 @@ echo -e "\n[4/4] Configuring seatd system service..."
 # (Debian uses _seatd, Arch uses seat). We add the user to both for compatibility.
 getent group _seatd >/dev/null && usermod -aG _seatd "$TARGET_USER"
 getent group seat >/dev/null && usermod -aG seat "$TARGET_USER"
+getent group input >/dev/null && usermod -aG input "$TARGET_USER"
 
 # Enable and restart the seatd service
 systemctl enable seatd

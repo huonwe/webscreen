@@ -62,12 +62,37 @@ func NewWaylandSession(tcpPort string, width int, height int, frameRate string, 
 xwayland enable
 output HEADLESS-1 resolution %dx%d@%sHz position 0 0
 
-# 关键配置：允许所有输入设备作用于 seat0
-seat seat0 attach *
-# 强制所有输入映射到虚拟屏幕
-# input "*" map_to_output HEADLESS-1
+# === 外观与美化配置 ===
 
+# 1. 设置背景壁纸 (fill 模式会按比例缩放并裁剪填满屏幕)
+output HEADLESS-1 bg /home/hiroi/Downloads/124956717_p0.png fill
+
+# 2. 全局字体设置
+font pango:sans-serif 11
+
+# 3. 窗口边框与间距 (现代平铺桌面风格)
+# 取消默认的粗大标题栏，改为 2 像素的纯色边框
+default_border pixel 2
+default_floating_border normal
+
+# 设置窗口之间的缝隙，让壁纸能透出来
+gaps inner 8
+gaps outer 4
+
+# 4. 窗口颜色配置 (基于优雅的 Nord 主题配色)
+# 格式：class                 border  backgr. text    indicator child_border
+client.focused          #88c0d0 #434c5e #eceff4 #8fbcbb   #88c0d0
+client.focused_inactive #3b4252 #2e3440 #d8dee9 #4c566a   #4c566a
+client.unfocused        #2e3440 #2e3440 #d8dee9 #2e3440   #2e3440
+client.urgent           #bf616a #bf616a #eceff4 #bf616a   #bf616a
+
+# 5. 状态栏配置 (可选)
+# 如果你只想要一个纯净的画面（比如为了无干扰地跑特定应用），可以取消下面 bar 的注释来隐藏默认的底部状态栏
+# bar {
+#     mode invisible
+# }
 `, width, height, frameRate)
+	// configContent := ""
 	os.WriteFile(swayConfig, []byte(configContent), 0600)
 
 	swayCmd := exec.Command("sway", "-c", swayConfig)
