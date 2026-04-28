@@ -26,7 +26,9 @@ func NewADBClient(deviceSerial string, scid string, parentCtx context.Context) *
 
 // 显式停止服务的方法
 func (c *ADBClient) Stop() {
-	c.ReverseRemove(fmt.Sprintf("localabstract:scrcpy_%s", c.scid))
+	if c.scid != "" {
+		c.ReverseRemove(fmt.Sprintf("localabstract:scrcpy_%s", c.scid))
+	}
 	c.cancel() // 这会触发所有绑定了该 ctx 的命令被 Kill
 }
 
@@ -131,7 +133,7 @@ func (c *ADBClient) SupportOpusAudio() bool {
 	return strings.Contains(outputStr, "opus.encoder")
 }
 
-func (c *ADBClient) GetSupportedEncoders() []string {
+func (c *ADBClient) SupportedEncoderList() []string {
 	// 1. 构造 shell 命令
 	cmdStr := "grep -E '<MediaCodec name=\"[^\"]*encoder[^\"]*\"' " +
 		"/system/etc/media_codecs*.xml " +

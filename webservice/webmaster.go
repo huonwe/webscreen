@@ -87,6 +87,7 @@ func (wm *WebMaster) setRouter() {
 		api.GET("/device/list", wm.handleListDevices)
 		api.POST("/device/connect", wm.handleConnectDevice)
 		api.POST("/device/pair", wm.handlePairDevice)
+		api.GET("/device/configDescription", wm.handleDeviceConfigDescription)
 		// api.POST("/device/discovery", wm.handleListDevicesDiscoveried)
 		// api.POST("/setPIN", wm.handleSetPIN)
 	}

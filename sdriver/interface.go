@@ -13,5 +13,5 @@ type SDriver interface {
 	MediaMeta() MediaMeta
 	Stop()
 
-	ConfigDescription() map[string]string
+	// ConfigDescription() map[string]string
 }

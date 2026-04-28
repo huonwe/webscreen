@@ -366,7 +366,7 @@ func (da *ScrcpyDriver) ShowDeviceInfo() {
 }
 
 func (da *ScrcpyDriver) EncoderList() []string {
-	return da.adbClient.GetSupportedEncoders()
+	return da.adbClient.SupportedEncoderList()
 }
 
 // Please Ensure the input conn is not Control conn

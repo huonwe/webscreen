@@ -292,8 +292,14 @@ func (d *LinuxDriver) Stop() {
 	os.Remove("capturer_xvfb")
 }
 
-func (d *LinuxDriver) ConfigDescription() map[string]string {
-	return map[string]string{
-		"test": "{String, defaultValue, isOptional, [options...]}Description of the config parameter",
+func ConfigDescription() map[string]sdriver.ConfigParamDescription {
+	return map[string]sdriver.ConfigParamDescription{
+		"test": {
+			Type:        "string",
+			Required:    false,
+			Default:     "defaultValue",
+			Options:     []string{"options..."},
+			Description: "description of the config parameter",
+		},
 	}
 }

@@ -1,10 +1,12 @@
 package sagent
 
+// type deviceType string
+
 const (
-	DEVICE_TYPE_SUNSHINE = "sunshine"
-	DEVICE_TYPE_LINUX    = "linux"
-	DEVICE_TYPE_ANDROID  = "android"
-	DEVICE_TYPE_DUMMY    = "dummy"
+	DEVICE_TYPE_SUNSHINE string = "sunshine"
+	DEVICE_TYPE_LINUX    string = "linux"
+	DEVICE_TYPE_ANDROID  string = "android"
+	DEVICE_TYPE_DUMMY    string = "dummy"
 )
 
 type AgentConfig struct {

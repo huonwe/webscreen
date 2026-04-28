@@ -1,9 +1,5 @@
 package webservice
 
-const (
-	DeviceTypeAndroid = "android"
-)
-
 type Device interface {
 	GetType() string
 	GetDeviceID() string

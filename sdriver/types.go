@@ -19,6 +19,14 @@ type MediaMeta struct {
 	AudioCodec string `json:"audio_codec"`
 }
 
+type ConfigParamDescription struct {
+	Type        string   `json:"type"`
+	Required    bool     `json:"required"`
+	Default     any      `json:"default,omitempty"`
+	Options     []string `json:"options,omitempty"`
+	Description string   `json:"description"`
+}
+
 type DriverCaps struct {
 	CanClipboard bool `json:"can_clipboard"`
 	CanUHID      bool `json:"can_uhid"`
