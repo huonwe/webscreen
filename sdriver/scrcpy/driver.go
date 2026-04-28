@@ -263,18 +263,21 @@ func New(config map[string]string) (*ScrcpyDriver, error) {
 		video_codec_options = video_codec_options_user
 		log.Printf("Using user-provided video codec options: %s", video_codec_options)
 	}
+	use_video_codec_options := config["use_video_codec_options"]
+	if use_video_codec_options == "" {
+		use_video_codec_options = "true"
+	}
 	options := map[string]string{
-		"CLASSPATH":           SCRCPY_SERVER_ANDROID_DST,
-		"Version":             SCRCPY_VERSION,
-		"scid":                da.scid,
-		"max_size":            strconv.Itoa(max_size),
-		"max_fps":             strconv.Itoa(max_fps),
-		"video":               "true",
-		"video_codec_options": video_codec_options, // bitrate-mode=2 to enable CBR
-		"video_bit_rate":      strconv.Itoa(video_bit_rate),
-		"video_codec":         config["video_codec"],
-		"audio":               config["audio"],
-		"audio_bit_rate":      config["audio_bit_rate"],
+		"CLASSPATH":      SCRCPY_SERVER_ANDROID_DST,
+		"Version":        SCRCPY_VERSION,
+		"scid":           da.scid,
+		"max_size":       strconv.Itoa(max_size),
+		"max_fps":        strconv.Itoa(max_fps),
+		"video":          "true",
+		"video_bit_rate": strconv.Itoa(video_bit_rate),
+		"video_codec":    config["video_codec"],
+		"audio":          config["audio"],
+		"audio_bit_rate": config["audio_bit_rate"],
 		// "audio_codec_options": "durationUs=10000", // 10ms
 		"control":     "true",
 		"new_display": config["new_display"],
@@ -282,6 +285,9 @@ func New(config map[string]string) (*ScrcpyDriver, error) {
 		"log_level":   "info",
 
 		// "video_encoder":  "c2.rk.hevc.encoder",
+	}
+	if use_video_codec_options == "true" {
+		options["video_codec_options"] = video_codec_options // bitrate-mode=2 to enable CBR
 	}
 
 	da.adbClient.StartScrcpyServer(options)
