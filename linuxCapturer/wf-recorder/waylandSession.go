@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/binary"
 	"fmt"
 	"io"
 	"log"
@@ -37,7 +36,7 @@ type WaylandSession struct {
 	Height     int
 
 	ffmpegOutput io.ReadCloser
-	controller   *InputControllerWayland
+	controller   *lc.InputController
 	cleanupOnce  sync.Once
 }
 
@@ -132,7 +131,7 @@ client.urgent           #bf616a #bf616a #eceff4 #bf616a   #bf616a
 	log.Printf("TCP connection established at %s\n", tcpPort)
 
 	var errController error
-	session.controller, errController = NewInputControllerWayland(int32(width), int32(height))
+	session.controller, errController = lc.NewInputController(lc.CONTROLLER_TYPE_WAYLAND, "", uint16(width), uint16(height))
 	if errController != nil {
 		log.Printf("创建 Wayland 虚拟外设失败, 请检查 /dev/uinput 权限: %v\n", errController)
 	} else {
@@ -140,7 +139,7 @@ client.urgent           #bf616a #bf616a #eceff4 #bf616a   #bf616a
 	}
 
 	go func() {
-		session.HandleEvent()
+		session.controller.ServeControlConn(conn)
 		log.Println("控制连接关闭，正在清理资源...")
 		session.CleanUp()
 	}()
@@ -250,54 +249,6 @@ func (s *WaylandSession) RunCmd(cmdStr string) int {
 	// 不在此处 Wait() 阻塞主线程，因为图形程序可能会一直前台运行
 	// cmd.Wait()
 	return 0
-}
-
-func (s *WaylandSession) HandleEvent() {
-	const (
-		eventTypeKeyboard = 0x00
-		EventTypeMouse    = 0x01
-	)
-	head := make([]byte, 1)
-	for {
-		_, err := io.ReadFull(s.Conn, head)
-		if err != nil {
-			log.Println("控制连接断开或读取错误:", err)
-			return
-		}
-		eventType := head[0]
-		// log.Printf("Received event type: %v\n", eventType)
-		switch eventType {
-		case EventTypeMouse:
-			payload := make([]byte, 17)
-			if _, err := io.ReadFull(s.Conn, payload); err != nil {
-				return
-			}
-			action := payload[0]
-			x := binary.BigEndian.Uint32(payload[1:5])
-			y := binary.BigEndian.Uint32(payload[5:9])
-			buttons := binary.BigEndian.Uint32(payload[9:13])
-			deltaX := int16(binary.BigEndian.Uint16(payload[13:15]))
-			deltaY := int16(binary.BigEndian.Uint16(payload[15:]))
-
-			if s.controller != nil {
-				s.controller.HandleMouseEvent(action, int32(x), int32(y), buttons, deltaX, deltaY)
-			}
-		case eventTypeKeyboard:
-			payload := make([]byte, 5)
-			if _, err := io.ReadFull(s.Conn, payload); err != nil {
-				return
-			}
-			action := payload[0]
-			webKeyCode := binary.BigEndian.Uint32(payload[1:5])
-			x11Code := byte(webKeyCode)
-
-			if s.controller != nil {
-				s.controller.HandleKeyboardEvent(action, int32(x11Code))
-			}
-		default:
-			log.Printf("收到未知事件类型: %v", eventType)
-		}
-	}
 }
 
 func (s *WaylandSession) StartWfRecorder(codec string, resolution string, bitRate string, frameRate string) error {

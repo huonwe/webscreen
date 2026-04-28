@@ -79,6 +79,7 @@ let activeMousePointer = null;
 
 remoteVideo.addEventListener('mousedown', (event) => {
     // console.log("Mouse down event:", event);
+    if (document.pointerLockElement === remoteVideo) return;
     if (event.button !== 0 || window.isUHIDMouseEnabled) return; // Only Left Click
     activeMousePointer = 0; // 使用 pointerId 0 表示鼠标
     const coords = getScreenCoordinates(event.clientX, event.clientY);
@@ -88,6 +89,7 @@ remoteVideo.addEventListener('mousedown', (event) => {
 });
 
 remoteVideo.addEventListener('mouseup', (event) => {
+    if (document.pointerLockElement === remoteVideo) return;
     if (window.isUHIDMouseEnabled) return;
     if (activeMousePointer !== null) {
         const coords = getScreenCoordinates(event.clientX, event.clientY);
@@ -99,6 +101,7 @@ remoteVideo.addEventListener('mouseup', (event) => {
 });
 
 remoteVideo.addEventListener('mousemove', (event) => {
+    if (document.pointerLockElement === remoteVideo) return;
     if (window.isUHIDMouseEnabled) return;
     if (activeMousePointer !== null && event.buttons === 1) {
         // console.log("Mouse move event:", event);
@@ -112,6 +115,7 @@ remoteVideo.addEventListener('mousemove', (event) => {
 
 // 处理鼠标移出视频区域后释放的情况
 remoteVideo.addEventListener('mouseleave', (event) => {
+    if (document.pointerLockElement === remoteVideo) return;
     if (activeMousePointer !== null && event.buttons !== 1) {
         const coords = getScreenCoordinates(event.clientX, event.clientY);
         if (coords) {

@@ -10,10 +10,13 @@ func (d *LinuxDriver) SendEvent(event sdriver.Event) error {
 	// log.Printf("X11Driver: Sending event type %T", event)
 	buf := new(bytes.Buffer)
 
-	// 常量定义 (需确保与 sdriver 包一致，或直接使用字面量)
+	// 协议常量（与 linuxCapturer/inputController.go 对齐）
 	const (
 		PacketTypeKey   = 0x00
 		PacketTypeMouse = 0x01
+		PacketTypeTouch = 0x02
+
+		mouseActionMove = 2
 	)
 
 	switch v := event.(type) {
@@ -31,30 +34,23 @@ func (d *LinuxDriver) SendEvent(event sdriver.Event) error {
 		// 注意：需确保结构体里是 int16，或者在这里强转
 		binary.Write(buf, binary.BigEndian, int16(v.WheelDeltaX)) // [13-14] Wheel X
 		binary.Write(buf, binary.BigEndian, int16(v.WheelDeltaY)) // [15-16] Wheel Y
-	// =================================================================
-	// Case 1: 触摸事件 -> 鼠标包
-	// 接收端 Payload 长度: 16 bytes
-	// 结构: [Action 1][X 4][Y 4][Btn 4][Wheel X][Wheel Y]
-	// =================================================================
+
+	// Touch payload: [Action 1][PtrID 1][X 2][Y 2][Pressure 2][Buttons 1] => 9 bytes
 	case *sdriver.TouchEvent:
-		buf.WriteByte(PacketTypeMouse) // Header: 0x01
+		buf.WriteByte(PacketTypeTouch) // Header: 0x02
+		buf.WriteByte(v.Action)
+		buf.WriteByte(byte(v.PointerID & 0xFF))
+		binary.Write(buf, binary.BigEndian, uint16(v.PosX&0xFFFF))
+		binary.Write(buf, binary.BigEndian, uint16(v.PosY&0xFFFF))
+		binary.Write(buf, binary.BigEndian, v.Pressure)
+		buf.WriteByte(byte(v.Buttons & 0xFF))
 
-		// Payload (16 bytes)
-		buf.WriteByte(v.Action)                        // [0] Action
-		binary.Write(buf, binary.BigEndian, v.PosX)    // [1-4] X
-		binary.Write(buf, binary.BigEndian, v.PosY)    // [5-8] Y
-		binary.Write(buf, binary.BigEndian, v.Buttons) // [9-12] Buttons
-		binary.Write(buf, binary.BigEndian, int16(0))  // [13-14] Wheel (触摸无滚轮)
-		binary.Write(buf, binary.BigEndian, int16(0))  // [15-16] Padding (关键！补齐第16字节)
-
-	// =================================================================
-	// Case 2: 滚动事件 -> 鼠标包
-	// =================================================================
+	// Scroll 映射为 Mouse Move + Wheel
 	case *sdriver.ScrollEvent:
 		buf.WriteByte(PacketTypeMouse) // Header: 0x01
 
-		// Payload (16 bytes)
-		buf.WriteByte(0)                               // [0] Action (滚动视为 Move)
+		// Payload (17 bytes)
+		buf.WriteByte(mouseActionMove)                 // [0] Action (滚动视为 Move)
 		binary.Write(buf, binary.BigEndian, v.PosX)    // [1-4] X
 		binary.Write(buf, binary.BigEndian, v.PosY)    // [5-8] Y
 		binary.Write(buf, binary.BigEndian, v.Buttons) // [9-12] Buttons
@@ -63,11 +59,6 @@ func (d *LinuxDriver) SendEvent(event sdriver.Event) error {
 		// [15-16] Wheel (将 VScroll 转为 int16)
 		binary.Write(buf, binary.BigEndian, int16(v.VScroll))
 
-	// =================================================================
-	// Case 3: 键盘事件 -> 键盘包
-	// 接收端 Payload 长度: 5 bytes
-	// 结构: [Action 1][KeyCode 4]
-	// =================================================================
 	case *sdriver.KeyEvent:
 		buf.WriteByte(PacketTypeKey) // Header: 0x00
 

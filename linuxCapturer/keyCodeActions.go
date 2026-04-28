@@ -5,12 +5,15 @@ const WheelStep = 40
 
 // 鼠标\触控动作类型
 const (
-	MouseActionMove  = 0
-	MouseActionDown  = 1
-	MouseActionUp    = 2
-	TouchActionStart = 3
-	TouchActionMove  = 4
-	TouchActionEnd   = 5
+	MouseActionDown = 0
+	MouseActionUp   = 1
+	MouseActionMove = 2
+)
+
+const (
+	TouchActionDown = 0
+	TouchActionUp   = 1
+	TouchActionMove = 2
 )
 
 // X11 鼠标按键映射 (标准定义)

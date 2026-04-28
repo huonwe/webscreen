@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/binary"
 	"fmt"
 	"io"
 	"log"
@@ -22,7 +21,7 @@ type XvfbSession struct {
 
 	ffmpegOutput io.ReadCloser
 
-	controller *InputController
+	controller *lc.InputController
 }
 
 func NewXvfbSession(tcpPort string, width int, height int, DisplayNum int, depth int) (*XvfbSession, error) {
@@ -50,8 +49,12 @@ func NewXvfbSession(tcpPort string, width int, height int, DisplayNum int, depth
 	log.Printf("TCP connection established at %s\n", tcpPort)
 	go session.RunXfce4Session()
 
-	session.controller, _ = NewInputController(fmt.Sprintf(":%d", session.Display))
-	go session.HandleEvent()
+	session.controller, err = lc.NewInputController(lc.CONTROLLER_TYPE_X11, fmt.Sprintf(":%d", session.Display), uint16(width), uint16(height))
+	if err != nil {
+		session.CleanUp()
+		return nil, fmt.Errorf("failed to create input controller: %w", err)
+	}
+	go session.controller.ServeControlConn(conn)
 	return session, nil
 
 }
@@ -115,76 +118,6 @@ func (s *XvfbSession) waitLaunchFinished() error {
 		return fmt.Errorf("Xvfb Timeout! Socket file not found: %s", socketFile)
 	}
 	return nil
-}
-
-func (s *XvfbSession) HandleEvent() {
-	const (
-		eventTypeKeyboard = 0x00
-		EventTypeMouse    = 0x01
-	)
-
-	// 预分配一个小 buffer 用于读取头部或完整包
-
-	head := make([]byte, 1)
-	for {
-		_, err := io.ReadFull(s.Conn, head)
-		if err != nil {
-			log.Println("控制连接断开或读取错误:", err)
-			return
-		}
-		eventType := head[0]
-		switch eventType {
-		case EventTypeMouse:
-			// 2. 如果是鼠标事件，读取剩余的 17 字节
-			payload := make([]byte, 17)
-			_, err := io.ReadFull(s.Conn, payload)
-			if err != nil {
-				log.Println("读取鼠标数据包失败:", err)
-				return
-			}
-
-			// 3. 解析数据 (BigEndian)
-			action := payload[0]
-			x := binary.BigEndian.Uint32(payload[1:5])
-			y := binary.BigEndian.Uint32(payload[5:9])
-			buttons := binary.BigEndian.Uint32(payload[9:13])
-			deltaX := int16(binary.BigEndian.Uint16(payload[13:15]))
-			deltaY := int16(binary.BigEndian.Uint16(payload[15:]))
-			// log.Printf("收到鼠标事件: Action=%d, X=%d, Y=%d, Buttons=0x%X, DeltaX=%d, DeltaY=%d\n", action, x, y, buttons, wheelDeltaX, wheelDeltaY)
-
-			if s.controller == nil {
-				log.Println("输入控制器未初始化，无法处理鼠标事件")
-				continue
-			}
-
-			// 4. 执行控制逻辑
-			// 注意：这里需要把 uint32 转为 int16 传给 InputController
-			s.controller.HandleMouseEvent(action, int16(x), int16(y), buttons, deltaX, deltaY)
-		case eventTypeKeyboard:
-			payload := make([]byte, 5)
-			if _, err := io.ReadFull(s.Conn, payload); err != nil {
-				return
-			}
-
-			action := payload[0] // 0=Down, 1=Up
-			// Web 端传来的 KeyCode 往往是 DOM Code，这里收到的是 uint32
-			// 注意：这里可能需要做 Web KeyCode -> X11 KeyCode 的映射表
-			webKeyCode := binary.BigEndian.Uint32(payload[1:5])
-
-			// 简单的映射示例 (需完善 Map)
-			// x11Code := mapWebToX11(webKeyCode)
-			// 暂时直接透传 (假设前端已经发了 X11 Code)
-			x11Code := byte(webKeyCode)
-
-			if s.controller != nil {
-				s.controller.HandleKeyboardEvent(action, x11Code)
-			}
-		default:
-			log.Printf("收到未知事件类型: 0x%X", eventType)
-			// 如果有变长包，这里如果不处理会导致后续数据错乱
-			// 建议实现一个通用的长度头，但在目前定长场景下，这样够用了
-		}
-	}
 }
 
 func (s *XvfbSession) StartFFmpeg(codec string, resolution string, bitRate string, frameRate string) error {

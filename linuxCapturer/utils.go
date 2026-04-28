@@ -28,29 +28,30 @@ func WaitTCP(port string) net.Conn {
 // GetBestH264Encoder 自动检测最佳 H.264 编码器
 func GetBestH264Encoder() string {
 
-	// if HasEncoder("h264_v4l2m2m") {
-	// 	return "h264_v4l2m2m"
-	// }
-
-	// // 1. 检查是否存在瑞芯微硬件编码器 (Rockchip)
+	// 1. 检查是否存在瑞芯微硬件编码器 (Rockchip)
 	if HasEncoder("h264_rkmpp") {
 		return "h264_rkmpp"
 	}
 
-	// // 2. 检查是否存在 NVIDIA 硬件编码器 (PC N卡)
-	// if HasEncoder("h264_nvenc") {
-	// 	return "h264_nvenc"
-	// }
+	// 2. 检查是否存在 NVIDIA 硬件编码器 (PC N卡)
+	if HasEncoder("h264_nvenc") {
+		return "h264_nvenc"
+	}
 
-	// // 3. 检查是否存在 Intel 硬件编码器 (PC 核显)
-	// if HasEncoder("h264_qsv") {
-	// 	return "h264_qsv"
-	// }
+	// 3. 检查是否存在 Intel 硬件编码器 (PC 核显)
+	if HasEncoder("h264_qsv") {
+		return "h264_qsv"
+	}
 
-	// // 4. Android Termux 下常用的硬件编码 (MediaCodec)
-	// if HasEncoder("h264_mediacodec") {
-	// 	return "h264_mediacodec"
-	// }
+	// 4. Android Termux 下常用的硬件编码 (MediaCodec)
+	if HasEncoder("h264_mediacodec") {
+		return "h264_mediacodec"
+	}
+
+	// 5. v4l2m2m
+	if HasEncoder("h264_v4l2m2m") {
+		return "h264_v4l2m2m"
+	}
 
 	// 5. 默认回退到软件编码 (通用)
 	return "libx264"

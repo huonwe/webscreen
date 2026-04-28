@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/binary"
 	"fmt"
 	"io"
 	"log"
@@ -24,7 +23,7 @@ type X11Session struct {
 
 	ffmpegOutput io.ReadCloser
 
-	controller  *InputController
+	controller  *lc.InputController
 	cleanupOnce sync.Once
 
 	xorgConfigPath string
@@ -77,8 +76,12 @@ func NewX11Session(tcpPort string, width int, height int, displayNum int, depth 
 
 	go session.RunDesktopSession()
 
-	session.controller, _ = NewInputController(fmt.Sprintf(":%d", session.Display))
-	go session.HandleEvent()
+	session.controller, err = lc.NewInputController(lc.CONTROLLER_TYPE_X11, fmt.Sprintf(":%d", session.Display), uint16(width), uint16(height))
+	if err != nil {
+		session.CleanUp()
+		return nil, fmt.Errorf("failed to create input controller: %w", err)
+	}
+	go session.controller.ServeControlConn(conn)
 	return session, nil
 }
 
@@ -251,59 +254,6 @@ func (s *X11Session) waitLaunchFinished() error {
 		return fmt.Errorf("Xorg timeout! Socket file not found: %s", socketFile)
 	}
 	return nil
-}
-
-func (s *X11Session) HandleEvent() {
-	const (
-		eventTypeKeyboard = 0x00
-		EventTypeMouse    = 0x01
-	)
-
-	head := make([]byte, 1)
-	for {
-		_, err := io.ReadFull(s.Conn, head)
-		if err != nil {
-			log.Println("控制连接断开或读取错误:", err)
-			return
-		}
-		switch head[0] {
-		case EventTypeMouse:
-			payload := make([]byte, 17)
-			if _, err := io.ReadFull(s.Conn, payload); err != nil {
-				log.Println("读取鼠标数据包失败:", err)
-				return
-			}
-
-			action := payload[0]
-			x := binary.BigEndian.Uint32(payload[1:5])
-			y := binary.BigEndian.Uint32(payload[5:9])
-			buttons := binary.BigEndian.Uint32(payload[9:13])
-			deltaX := int16(binary.BigEndian.Uint16(payload[13:15]))
-			deltaY := int16(binary.BigEndian.Uint16(payload[15:]))
-
-			if s.controller == nil {
-				log.Println("输入控制器未初始化，无法处理鼠标事件")
-				continue
-			}
-
-			s.controller.HandleMouseEvent(action, int16(x), int16(y), buttons, deltaX, deltaY)
-		case eventTypeKeyboard:
-			payload := make([]byte, 5)
-			if _, err := io.ReadFull(s.Conn, payload); err != nil {
-				return
-			}
-
-			action := payload[0]
-			webKeyCode := binary.BigEndian.Uint32(payload[1:5])
-			x11Code := byte(webKeyCode)
-
-			if s.controller != nil {
-				s.controller.HandleKeyboardEvent(action, x11Code)
-			}
-		default:
-			log.Printf("收到未知事件类型: 0x%X", head[0])
-		}
-	}
 }
 
 func (s *X11Session) StartFFmpeg(codec string, resolution string, bitRate string, frameRate string) error {

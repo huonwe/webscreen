@@ -1,10 +1,12 @@
 (function() {
 // 动作常量定义 (必须与 Go 后端 InputController 保持一致)
-// Go端: 0=Move, 1=Down, 2=Up
+// Go端: 0=Down, 1=Up, 2=Move
 const TYPE_MOUSE = 0x01;
-const MOUSE_ACTION_MOVE = 0;
-const MOUSE_ACTION_DOWN = 1;
-const MOUSE_ACTION_UP = 2;
+const TYPE_TOUCH = 0x02;
+
+const MOUSE_ACTION_DOWN = 0;
+const MOUSE_ACTION_UP = 1;
+const MOUSE_ACTION_MOVE = 2;
 
 /**
  * Remote Control Mouse Handler
@@ -17,7 +19,7 @@ const MOUSE_SENSITIVITY = 1.0;
 let isPointerLocked = false;
 let mouseButtonsMask = 0; // Bitmask: 1=Left, 2=Right, 4=Middle
 let pendingMovement = { x: 0, y: 0, wheelY: 0 };
-// let rafScheduled = false;
+let rafScheduled = false;
 
 function initRemoteControl() {
     if (!remoteVideo) {
@@ -91,14 +93,17 @@ function handleMouseDown(e) {
     if (!isPointerLocked) return;
     e.preventDefault(); e.stopPropagation();
 
+    // 先发送累计位移，避免点击包携带位移导致跳指针
+    flushPendingEvents(MOUSE_ACTION_MOVE);
+
     switch (e.button) {
         case 0: mouseButtonsMask |= 1; break; // Left
         case 2: mouseButtonsMask |= 2; break; // Right (Go端需映射为3)
         case 1: mouseButtonsMask |= 4; break; // Middle
     }
 
-    // 点击立即发送，不走 RAF 延迟
-    flushPendingEvents(MOUSE_ACTION_DOWN);
+    // 点击包只发送按键信息
+    sendControlPacket(MOUSE_ACTION_DOWN, 0, 0, mouseButtonsMask, 0);
 }
 
 /**
@@ -108,6 +113,9 @@ function handleMouseUp(e) {
     if (!isPointerLocked) return;
     e.preventDefault(); e.stopPropagation();
 
+    // 先发送累计位移，避免抬起包携带位移导致跳指针
+    flushPendingEvents(MOUSE_ACTION_MOVE);
+
     // 1. 先计算出当前正在被抬起的按键掩码
     let releasingMask = 0;
     switch (e.button) {
@@ -116,10 +124,9 @@ function handleMouseUp(e) {
         case 1: releasingMask = 4; break; // Middle
     }
 
-    // 2. 发送 UP 事件
-    // 【关键】这里我们传入 releasingMask，告诉后端是"这个键"抬起了
-    // 如果传入全局的 mouseButtonsMask，那时它已经被清除了，后端就不知道谁抬起了
-    flushPendingEvents(MOUSE_ACTION_UP, releasingMask);
+    // 2. 发送 UP 事件（只发送按键信息）
+    // 【关键】这里传入 releasingMask，告诉后端是"这个键"抬起了
+    sendControlPacket(MOUSE_ACTION_UP, 0, 0, releasingMask, 0);
 
     // 3. 事件发送后再更新全局状态 (清除对应的位)
     mouseButtonsMask &= ~releasingMask;
@@ -136,12 +143,13 @@ function handleWheel(e) {
     scheduleSend(MOUSE_ACTION_MOVE); // 滚轮视为带 Wheel 数据的 Move
 }
 
+
 function scheduleSend(actionType) {
     // 如果是 RAF 调度，我们需要保存最后一次的 actionType 吗？
     // 简化起见，移动和滚动统一走 RAF，点击直接发
     // 这里传入 actionType 主要是为了区分是否是移动
     // flushPendingEvents(MOUSE_ACTION_MOVE);
-    // if (rafScheduled) return;
+    if (rafScheduled) return;
     rafScheduled = true;
 
     requestAnimationFrame(() => {
@@ -188,6 +196,7 @@ function sendControlPacket(action, dx, dy, buttons, wheel) {
     const packet = createMousePacket(action, dx, dy, buttons, 0, -wheel);
     sendDataChannelMessage(window.dataChannelUnordered, packet);
 }
+
 
 /**
  * 创建鼠标事件数据包 (18字节)

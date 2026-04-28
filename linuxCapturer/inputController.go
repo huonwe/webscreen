@@ -1,7 +1,11 @@
 package linuxcapturer
 
 import (
+	"encoding/binary"
 	"fmt"
+	"io"
+	"log"
+	"net"
 
 	"github.com/bendahl/uinput"
 	"github.com/jezek/xgb"
@@ -21,19 +25,25 @@ type InputController struct {
 	// ========== uinput (Wayland) 相关成员 ==========
 	keyboard uinput.Keyboard
 	mouse    uinput.Mouse
+	touch    uinput.MultiTouch
 
 	// ========== X11 (xtest) 相关成员 ==========
 	conn *xgb.Conn
 	root xproto.Window
 
-	// ========== 通用共享状态 ==========
-	ctrlPressed, shiftPressed, altPressed, metaPressed bool
+	screenWidth  uint16
+	screenHeight uint16
 }
 
+const normalizedCoordMax uint16 = 65535
+const touchPadAbsMax int32 = 32767
+
 // NewInputController 初始化输入控制器
-func NewInputController(controllerType string, display string) (*InputController, error) {
+func NewInputController(controllerType string, display string, screenWidth uint16, screenHeight uint16) (*InputController, error) {
 	ic := &InputController{
 		controllerType: controllerType,
+		screenWidth:    screenWidth,
+		screenHeight:   screenHeight,
 	}
 
 	switch controllerType {
@@ -49,6 +59,10 @@ func NewInputController(controllerType string, display string) (*InputController
 		setup := xproto.Setup(c)
 		ic.conn = c
 		ic.root = setup.Roots[0].Root
+		if geo, err := xproto.GetGeometry(c, xproto.Drawable(ic.root)).Reply(); err == nil {
+			ic.screenWidth = uint16(geo.Width)
+			ic.screenHeight = uint16(geo.Height)
+		}
 
 	case CONTROLLER_TYPE_WAYLAND:
 		kb, err := uinput.CreateKeyboard("/dev/uinput", []byte("webscreen_keyboard"))
@@ -60,8 +74,23 @@ func NewInputController(controllerType string, display string) (*InputController
 			kb.Close()
 			return nil, err
 		}
+		touch, err := uinput.CreateMultiTouch(
+			"/dev/uinput",
+			[]byte("webscreen_touch"),
+			int32(0),
+			int32(screenWidth),
+			int32(0),
+			int32(screenHeight),
+			10, // max slots
+		)
+		if err != nil {
+			kb.Close()
+			m.Close()
+			return nil, err
+		}
 		ic.keyboard = kb
 		ic.mouse = m
+		ic.touch = touch
 
 	default:
 		return nil, fmt.Errorf("unsupported controller type: %s", controllerType)
@@ -78,14 +107,68 @@ func (ic *InputController) Close() {
 	if ic.mouse != nil {
 		ic.mouse.Close()
 	}
+	if ic.touch != nil {
+		ic.touch.Close()
+	}
 	if ic.conn != nil {
 		ic.conn.Close()
+	}
+}
+
+func (ic *InputController) ServeControlConn(conn net.Conn) error {
+	head := make([]byte, 1)
+	buff := make([]byte, 256) // 足够大以容纳任何事件的完整数据包
+	for {
+		_, err := io.ReadFull(conn, head)
+		if err != nil {
+			return fmt.Errorf("control connection error: %w", err)
+		}
+		eventType := EventType(head[0])
+		// log.Printf("Received event type: 0x%X", head[0])
+		switch eventType {
+		case EventTypeKeyboard:
+			if _, err := io.ReadFull(conn, buff[:5]); err != nil {
+				return fmt.Errorf("failed to read keyboard event payload: %w", err)
+			}
+			event, err := ParseKeyboardEvent(buff[:5])
+			if err != nil {
+				return fmt.Errorf("failed to parse keyboard event: %w", err)
+			}
+			ic.HandleKeyboardEvent(event.(*KeyboardEvent).action, event.(*KeyboardEvent).keyCode)
+
+		case EventTypeMouse:
+			if _, err := io.ReadFull(conn, buff[:17]); err != nil {
+				return fmt.Errorf("failed to read mouse event payload: %w", err)
+			}
+			event, err := ParseMouseEvent(buff[:17])
+			if err != nil {
+				return fmt.Errorf("failed to parse mouse event: %w", err)
+			}
+			me := event.(*MouseEvent)
+			ic.HandleMouseEvent(me.action, me.deltaX, me.deltaY, me.buttons, me.wheelDeltaX, me.wheelDeltaY)
+
+		case EventTypeTouch:
+			if _, err := io.ReadFull(conn, buff[:9]); err != nil {
+				return fmt.Errorf("failed to read touch event payload: %w", err)
+			}
+			event, err := ParseTouchEvent(buff[:9])
+			if err != nil {
+				return fmt.Errorf("failed to parse touch event: %w", err)
+			}
+			te := event.(*TouchEvent)
+			ic.HandleTouchEvent(te.action, te.ptrID, te.x, te.y, te.pressure, te.buttons)
+
+		default:
+			return fmt.Errorf("unknown event type: 0x%X", head[0])
+			// log.Printf("收到未知事件类型: 0x%X", head[0])
+		}
 	}
 }
 
 // HandleMouseEvent 处理鼠标事件并分发到对应底层接口
 func (ic *InputController) HandleMouseEvent(action byte, deltaX, deltaY int32, buttons uint32, wheelDeltaX, wheelDeltaY int16) {
 	// 1. 处理鼠标移动 (使用相对坐标 deltaX, deltaY)
+	log.Printf("Mouse Event - Action: %d, DeltaX: %d, DeltaY: %d", action, deltaX, deltaY)
 	if deltaX != 0 || deltaY != 0 {
 		if ic.controllerType == CONTROLLER_TYPE_WAYLAND {
 			_ = ic.mouse.Move(deltaX, deltaY)
@@ -151,24 +234,71 @@ func (ic *InputController) HandleMouseEvent(action byte, deltaX, deltaY int32, b
 	}
 }
 
-// HandleTouchEvent 处理触摸事件
-func (ic *InputController) HandleTouchEvent(action byte, x, y int32) {
-	// 绝对坐标移动
+// 映射公式: (当前坐标 / 屏幕最大值) * uinput最大值
+func scaleCoord(val uint16, screenMax uint16, uinputMax int32) int32 {
+	if screenMax == 0 {
+		return 0
+	}
+	return int32(uint32(val) * uint32(uinputMax) / uint32(screenMax))
+}
+
+// HandleTouchEvent 处理触摸事件（协议与 touch.js 保持一致）
+func (ic *InputController) HandleTouchEvent(action, ptrID byte, x, y, pressure uint16, buttons byte) {
+	_ = ptrID
+	_ = pressure
+
+	// log.Printf("Touch Event - Action: %d, PtrID: %d, X: %d, Y: %d", action, ptrID, x, y)
+
+	// 传入的 x/y 为屏幕坐标
 	if ic.controllerType == CONTROLLER_TYPE_WAYLAND {
-		// 由于 uinput.Mouse 不能做绝对定位限制，如果是单纯鼠标设备暂无法代偿完美绝对触摸
-		// 如果引入 uinput.TouchScreen，则可使用 _ = ic.touch.MoveTo(x, y) 等
-		// 遵循如无必要勿增实体，这里先留出扩展口或者忽略，实际 Wayland 环境中可以拓展 Touch 设备逻辑
+		if ic.touch == nil {
+			return
+		}
+
+		finger := ic.touch.GetContacts()[ptrID%10] // 取模以防 ptrID 超出范围
+		finger.TouchDownAt(int32(x), int32(y))
+
+		finger.TouchUp()
+		return
 	} else {
-		// X11 使用根窗口(ic.root)作为基准进行绝对坐标移动
+		// X11: 将归一化坐标映射到根窗口绝对坐标
+		// absX := scaleNormalizedToRange(x, ic.rootWidth)
+		// absY := scaleNormalizedToRange(y, ic.rootHeight)
 		xproto.WarpPointer(ic.conn, 0, ic.root, 0, 0, 0, 0, int16(x), int16(y))
 	}
 
-	// 处理点击状态
-	if action == TouchActionStart {
-		ic.triggerMouseButton(MouseBtnLeft, true)
-	} else if action == TouchActionEnd {
-		ic.triggerMouseButton(MouseBtnLeft, false)
+	if action == TouchActionUp {
+		ic.touch.GetContacts()[ptrID%10].TouchUp()
 	}
+
+	// 处理按键状态：按 touch.js 约定 buttons=1 代表主键
+	// buttonID := byte(MouseBtnLeft)
+	// if buttons&0x02 != 0 {
+	// 	buttonID = byte(MouseBtnRight)
+	// }
+
+	// if action == TouchActionDown {
+	// 	ic.triggerMouseButton(buttonID, true)
+	// } else if action == TouchActionUp {
+	// 	ic.triggerMouseButton(buttonID, false)
+	// }
+}
+
+func scaleNormalizedToRange(normalized uint16, max uint16) int16 {
+	if max <= 1 {
+		return 0
+	}
+
+	value := int32(normalized) * int32(max-1) / int32(normalizedCoordMax)
+	return int16(value)
+}
+
+func scaleNormalizedToRange32(normalized uint16, max int32) int32 {
+	if max <= 1 {
+		return 0
+	}
+
+	return int32(normalized) * (max - 1) / int32(normalizedCoordMax)
 }
 
 // triggerMouseButton 屏蔽底层差异，执行点击动作
@@ -211,7 +341,6 @@ func (ic *InputController) HandleKeyboardEvent(action byte, keyCode int32) {
 	}
 
 	isPress := action == KeyActionDown
-	ic.updateModifierState(keyCode, isPress)
 
 	if ic.controllerType == CONTROLLER_TYPE_WAYLAND {
 		linuxKeyCode, ok := AndroidToLinuxEvdevMap[keyCode]
@@ -235,21 +364,56 @@ func (ic *InputController) HandleKeyboardEvent(action byte, keyCode int32) {
 	}
 }
 
-// updateModifierState 处理常用的修饰键高层状态
-func (ic *InputController) updateModifierState(androidKeyCode int32, isPress bool) {
-	switch androidKeyCode {
-	case 113, 114:
-		ic.ctrlPressed = isPress
-	case 59, 60:
-		ic.shiftPressed = isPress
-	case 57, 58:
-		ic.altPressed = isPress
-	case 117, 118:
-		ic.metaPressed = isPress
+func ParseKeyboardEvent(payload []byte) (event Event, err error) {
+	if len(payload) != 5 {
+		return nil, fmt.Errorf("invalid keyboard event payload length: %d", len(payload))
 	}
+	action := payload[0]
+	keyCode := int32(binary.BigEndian.Uint32(payload[1:5]))
+	return &KeyboardEvent{
+		action:  action,
+		keyCode: keyCode,
+	}, nil
 }
 
-// GetModifierState 获取当前的高层修饰键状态
-func (ic *InputController) GetModifierState() (ctrl, shift, alt, meta bool) {
-	return ic.ctrlPressed, ic.shiftPressed, ic.altPressed, ic.metaPressed
+func ParseMouseEvent(payload []byte) (event Event, err error) {
+	if len(payload) != 17 {
+		return nil, fmt.Errorf("invalid mouse event payload length: %d", len(payload))
+	}
+	action := payload[0]
+	deltaX := int32(binary.BigEndian.Uint32(payload[1:5]))
+	deltaY := int32(binary.BigEndian.Uint32(payload[5:9]))
+	buttons := binary.BigEndian.Uint32(payload[9:13])
+	wheelDeltaX := int16(binary.BigEndian.Uint16(payload[13:15]))
+	wheelDeltaY := int16(binary.BigEndian.Uint16(payload[15:]))
+	return &MouseEvent{
+		action:      action,
+		x:           0,
+		y:           0,
+		buttons:     buttons,
+		deltaX:      deltaX,
+		deltaY:      deltaY,
+		wheelDeltaX: wheelDeltaX,
+		wheelDeltaY: wheelDeltaY,
+	}, nil
+}
+
+func ParseTouchEvent(payload []byte) (event Event, err error) {
+	if len(payload) != 9 {
+		return nil, fmt.Errorf("invalid touch event payload length: %d", len(payload))
+	}
+	action := payload[0]
+	ptrID := payload[1]
+	x := binary.BigEndian.Uint16(payload[2:4])
+	y := binary.BigEndian.Uint16(payload[4:6])
+	pressure := binary.BigEndian.Uint16(payload[6:8])
+	buttons := payload[8]
+	return &TouchEvent{
+		action:   action,
+		ptrID:    ptrID,
+		x:        x,
+		y:        y,
+		pressure: pressure,
+		buttons:  buttons,
+	}, nil
 }
