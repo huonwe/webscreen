@@ -54,39 +54,9 @@ function unignoreDevice(serial) {
 }
 
 // Refactored structure to match new requirements (all in driver_config)
-const defaultScrcpyConfig = {
-    device_type: 'android',
-    av_sync: false,
-    driver_config: {
-        max_fps: '',
-        max_size: '',
-        video_codec: 'h264',
-        audio: 'true',
-        audio_codec: 'opus',
-        video_bit_rate: 8000000,
-        video_codec_options: '',
-        use_video_codec_options: 'true',
-        new_display: '',
-        deviceID: '', // For scrcpy driver to identify which device to connect to
-    }
+const defaultConfig = {
+    driver_config: {}
 };
-
-const defaultXvfbConfig = {
-    device_type: "xvfb",
-    device_id: "localhost",
-    device_ip: "127.0.0.1",
-    device_port: "0",
-    av_sync: false,
-    driver_config: {
-        ip : "",
-        user: "",
-        resolution: "1920x1080",
-        frameRate: "60",
-        bitRate: "8000000",
-        video_codec: "h264",
-    }
-};
-
 
 // --- Config Management ---
 
@@ -115,14 +85,8 @@ function ensureDeviceConfig(device) {
     console.log('Ensuring config for device', serial);
     if (!deviceConfigs[serial]) {
         const type = device.device_type;
-        // console.log('Creating default config for', serial, 'of type', type);
-        let baseConfig;
-        if (type === 'xvfb') {
-             baseConfig = JSON.parse(JSON.stringify(defaultXvfbConfig));
-        } else {
-             baseConfig = JSON.parse(JSON.stringify(defaultScrcpyConfig));
-        }
-
+        console.log(`Creating default config for new device: ${serial} of type ${type}`);
+        let baseConfig = JSON.parse(JSON.stringify(defaultConfig));
         deviceConfigs[serial] = {
             device_type: type,
             device_id: serial,
@@ -215,7 +179,7 @@ function renderDeviceList() {
 
         // Construct config tags
         let tagsHtml = '';
-        if (config.device_type === 'xvfb') {
+        if (config.device_type === 'linux') {
              if (drv.resolution) tagsHtml += `<span class="px-2 py-0.5 rounded-md bg-[#333] text-xs text-gray-300 font-mono">${drv.resolution}</span>`;
              if (drv.frameRate) tagsHtml += `<span class="px-2 py-0.5 rounded-md bg-[#333] text-xs text-gray-300 font-mono">${drv.frameRate}FPS</span>`;
         } else {
@@ -374,60 +338,33 @@ async function pairDevice() {
     }
 }
 
+let currentConfigSchema = {};
+
 function startStream(serial) {
     const device = knownDevices.find(d => d.device_id === serial);
     if (!device) return;
 
     const config = ensureDeviceConfig(device);
-    const drv = config.driver_config || {};
+    const drv = { ...(config.driver_config || {}) };
 
-    let finalConfig;
-
-    if (config.device_type === 'xvfb') {
-        finalConfig = {
-            device_type: "xvfb",
-            device_id: config.device_id || serial,
-            device_ip: config.device_ip || "127.0.0.1",
-            device_port: config.device_port || "0",
-            av_sync: document.getElementById('configAVSync').checked,
-            driver_config: {
-                ip : drv.ip || "",
-                user: drv.user || "",
-                resolution: drv.resolution || "1920x1080",
-                frameRate: String(drv.frameRate || "60"),
-                bitRate: String(drv.bitRate || "20000000"),
-                video_codec: drv.video_codec || "h264",
-            }
-        };
-    } else {
-        // Format as requested by user
-        finalConfig = {
-            device_type: config.device_type,
-            device_id: config.device_id || serial,
-            device_ip: config.device_ip || '0',
-            device_port: config.device_port || '0',
-            av_sync: document.getElementById('configAVSync').checked,
-            driver_config: {
-                max_fps: String(drv.max_fps || ''),
-                video_codec: drv.video_codec || "h264",
-                audio_codec: drv.audio_codec || "opus",
-                audio: drv.audio || "true",
-                video_bit_rate: String(drv.video_bit_rate || 8000000),
-                video_codec_options: drv.video_codec_options || '',
-                use_video_codec_options: drv.use_video_codec_options || 'true',
-                new_display: drv.new_display || '',
-                max_size: drv.max_size || '',
-                deviceID: config.device_ip || '', // Pass device IP as deviceID for scrcpy to identify which device to connect to
-            }
-        };
+    let finalConfig = {
+        device_type: config.device_type,
+        device_id: config.device_id || serial,
+        device_ip: config.device_ip || '0',
+        device_port: config.device_port || '0',
+        av_sync: config.av_sync || false, 
+        driver_config: drv
+    };
+    
+    if (config.device_type == 'android') {
+    finalConfig.driver_config.deviceID = config.device_ip || '';
     }
-
     console.log('Starting stream with config:', finalConfig);
     sessionStorage.setItem('webscreen_device_configs_now', JSON.stringify(finalConfig));
     showToast(i18n.t('starting_stream'));
 
-    id = `${finalConfig.device_type}_${finalConfig.device_id}_${finalConfig.device_ip}_${finalConfig.device_port}`;
-    // Delay slightly for UX
+    const id = `${finalConfig.device_type}_${finalConfig.device_id}_${finalConfig.device_ip}_${finalConfig.device_port}`;
+    
     setTimeout(() => {
         window.location.href = `/screen/${id}`;
     }, 500);
@@ -439,62 +376,162 @@ function openModal(id) {
     const dialog = document.getElementById(id);
     if (dialog) {
         dialog.showModal();
-        // Add closing listener on backdrop click
-        dialog.addEventListener('click', (e) => {
-            if (e.target === dialog) closeModal(id);
-        });
+        // dialog.addEventListener('click', (e) => {
+        //     const rect = dialog.getBoundingClientRect();
+        //     if (e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom) {
+        //         closeModal(id);
+        //     }
+        // });
     }
 }
 
 function closeModal(id) {
     const dialog = document.getElementById(id);
     if (dialog) {
-        // Animation out could be added here
         dialog.close();
     }
-    if (id === 'configModal') activeConfigSerial = null;
+    if (id === 'configModal') {
+        activeConfigSerial = null;
+        currentConfigSchema = {};
+    }
 }
 
-function showConfigModal(serial) {
+async function showConfigModal(serial) {
     activeConfigSerial = serial;
     const device = knownDevices.find(d => d.device_id === serial) || { device_id: serial };
     const config = ensureDeviceConfig(device);
 
-    // New structure: everything is in driver_config
-    const drv = config.driver_config || {};
-
-    const androidSettings = document.getElementById('androidSettings');
-    const xvfbSettings = document.getElementById('xvfbSettings');
-
     document.getElementById('configAVSync').checked = config.av_sync || false;
-    console.log('Configuring modal for', serial, 'of type', config.device_type);
+    document.getElementById('configModalTitle').textContent = i18n.t('config_device_title', {serial: serial});
+    
+    const dynamicContainer = document.getElementById('dynamicSettings');
+    dynamicContainer.innerHTML = `<div class="flex justify-center py-8"><div class="spinner"></div></div>`;
+    openModal('configModal');
+
+    // For compatibility with older versions, treat 'xvfb' as 'linux' for config schema purposes
     if (config.device_type === 'xvfb') {
-        console.log('Showing XVFB settings for', serial);
-        androidSettings.classList.add('hidden');
-        xvfbSettings.classList.remove('hidden');
+        config.device_type = 'linux';
+    }
+    try {
+        const res = await fetch(`/api/device/configDescription?device_type=${config.device_type}&device_id=${encodeURIComponent(device.device_id)}`);
+        if (!res.ok) throw new Error('Failed to fetch config description');
+        const schema = await res.json();
+        currentConfigSchema = schema;
 
-        document.getElementById('ldBackend').value = drv.backend || 'xvfb';
-        document.getElementById('xvfbResolution').value = drv.resolution || '1920x1080';
-        document.getElementById('xvfbFrameRate').value = drv.frameRate || '60';
-        document.getElementById('xvfbBitRate').value = drv.bitRate || '20000000';
-        document.getElementById('xvfbVideoCodec').value = drv.video_codec || 'h264';
+        renderDynamicConfigForm(schema, config.driver_config || {});
+    } catch (e) {
+        console.error(e);
+        dynamicContainer.innerHTML = `<div class="text-red-400 text-sm text-center py-4">Failed to load configuration schema.</div>`;
+    }
+}
 
-    } else {
-        androidSettings.classList.remove('hidden');
-        xvfbSettings.classList.add('hidden');
+function renderDynamicConfigForm(schema, currentValues) {
+    const container = document.getElementById('dynamicSettings');
+    container.innerHTML = '';
 
-        document.getElementById('configMaxFPS').value = drv.max_fps || '';
-        document.getElementById('configVideoBitrate').value = formatBitrate(drv.video_bit_rate).replace(/[KMG]$/, '') || '';
-        document.getElementById('configMaxSize').value = drv.max_size || '';
-        document.getElementById('configVideoCodec').value = drv.video_codec || 'h264';
-        document.getElementById('configVideoCodecOptions').value = drv.video_codec_options || '';
-        document.getElementById('configUseVideoCodecOptions').checked = (drv.use_video_codec_options || 'true') === 'true';
-        document.getElementById('configAudio').checked = drv.audio === 'true';
-        document.getElementById('configNewDisplay').value = drv.new_display || '';
+    const panel = document.createElement('div');
+    panel.className = 'bg-[#2a2b2c] p-4 rounded-2xl space-y-4';
+
+    let schemaArray = Array.isArray(schema) ? schema : [];
+    if (!Array.isArray(schema)) {
+        // Fallback for older backend format if not updated
+        schemaArray = Object.entries(schema).map(([k, v]) => ({ name: k, ...v }));
     }
 
-    document.getElementById('configModalTitle').textContent = i18n.t('config_device_title', {serial: serial});
-    openModal('configModal');
+    for (const param of schemaArray) {
+        const key = param.name;
+        const fieldDiv = document.createElement('div');
+        fieldDiv.className = 'flex flex-col gap-1';
+
+        const label = document.createElement('label');
+        label.className = 'block text-xs font-medium text-gray-400 ml-1';
+        label.textContent = key + (param.required ? ' *' : '');
+        label.title = param.description || '';
+
+        let input;
+        const currentValue = currentValues[key] !== undefined ? currentValues[key] : param.default;
+
+        if (param.type === 'boolean') {
+            const wrap = document.createElement('div');
+            wrap.className = 'flex items-center justify-between py-1';
+            
+            const checkLabel = document.createElement('label');
+            checkLabel.className = 'text-sm font-medium text-gray-300 cursor-pointer select-none ml-1';
+            checkLabel.textContent = key;
+            checkLabel.title = param.description || '';
+
+            input = document.createElement('input');
+            input.type = 'checkbox';
+            input.className = 'md-switch';
+            input.id = `dyn_${key}`;
+            
+            // Allow string 'true' or boolean true
+            input.checked = currentValue === true || currentValue === 'true';
+
+            wrap.appendChild(checkLabel);
+            wrap.appendChild(input);
+            fieldDiv.appendChild(wrap);
+            
+            if (param.description) {
+                const desc = document.createElement('p');
+                desc.className = 'text-[10px] text-gray-500 ml-1';
+                desc.textContent = param.description;
+                fieldDiv.appendChild(desc);
+            }
+        } else if (param.options && param.options.length > 0) {
+            const wrap = document.createElement('div');
+            input = document.createElement('select');
+            input.className = 'md-input w-full px-3 py-2 rounded-lg text-white text-sm appearance-none bg-[url("data:image/svg+xml;base64,PHN2ZyBmaWxsPSIjZmZmIiBoZWlnaHQ9IjI0IiB2aWV3Qm94PSIwIDAgMjQgMjQiIHdpZHRoPSIyNCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBkPSJNNyAxMGw1IDUgNS01eiIvPjwvc3ZnPg==")] bg-no-repeat bg-right';
+            input.id = `dyn_${key}`;
+
+            if (!param.required) {
+                const opt = document.createElement('option');
+                opt.value = '';
+                opt.textContent = '-- Select / Auto --';
+                input.appendChild(opt);
+            }
+
+            param.options.forEach(o => {
+                const opt = document.createElement('option');
+                opt.value = o;
+                opt.textContent = o;
+                if (currentValue === o || currentValue === String(o)) opt.selected = true;
+                input.appendChild(opt);
+            });
+
+            fieldDiv.appendChild(label);
+            fieldDiv.appendChild(input);
+            
+            if (param.description) {
+                const desc = document.createElement('p');
+                desc.className = 'text-[10px] text-gray-500 ml-1';
+                desc.textContent = param.description;
+                fieldDiv.appendChild(desc);
+            }
+        } else {
+            input = document.createElement('input');
+            input.type = param.type === 'integer' ? 'number' : 'text';
+            input.className = 'md-input w-full px-3 py-2 rounded-lg text-white text-sm';
+            input.id = `dyn_${key}`;
+            input.value = currentValue !== undefined ? currentValue : '';
+            if (param.default) {
+                input.placeholder = `${param.default}`;
+            }
+
+            fieldDiv.appendChild(label);
+            fieldDiv.appendChild(input);
+            
+            if (param.description) {
+                const desc = document.createElement('p');
+                desc.className = 'text-[10px] text-gray-500 ml-1 mt-1';
+                desc.textContent = param.description;
+                fieldDiv.appendChild(desc);
+            }
+        }
+
+        panel.appendChild(fieldDiv);
+    }
+    container.appendChild(panel);
 }
 
 function saveDeviceConfig() {
@@ -505,32 +542,37 @@ function saveDeviceConfig() {
 
     config.av_sync = document.getElementById('configAVSync').checked;
 
-    // Initialize if missing
     if (!config.driver_config) config.driver_config = {};
     const drv = config.driver_config;
 
-    if (config.device_type === 'xvfb') {
-        drv.backend = document.getElementById('ldBackend').value;
-        drv.resolution = document.getElementById('xvfbResolution').value.trim();
-        drv.frameRate = document.getElementById('xvfbFrameRate').value.trim();
-        drv.bitRate = document.getElementById('xvfbBitRate').value.trim();
-        drv.video_codec = document.getElementById('xvfbVideoCodec').value;
-    } else { // Android Scrcpy
-        drv.max_fps = document.getElementById('configMaxFPS').value.trim() || '';
-        // Parse bitrate input (e.g. "8") to number (8000000) using 'M' as default if not specified
-        const bitrateInput = document.getElementById('configVideoBitrate').value.trim();
-        // If user just types "8", treat as 8M. If "20000000", parseBitrate handles it?
-        // Existing parseBitrate handles "8M" or "8000000". 
-        // If user enters "8", we append "M" to maintain previous UX, or rewrite parseBitrate.
-        // Let's assume input "8" means 8Mbps for simplicity in this UI context.
-        drv.video_bit_rate = parseBitrate(bitrateInput + (bitrateInput.match(/[KMG]/i) ? '' : 'M'));
-        drv.max_size = document.getElementById('configMaxSize').value.trim() || '';
-        drv.video_codec = document.getElementById('configVideoCodec').value;
-        drv.video_codec_options = document.getElementById('configVideoCodecOptions').value.trim();
-        drv.use_video_codec_options = document.getElementById('configUseVideoCodecOptions').checked ? 'true' : 'false';
-        drv.new_display = document.getElementById('configNewDisplay').value.trim();
-        drv.audio = document.getElementById('configAudio').checked ? 'true' : 'false';
-        drv.audio_codec = 'opus'; // Hardcoded default for now
+    let schemaArray = Array.isArray(currentConfigSchema) ? currentConfigSchema : [];
+    if (!Array.isArray(currentConfigSchema)) {
+        schemaArray = Object.entries(currentConfigSchema).map(([k, v]) => ({ name: k, ...v }));
+    }
+
+    for (const param of schemaArray) {
+        const key = param.name;
+        const input = document.getElementById(`dyn_${key}`);
+        if (!input) continue;
+
+        if (param.type === 'boolean') {
+            drv[key] = input.checked ? 'true' : 'false'; 
+        } else {
+            const val = input.value.trim();
+            if (val) {
+                // If it's the bitrate we might parse it to scale if user writes 8M, but wait, the older code parsed it.
+                // Here we can just accept raw string. For bitrate we'd just want them to enter proper bits. 
+                // But for ease of use, we run parseBitrate only if it is video_bit_rate and string ends in K/M/G.
+                if (key === 'video_bit_rate') {
+                    const parsed = parseBitrate(val + (val.match(/[KMG]/i) ? '' : 'M'));
+                    drv[key] = String(parsed);
+                } else {
+                    drv[key] = val;
+                }
+            } else {
+                delete drv[key];
+            }
+        }
     }
 
     saveDeviceConfigs(deviceConfigs);

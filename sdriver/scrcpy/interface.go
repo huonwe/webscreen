@@ -1,9 +1,7 @@
 package scrcpy
 
 import (
-	"context"
 	"log"
-	"strings"
 	"time"
 	"webscreen/sdriver"
 )
@@ -105,95 +103,4 @@ func (sd *ScrcpyDriver) Stop() {
 	// sd.adbClient.ReverseRemove(fmt.Sprintf("localabstract:scrcpy_%s", sd.scid))
 	sd.adbClient.Stop()
 	sd.cancel()
-}
-
-// Receive an optional params
-func ConfigDescription(opt string) map[string]sdriver.ConfigParamDescription {
-	deviceID := opt
-	var encoderListStr string
-	if deviceID != "" {
-		adbClient := NewADBClient(deviceID, "", context.Background())
-		encoderList := adbClient.SupportedEncoderList()
-		encoderListStr = strings.Join(encoderList, ",")
-		adbClient.Stop()
-	} else {
-		encoderListStr = ""
-	}
-
-	return map[string]sdriver.ConfigParamDescription{
-		"video": {
-			Type:        "boolean",
-			Required:    true,
-			Default:     true,
-			Description: "enable video stream",
-		},
-		"audio": {
-			Type:        "boolean",
-			Required:    true,
-			Default:     true,
-			Description: "enable audio stream",
-		},
-		"control": {
-			Type:        "boolean",
-			Required:    true,
-			Default:     true,
-			Description: "enable control stream",
-		},
-		"video_codec": {
-			Type:        "string",
-			Required:    false,
-			Default:     "h264",
-			Options:     []string{"h264", "h265"},
-			Description: "video codec to use",
-		},
-		"video_encoder": {
-			Type:     "string",
-			Required: false,
-			Options: func() []string {
-				if encoderListStr == "" {
-					return nil
-				}
-				return strings.Split(encoderListStr, ",")
-			}(),
-			Description: "video encoder to use, e.g. 'omx' for hardware encoding on Raspberry Pi",
-		},
-		"video_bit_rate": {
-			Type:        "string",
-			Required:    false,
-			Description: "video bit rate in bits per second, e.g. 20000000 for 20Mbps",
-		},
-		"video_codec_options": {
-			Type:        "string",
-			Required:    false,
-			Description: "additional options for the video codec, e.g. 'profile=1' for h264",
-		},
-		"max_size": {
-			Type:        "integer",
-			Required:    false,
-			Default:     0,
-			Description: "maximum video dimension (width or height) in pixels, e.g. 1920",
-		},
-		"max_fps": {
-			Type:        "integer",
-			Required:    false,
-			Default:     0,
-			Description: "maximum video frames per second, e.g. 60",
-		},
-		"resolution": {
-			Type:        "string",
-			Required:    false,
-			Description: "video resolution, e.g. 1920x1080",
-		},
-		"frame_rate": {
-			Type:        "string",
-			Required:    false,
-			Description: "video frame rate, e.g. 60",
-		},
-		"new_display": {
-			Type:        "boolean",
-			Required:    false,
-			Default:     false,
-			Description: "whether to create a new virtual display for the session (Android 10+)",
-		},
-	}
 }

@@ -16,6 +16,7 @@ import (
 	"time"
 	"webscreen/sdriver"
 	"webscreen/sdriver/comm"
+	"webscreen/utils"
 )
 
 //go:embed bin/scrcpy-server-master
@@ -133,9 +134,13 @@ func New(config map[string]string) (*ScrcpyDriver, error) {
 	if err != nil {
 		max_fps = 120
 	}
-	video_bit_rate, err := strconv.Atoi(config["video_bit_rate"])
+	video_bit_rate_str, ok := config["video_bit_rate"]
+	if !ok || video_bit_rate_str == "" {
+		config["video_bit_rate"] = "4M" // 默认 4 Mbps
+	}
+	video_bit_rate, err := utils.ParseBitrate(video_bit_rate_str)
 	if err != nil {
-		video_bit_rate = 8000000
+		return nil, fmt.Errorf("invalid video bit rate: %v", err)
 	}
 	codecConfigStr := config["webrtc_codec_level"]
 	if codecConfigStr != "" {
@@ -267,6 +272,7 @@ func New(config map[string]string) (*ScrcpyDriver, error) {
 	if use_video_codec_options == "" {
 		use_video_codec_options = "true"
 	}
+
 	options := map[string]string{
 		"CLASSPATH":      SCRCPY_SERVER_ANDROID_DST,
 		"Version":        SCRCPY_VERSION,
@@ -279,16 +285,18 @@ func New(config map[string]string) (*ScrcpyDriver, error) {
 		"audio":          config["audio"],
 		"audio_bit_rate": config["audio_bit_rate"],
 		// "audio_codec_options": "durationUs=10000", // 10ms
-		"control":     "true",
-		"new_display": config["new_display"],
-		"cleanup":     "true",
-		"log_level":   "info",
+		"control":   "true",
+		"cleanup":   "true",
+		"log_level": "info",
 
 		// "video_encoder":  "c2.rk.hevc.encoder",
 	}
 	if use_video_codec_options == "true" {
 		options["video_codec_options"] = video_codec_options // bitrate-mode=2 to enable CBR
 	}
+	// if config["new_display"] == "true" {
+	// 	options["new_display"] = config["new_display"]
+	// }
 
 	da.adbClient.StartScrcpyServer(options)
 	da.options = options

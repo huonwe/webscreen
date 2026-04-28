@@ -5,7 +5,7 @@ import (
 	"webscreen/sdriver/scrcpy"
 	sagent "webscreen/streamAgent"
 	"webscreen/webservice/android"
-	"webscreen/webservice/xvfb"
+	"webscreen/webservice/linux"
 
 	"github.com/gin-gonic/gin"
 )
@@ -25,8 +25,8 @@ func (wm *WebMaster) handleListDevices(c *gin.Context) {
 			Status:   d.GetStatus(),
 		})
 	}
-	xvfbDevices, err := xvfb.GetDevices()
-	for _, d := range xvfbDevices {
+	linuxDevices, err := linux.GetDevices()
+	for _, d := range linuxDevices {
 		devicesInfo = append(devicesInfo, DeviceInfo{
 			Type:     d.GetType(),
 			DeviceID: d.GetDeviceID(),

@@ -48,6 +48,10 @@ func (wm *WebMaster) handleScreenWS(c *gin.Context) {
 
 	// Create a unique ID for one abstract device
 	deviceIdentifier := config.DeviceType + "_" + config.DeviceID + "_" + config.DeviceIP + "_" + config.DevicePort
+	// Hash the identifier to ensure it's a valid filename and not too long
+	// h := sha256.New()
+	// h.Write([]byte(deviceIdentifier))
+	// deviceIdentifier = fmt.Sprintf("%x", h.Sum(nil))
 
 	finalSDP, receiptNo, err := wm.WebRTCManager.NewSubscriber(deviceIdentifier, config.SDP, config)
 	if err != nil {

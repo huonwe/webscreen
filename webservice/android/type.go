@@ -1,5 +1,7 @@
 package android
 
+import sagent "webscreen/streamAgent"
+
 type AndroidDevice struct {
 	DeviceID string `json:"device_id"`
 	IP       string `json:"ip"`
@@ -8,7 +10,7 @@ type AndroidDevice struct {
 }
 
 func (d AndroidDevice) GetType() string {
-	return "android"
+	return sagent.DEVICE_TYPE_ANDROID
 }
 
 func (d AndroidDevice) GetDeviceID() string {

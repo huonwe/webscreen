@@ -268,6 +268,7 @@ func (s *X11Session) StartFFmpeg(codec string, resolution string, bitRate string
 	}
 
 	log.Printf("Encoder: %s\n", bestEncoder)
+	log.Printf("Starting FFmpeg with codec %s, resolution %s, bitrate %s, frame rate %s\n", bestEncoder, resolution, bitRate, frameRate)
 	// _preset := "ultrafast"
 	// if strings.Contains(bestEncoder, "nvenc") {
 	// 	_preset = "p1"
@@ -292,7 +293,7 @@ func (s *X11Session) StartFFmpeg(codec string, resolution string, bitRate string
 		// 核心滤镜链：下载 -> 翻转红蓝通道 -> 缩放 -> 转换格式
 		"-vf", filterStr,
 
-		"-c:v", "h264_rkmpp",
+		"-c:v", bestEncoder,
 		"-b:v", bitRate,
 		"-maxrate", bitRate,
 		"-g", "60",
@@ -302,6 +303,7 @@ func (s *X11Session) StartFFmpeg(codec string, resolution string, bitRate string
 	)
 	ffmpegCmd.Env = append(os.Environ(), fmt.Sprintf("DISPLAY=:%d", s.Display))
 	ffmpegCmd.Stderr = os.Stderr
+	log.Printf("Running FFmpeg command: %s\n", strings.Join(ffmpegCmd.Args, " "))
 
 	// 创建匿名管道
 	pr, pw, err := os.Pipe()

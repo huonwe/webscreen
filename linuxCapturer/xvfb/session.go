@@ -168,6 +168,7 @@ func (s *XvfbSession) StartFFmpeg(codec string, resolution string, bitRate strin
 	// 注入 DISPLAY 变量
 	ffmpegCmd.Env = append(os.Environ(), fmt.Sprintf("DISPLAY=:%d", s.Display))
 	ffmpegCmd.Stderr = os.Stderr // 错误日志打印出来
+	log.Printf("Running FFmpeg command: %s\n", strings.Join(ffmpegCmd.Args, " "))
 
 	var err error
 	s.ffmpegOutput, err = ffmpegCmd.StdoutPipe()

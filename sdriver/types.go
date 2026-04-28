@@ -20,6 +20,7 @@ type MediaMeta struct {
 }
 
 type ConfigParamDescription struct {
+	Name        string   `json:"name"`
 	Type        string   `json:"type"`
 	Required    bool     `json:"required"`
 	Default     any      `json:"default,omitempty"`

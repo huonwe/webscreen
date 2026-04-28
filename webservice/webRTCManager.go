@@ -134,7 +134,7 @@ func (manager *WebRTCManager) NewSubscriber(deviceIdentifier string, clientSDP s
 	manager.Lock()
 	broadcaster, exists := manager.broadcasters[deviceIdentifier]
 	if !exists {
-		videoTrack, audioTrack := createAVTrack(videoMimeType, audioMimeType, AgentConfig)
+		videoTrack, audioTrack := createAVTrack(videoMimeType, audioMimeType, AgentConfig.AVSync)
 		if videoTrack == nil && audioTrack == nil {
 			manager.Unlock()
 			log.Printf("Failed to create both video and audio tracks")
@@ -214,7 +214,7 @@ func (manager *WebRTCManager) Start(deviceIdentifier string, receiptNo uint32, a
 	err := manager.ensureAgent(deviceIdentifier, receiptNo, agentConfig)
 	if err != nil {
 		log.Printf("Failed to ensure agent for device %s: %v", deviceIdentifier, err)
-		return err
+		return fmt.Errorf("failed to ensure agent: %v", err)
 	}
 	manager.RLock()
 	broadcaster, exists := manager.broadcasters[deviceIdentifier]
@@ -590,16 +590,17 @@ func getMimeTypeFromConfig(config sagent.AgentConfig) (string, string) {
 	return videoMimeType, audioMimeType
 }
 
-func createAVTrack(videoMimeType, audioMimeType string, config sagent.AgentConfig) (*webrtc.TrackLocalStaticSample, *webrtc.TrackLocalStaticSample) {
+func createAVTrack(videoMimeType, audioMimeType string, AVSync bool) (*webrtc.TrackLocalStaticSample, *webrtc.TrackLocalStaticSample) {
+	mark := fmt.Sprintf("%d", time.Now().UnixNano())
 	trackID := fmt.Sprintf("%s-%s", "webscreen-track", randomString(8))
-	trackIDVideo := trackID + "-" + config.DeviceID + "-video"
-	trackIDAudio := trackID + "-" + config.DeviceID + "-audio"
+	trackIDVideo := trackID + "-" + mark + "-video"
+	trackIDAudio := trackID + "-" + mark + "-audio"
 	streamID := fmt.Sprintf("%s-%s", "webscreen-stream", randomString(8))
-	streamIDVideo := streamID + "-" + config.DeviceID + "-video"
-	streamIDAudio := streamID + "-" + config.DeviceID + "-audio"
-	if !config.AVSync {
-		streamIDVideo = streamID + "-" + config.DeviceID
-		streamIDAudio = streamID + "-" + config.DeviceID
+	streamIDVideo := streamID + "-" + mark + "-video"
+	streamIDAudio := streamID + "-" + mark + "-audio"
+	if !AVSync {
+		streamIDVideo = streamID + "-" + mark
+		streamIDAudio = streamID + "-" + mark
 	}
 
 	trackVideo, err := webrtc.NewTrackLocalStaticSample(webrtc.RTPCodecCapability{MimeType: videoMimeType}, trackIDVideo, streamIDVideo)

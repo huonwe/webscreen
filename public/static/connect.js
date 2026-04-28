@@ -282,7 +282,7 @@ async function force_sync(pc) {
             const videoEl = document.getElementById('remoteVideo');
             if (!videoEl) return;
 
-            if (currentDelay > 0.1 && currentDelay < 0.5) {
+            if (currentDelay > 0.1) {
                 if (videoEl.playbackRate !== 1.1) {
                     // console.log("轻微延迟，启用 1.1x 倍速追赶");
                     videoEl.playbackRate = 1.1;

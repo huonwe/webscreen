@@ -8,15 +8,17 @@ import (
 	"log"
 	"net"
 	"os"
+	"strconv"
 	"time"
 	"webscreen/sdriver"
 	"webscreen/sdriver/comm"
+	"webscreen/utils"
 )
 
 //go:embed bin/capturer_wf-recorder
 //go:embed bin/capturer_xorg
 //go:embed bin/capturer_xvfb
-var capturerXvfbData embed.FS
+var capturerExec embed.FS
 
 // sudo killall Xvfb
 type LinuxDriver struct {
@@ -24,6 +26,7 @@ type LinuxDriver struct {
 	videoBuffer *comm.LinearBuffer
 	conn        net.Conn
 
+	backend     string
 	ip          string
 	user        string
 	password    string
@@ -44,27 +47,48 @@ type Header struct {
 }
 
 func New(cfg map[string]string) (*LinuxDriver, error) {
+	video_bit_rate_str, ok := cfg["video_bit_rate"]
+	if !ok || video_bit_rate_str == "" {
+		video_bit_rate_str = "4M" // 默认 4 Mbps
+	}
+	video_bit_rate, err := utils.ParseBitrate(video_bit_rate_str)
+	if err != nil {
+		return nil, fmt.Errorf("invalid video bit rate: %v", err)
+	}
+	log.Printf("Parsed video bit rate: %d bps\n", video_bit_rate)
 	d := &LinuxDriver{
-		videoChan:   make(chan sdriver.AVBox, 10), // 适当增大缓冲防止阻塞
-		ip:          cfg["ip"],
-		user:        cfg["user"],
+		videoChan: make(chan sdriver.AVBox, 10), // 适当增大缓冲防止阻塞
+		// ip:          cfg["ip"],
+		// user:        cfg["user"],
+		backend:     cfg["backend"],
 		resolution:  cfg["resolution"],
-		frameRate:   cfg["frameRate"],
-		bitRate:     cfg["bitRate"],
+		frameRate:   cfg["frame_rate"],
+		bitRate:     strconv.Itoa(video_bit_rate),
 		video_codec: cfg["video_codec"],
 
 		videoBuffer: comm.NewLinearBuffer(16 * 1024 * 1024),
 	}
+	log.Println("Initializing LinuxDriver with config:", cfg)
+	var execFile []byte
+	switch d.backend {
+	case "wayland":
+		execFile, err = capturerExec.ReadFile("bin/capturer_wf-recorder")
+	case "xorg":
+		execFile, err = capturerExec.ReadFile("bin/capturer_xorg")
+	case "xvfb":
+		execFile, err = capturerExec.ReadFile("bin/capturer_xvfb")
+	default:
+		return nil, fmt.Errorf("unsupported backend: %s", d.backend)
+	}
 
-	data, err := capturerXvfbData.ReadFile("bin/capturer_wf-recorder")
 	if err != nil {
-		log.Printf("[wf-recorder] 读取 capturer_wf-recorder 失败: %v", err)
+		log.Printf("[linux driver] 读取 capturer 失败: %v", err)
 		return nil, err
 	}
-	err = os.WriteFile("capturer_xvfb", data, 0755)
+	err = os.WriteFile("capturer", execFile, 0755)
 	if err != nil {
-		log.Printf("[xvfb] 写入本地文件失败: %v", err)
-		os.Remove("capturer_xvfb")
+		log.Printf("[linux driver] 写入本地文件失败: %v", err)
+		os.Remove("capturer")
 		return nil, err
 	}
 	if d.ip == "127.0.0.1" || d.ip == "localhost" || d.ip == "" {
@@ -74,8 +98,8 @@ func New(cfg map[string]string) (*LinuxDriver, error) {
 		err = PushAndStartXvfb(d.user, d.ip, "27184", d.resolution, d.bitRate, d.frameRate, d.video_codec)
 	}
 	if err != nil {
-		log.Printf("[xvfb] 启动远程 capturer_xvfb 失败: %v", err)
-		os.Remove("capturer_xvfb")
+		log.Printf("[linux driver] 启动远程 capturer 失败: %v", err)
+		os.Remove("capturer")
 		return nil, err
 	}
 
@@ -88,7 +112,7 @@ func New(cfg map[string]string) (*LinuxDriver, error) {
 		}
 		time.Sleep(time.Second)
 		if time.Since(startTime) > 5*time.Second {
-			os.Remove("capturer_xvfb")
+			os.Remove("capturer")
 			return nil, fmt.Errorf("Failed to connect to capturer after 5 seconds: %v", err)
 		}
 	}
@@ -289,17 +313,5 @@ func (d *LinuxDriver) Stop() {
 	if d.conn != nil {
 		d.conn.Close()
 	}
-	os.Remove("capturer_xvfb")
-}
-
-func ConfigDescription() map[string]sdriver.ConfigParamDescription {
-	return map[string]sdriver.ConfigParamDescription{
-		"test": {
-			Type:        "string",
-			Required:    false,
-			Default:     "defaultValue",
-			Options:     []string{"options..."},
-			Description: "description of the config parameter",
-		},
-	}
+	os.Remove("capturer")
 }
