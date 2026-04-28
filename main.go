@@ -16,7 +16,7 @@ var publicFS embed.FS
 
 func main() {
 	host := flag.String("host", "0.0.0.0", "host to bind the server to")
-	port := flag.String("port", "8079", "server port")
+	port := flag.String("port", "8081", "server port")
 	pin := flag.String("pin", "123456", "initial PIN for web access")
 	flag.Parse()
 	// pin should be 6 digits and only digits

@@ -66,7 +66,9 @@ func main() {
 	// 确保 main 函数正常结束时也清理
 	defer session.CleanUp()
 
-	session.RunXterm()
+	log.Printf("Recorder initialized with backend: %s", *backend)
+
+	go session.RunXterm()
 
 	err = session.ServeRecord(*codec, *resolution, *bitRate, *frameRate)
 	if err != nil {
@@ -74,11 +76,22 @@ func main() {
 		return
 	}
 
+	processOutput := session.processOutput
+	if processOutput == nil {
+		log.Println("录制流未初始化，退出")
+		return
+	}
+
 	// 数据发送循环
-	scanner := bufio.NewScanner(session.processOutput)
+	scanner := bufio.NewScanner(processOutput)
 	buf := make([]byte, 1024*1024)
 	scanner.Buffer(buf, 10*1024*1024)
 	scanner.Split(SplitNALU)
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("录制循环异常退出: %v", r)
+		}
+	}()
 
 	header := make([]byte, 12)
 	var currentPts uint64 = uint64(time.Now().UnixNano() / 1e3)
@@ -143,5 +156,7 @@ func main() {
 		}
 
 	}
-	<-sigChan
+	if err := scanner.Err(); err != nil {
+		log.Println("录制流读取结束:", err)
+	}
 }

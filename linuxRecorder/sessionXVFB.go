@@ -21,6 +21,7 @@ func NewXVFBSession(tcpPort string, width int, height int, displayNo int, depth 
 	if err := xvfbCmd.Start(); err != nil {
 		return nil, err
 	}
+	log.Printf("Started Xvfb on display :%d with PID %d\n", displayNo, xvfbCmd.Process.Pid)
 	session := &Session{
 		sessionType: "xvfb",
 		X11Display:  fmt.Sprintf(":%d", displayNo),

@@ -63,6 +63,10 @@ func (s *Session) StartFFmpeg(codec string, resolution string, bitRate string, f
 	if strings.Contains(bestEncoder, "amf") {
 		_preset = "speed"
 	}
+
+	if bitRate == "" || bitRate == "0" {
+		bitRate = "1M"
+	}
 	// If want to use kmsgrab, the command would be like this:
 	// ffmpeg -f kmsgrab -framerate 30 -i - -vf "hwdownload,format=bgr0,colorchannelmixer=rr=0:rb=1:br=1:bb=0,scale=1280:720,format=nv12" -c:v h264_nvenc -b:v 4M -maxrate 4M -g 60 -bf 0 -preset p1 -x yuv420p -f h264 -
 	// filterStr := fmt.Sprintf("hwdownload,format=bgr0,colorchannelmixer=rr=0:rb=1:br=1:bb=0,scale=%d:%d,format=nv12", width, height)
@@ -136,6 +140,9 @@ func (s *Session) CleanUp() {
 		if s.xorgLogPath != "" {
 			os.Remove(s.xorgLogPath)
 		}
+		if s.X11Display == "" {
+			return
+		}
 		tmpDir := os.Getenv("TMPDIR")
 		if tmpDir == "" {
 			tmpDir = "/tmp"
@@ -184,15 +191,18 @@ func (s *Session) RunXterm() {
 }
 
 func (s *Session) ServeRecord(codec string, resolution string, bitRate string, frameRate string) error {
+	log.Printf("Try Starting recording sessionType %s, resolution %s, bitrate %s, framerate %s\n", s.sessionType, resolution, bitRate, frameRate)
 	switch s.sessionType {
 	case "wayland":
 		err := s.StartWfRecorder(codec, resolution, bitRate, frameRate)
+		log.Printf("Started wf-recorder with codec %s, resolution %s, bitrate %s, framerate %s\n", codec, resolution, bitRate, frameRate)
 		if err != nil {
 			log.Printf("启动 wf-recorder 失败: %v\n", err)
 			return fmt.Errorf("启动 wf-recorder 失败: %v", err)
 		}
 	case "xorg", "xvfb":
 		err := s.StartFFmpeg(codec, resolution, bitRate, frameRate)
+		log.Printf("Started FFmpeg with codec %s, resolution %s, bitrate %s, framerate %s\n", codec, resolution, bitRate, frameRate)
 		if err != nil {
 			log.Printf("启动 FFmpeg 失败: %v\n", err)
 			return fmt.Errorf("启动 FFmpeg 失败: %v", err)

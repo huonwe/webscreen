@@ -82,6 +82,7 @@ func New(cfg map[string]string) (*LinuxDriver, error) {
 	}
 	if d.ip == "127.0.0.1" || d.ip == "localhost" || d.ip == "" {
 		d.ip = "127.0.0.1"
+		log.Printf("[linux driver] 使用 backend=%s 启动本地 recorder", d.backend)
 		err = LocalStartRecorder("27184", d.resolution, d.bitRate, d.frameRate, d.video_codec, d.backend)
 	} else {
 		err = PushAndStartRecorder(d.user, d.ip, "27184", d.resolution, d.bitRate, d.frameRate, d.video_codec, d.backend)

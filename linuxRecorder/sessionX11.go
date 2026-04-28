@@ -38,7 +38,7 @@ func NewXorgSession(tcpPort string, width int, height int, displayNo int, depth 
 	}
 
 	session := &Session{
-		sessionType:    "x11",
+		sessionType:    "xorg",
 		X11Display:     fmt.Sprintf(":%d", displayNo),
 		cmdProcess:     xorgCmd.Process,
 		xorgConfigPath: configPath,

@@ -83,9 +83,10 @@ client.urgent           #bf616a #bf616a #eceff4 #bf616a   #bf616a
 	}
 
 	session := &Session{
-		cmdProcess: swayCmd.Process,
-		width:      width,
-		height:     height,
+		sessionType: "wayland",
+		cmdProcess:  swayCmd.Process,
+		width:       width,
+		height:      height,
 	}
 
 	err := session.waitWaylandLaunch(xdgRuntimeDir)
@@ -110,9 +111,9 @@ client.urgent           #bf616a #bf616a #eceff4 #bf616a   #bf616a
 	}
 
 	go func() {
-		session.controller.ServeControlConn(conn)
-		log.Println("控制连接关闭，正在清理资源...")
-		session.CleanUp()
+		if err := session.controller.ServeControlConn(conn); err != nil {
+			log.Println("控制连接关闭:", err)
+		}
 	}()
 	return session, nil
 }
@@ -200,10 +201,6 @@ func (s *Session) StartWfRecorder(codec string, resolution string, bitRate strin
 
 	_preset := "ultrafast"
 	bitRate = "1M"
-	threadArgs := make([]string, 0, 2)
-	if encoder == "libx264" || encoder == "libx265" {
-		threadArgs = append(threadArgs, "-p", "threads=1")
-	}
 
 	// 2. 构造参数
 	args := []string{
@@ -217,7 +214,6 @@ func (s *Session) StartWfRecorder(codec string, resolution string, bitRate strin
 		"-p", "preset=" + _preset,
 		"-p", "tune=zerolatency",
 	}
-	args = append(args, threadArgs...)
 	args = append(args,
 		// --- 以下是针对 WebRTC 的关键优化 ---
 		// "-p", "profile=baseline", // 强制使用 Baseline Profile，这是 WebRTC 的最爱
@@ -261,6 +257,7 @@ func (s *Session) StartWfRecorder(codec string, resolution string, bitRate strin
 
 	// 将读取端赋值给 session，后续的 Scanner 会从这里读
 	s.processOutput = pr
+	log.Printf("Started wf-recorder with PID %d, streaming to session.processOutput\n", ffmpegCmd.Process.Pid)
 
 	return nil
 }
