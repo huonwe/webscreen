@@ -61,6 +61,7 @@ const translations = {
         display: "Display (Experimental)",
         config_device_title: "Configure {serial}",
         video_codec_options: "video_codec_options",
+        use_video_codec_options: "Send video_codec_options",
         error_from_server: "Error from server: {msg}",
         call_api_failed: "API request failed",
 
@@ -142,6 +143,7 @@ const translations = {
         display: "显示 (实验性)",
         config_device_title: "配置 {serial}",
         video_codec_options: "video_codec_options",
+        use_video_codec_options: "携带 video_codec_options 参数",
         error_from_server: "服务器错误: {msg}",
         call_api_failed: "API请求失败",
 
@@ -223,6 +225,7 @@ const translations = {
         display: "ディスプレイ (実験的)",
         config_device_title: "{serial} の設定",
         video_codec_options: "video_codec_options",
+        use_video_codec_options: "video_codec_options を送信",
         error_from_server: "サーバーエラー: {msg}",
         call_api_failed: "APIリクエストに失敗しました",
 

@@ -65,6 +65,7 @@ const defaultScrcpyConfig = {
         audio_codec: 'opus',
         video_bit_rate: 8000000,
         video_codec_options: '',
+        use_video_codec_options: 'true',
         new_display: '',
         deviceID: '', // For scrcpy driver to identify which device to connect to
     }
@@ -413,6 +414,7 @@ function startStream(serial) {
                 audio: drv.audio || "true",
                 video_bit_rate: String(drv.video_bit_rate || 8000000),
                 video_codec_options: drv.video_codec_options || '',
+                use_video_codec_options: drv.use_video_codec_options || 'true',
                 new_display: drv.new_display || '',
                 max_size: drv.max_size || '',
                 deviceID: config.device_ip || '', // Pass device IP as deviceID for scrcpy to identify which device to connect to
@@ -486,6 +488,7 @@ function showConfigModal(serial) {
         document.getElementById('configMaxSize').value = drv.max_size || '';
         document.getElementById('configVideoCodec').value = drv.video_codec || 'h264';
         document.getElementById('configVideoCodecOptions').value = drv.video_codec_options || '';
+        document.getElementById('configUseVideoCodecOptions').checked = (drv.use_video_codec_options || 'true') === 'true';
         document.getElementById('configAudio').checked = drv.audio === 'true';
         document.getElementById('configNewDisplay').value = drv.new_display || '';
     }
@@ -524,6 +527,7 @@ function saveDeviceConfig() {
         drv.max_size = document.getElementById('configMaxSize').value.trim() || '';
         drv.video_codec = document.getElementById('configVideoCodec').value;
         drv.video_codec_options = document.getElementById('configVideoCodecOptions').value.trim();
+        drv.use_video_codec_options = document.getElementById('configUseVideoCodecOptions').checked ? 'true' : 'false';
         drv.new_display = document.getElementById('configNewDisplay').value.trim();
         drv.audio = document.getElementById('configAudio').checked ? 'true' : 'false';
         drv.audio_codec = 'opus'; // Hardcoded default for now
