@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"log"
 	"net"
 
 	"github.com/bendahl/uinput"
@@ -34,9 +33,6 @@ type InputController struct {
 	screenWidth  uint16
 	screenHeight uint16
 }
-
-const normalizedCoordMax uint16 = 65535
-const touchPadAbsMax int32 = 32767
 
 // NewInputController 初始化输入控制器
 func NewInputController(controllerType string, display string, screenWidth uint16, screenHeight uint16) (*InputController, error) {
@@ -168,7 +164,7 @@ func (ic *InputController) ServeControlConn(conn net.Conn) error {
 // HandleMouseEvent 处理鼠标事件并分发到对应底层接口
 func (ic *InputController) HandleMouseEvent(action byte, deltaX, deltaY int32, buttons uint32, wheelDeltaX, wheelDeltaY int16) {
 	// 1. 处理鼠标移动 (使用相对坐标 deltaX, deltaY)
-	log.Printf("Mouse Event - Action: %d, DeltaX: %d, DeltaY: %d", action, deltaX, deltaY)
+	// log.Printf("Mouse Event - Action: %d, DeltaX: %d, DeltaY: %d", action, deltaX, deltaY)
 	if deltaX != 0 || deltaY != 0 {
 		if ic.controllerType == CONTROLLER_TYPE_WAYLAND {
 			_ = ic.mouse.Move(deltaX, deltaY)
@@ -282,23 +278,6 @@ func (ic *InputController) HandleTouchEvent(action, ptrID byte, x, y, pressure u
 	// } else if action == TouchActionUp {
 	// 	ic.triggerMouseButton(buttonID, false)
 	// }
-}
-
-func scaleNormalizedToRange(normalized uint16, max uint16) int16 {
-	if max <= 1 {
-		return 0
-	}
-
-	value := int32(normalized) * int32(max-1) / int32(normalizedCoordMax)
-	return int16(value)
-}
-
-func scaleNormalizedToRange32(normalized uint16, max int32) int32 {
-	if max <= 1 {
-		return 0
-	}
-
-	return int32(normalized) * (max - 1) / int32(normalizedCoordMax)
 }
 
 // triggerMouseButton 屏蔽底层差异，执行点击动作
