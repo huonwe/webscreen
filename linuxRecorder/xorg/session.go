@@ -7,13 +7,10 @@ import (
 	"net"
 	"os"
 	"os/exec"
-	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
-	"time"
 
-	lc "webscreen/linuxCapturer"
+	lc "webscreen/linuxRecorder"
 )
 
 type X11Session struct {
@@ -46,7 +43,7 @@ func NewX11Session(tcpPort string, width int, height int, displayNum int, depth 
 		"+extension", "GLX",
 		"+extension", "RANDR",
 		"+extension", "RENDER",
-		"vt7", // 👈 强制告诉 Xorg 去使用 7 号控制台
+		// "vt7", // 👈 强制告诉 Xorg 去使用 7 号控制台
 		"-logfile", logPath,
 	)
 	xorgCmd.Stderr = os.Stderr
@@ -182,148 +179,135 @@ func fileExists(path string) bool {
 	return err == nil
 }
 
-func (s *X11Session) CleanUp() {
-	s.cleanupOnce.Do(func() {
-		log.Println("正在清理资源，关闭原生 X11 虚拟显示器...")
-		if s.Conn != nil {
-			s.Conn.Close()
-		}
-		if s.controller != nil {
-			s.controller.Close()
-		}
-		if s.ffmpegOutput != nil {
-			s.ffmpegOutput.Close()
-		}
-		if s.Cmd != nil {
-			s.Cmd.Kill()
-			s.Cmd.Wait()
-		}
-		if s.xorgConfigPath != "" {
-			os.Remove(s.xorgConfigPath)
-		}
-		if s.xorgLogPath != "" {
-			os.Remove(s.xorgLogPath)
-		}
-		tmpDir := os.Getenv("TMPDIR")
-		if tmpDir == "" {
-			tmpDir = "/tmp"
-		}
-		socketFile := filepath.Join(tmpDir, ".X11-unix", fmt.Sprintf("X%d", s.Display))
-		lockFile := filepath.Join(tmpDir, fmt.Sprintf(".X%d-lock", s.Display))
-		os.Remove(socketFile)
-		os.Remove(lockFile)
-		log.Println("清理完成，程序退出。")
-	})
-}
+// func (s *X11Session) CleanUp() {
+// 	s.cleanupOnce.Do(func() {
+// 		log.Println("正在清理资源，关闭原生 X11 虚拟显示器...")
+// 		if s.Conn != nil {
+// 			s.Conn.Close()
+// 		}
+// 		if s.controller != nil {
+// 			s.controller.Close()
+// 		}
+// 		if s.ffmpegOutput != nil {
+// 			s.ffmpegOutput.Close()
+// 		}
+// 		if s.Cmd != nil {
+// 			s.Cmd.Kill()
+// 			s.Cmd.Wait()
+// 		}
+// 		if s.xorgConfigPath != "" {
+// 			os.Remove(s.xorgConfigPath)
+// 		}
+// 		if s.xorgLogPath != "" {
+// 			os.Remove(s.xorgLogPath)
+// 		}
+// 		tmpDir := os.Getenv("TMPDIR")
+// 		if tmpDir == "" {
+// 			tmpDir = "/tmp"
+// 		}
+// 		socketFile := filepath.Join(tmpDir, ".X11-unix", fmt.Sprintf("X%d", s.Display))
+// 		lockFile := filepath.Join(tmpDir, fmt.Sprintf(".X%d-lock", s.Display))
+// 		os.Remove(socketFile)
+// 		os.Remove(lockFile)
+// 		log.Println("清理完成，程序退出。")
+// 	})
+// }
 
-func (s *X11Session) RunCmd(cmdStr string) int {
-	cmd := exec.Command("bash", "-c", cmdStr)
-	cmd.Env = append(os.Environ(), fmt.Sprintf("DISPLAY=:%d", s.Display))
-	if err := cmd.Start(); err != nil {
-		log.Println("启动命令失败:", err)
-		return -1
-	}
-	cmd.Wait()
-	return cmd.ProcessState.ExitCode()
-}
+// func (s *X11Session) RunCmd(cmdStr string) int {
+// 	cmd := exec.Command("bash", "-c", cmdStr)
+// 	cmd.Env = append(os.Environ(), fmt.Sprintf("DISPLAY=:%d", s.Display))
+// 	if err := cmd.Start(); err != nil {
+// 		log.Println("启动命令失败:", err)
+// 		return -1
+// 	}
+// 	cmd.Wait()
+// 	return cmd.ProcessState.ExitCode()
+// }
 
-func (s *X11Session) RunDesktopSession() {
-	cmd := exec.Command("dbus-run-session", "xfce4-session")
-	cmd.Env = append(os.Environ(), "DISPLAY="+fmt.Sprintf(":%d", s.Display))
-	if err := cmd.Start(); err != nil {
-		log.Println("启动桌面失败:", err)
-	}
-}
+// func (s *X11Session) RunDesktopSession() {
+// 	cmd := exec.Command("dbus-run-session", "xfce4-session")
+// 	cmd.Env = append(os.Environ(), "DISPLAY="+fmt.Sprintf(":%d", s.Display))
+// 	if err := cmd.Start(); err != nil {
+// 		log.Println("启动桌面失败:", err)
+// 	}
+// }
 
-func (s *X11Session) waitLaunchFinished() error {
-	tmpDir := os.Getenv("TMPDIR")
-	if tmpDir == "" {
-		tmpDir = "/tmp"
-	}
-	socketFile := filepath.Join(tmpDir, ".X11-unix", fmt.Sprintf("X%d", s.Display))
-	ready := false
-	for i := 0; i < 50; i++ {
-		if _, err := os.Stat(socketFile); err == nil {
-			ready = true
-			break
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
+// func (s *X11Session) waitLaunchFinished() error {
+// 	tmpDir := os.Getenv("TMPDIR")
+// 	if tmpDir == "" {
+// 		tmpDir = "/tmp"
+// 	}
+// 	socketFile := filepath.Join(tmpDir, ".X11-unix", fmt.Sprintf("X%d", s.Display))
+// 	ready := false
+// 	for i := 0; i < 50; i++ {
+// 		if _, err := os.Stat(socketFile); err == nil {
+// 			ready = true
+// 			break
+// 		}
+// 		time.Sleep(100 * time.Millisecond)
+// 	}
 
-	if !ready {
-		return fmt.Errorf("Xorg timeout! Socket file not found: %s", socketFile)
-	}
-	return nil
-}
+// 	if !ready {
+// 		return fmt.Errorf("Xorg timeout! Socket file not found: %s", socketFile)
+// 	}
+// 	return nil
+// }
 
-func (s *X11Session) StartFFmpeg(codec string, resolution string, bitRate string, frameRate string) error {
-	var bestEncoder string
-	switch codec {
-	case "h264":
-		bestEncoder = lc.GetBestH264Encoder()
-	case "hevc":
-		bestEncoder = lc.GetBestHEVCEncoder()
-	default:
-		return fmt.Errorf("不支持的编码格式: %s", codec)
-	}
+// func (s *X11Session) StartFFmpeg(codec string, resolution string, bitRate string, frameRate string) error {
+// 	var bestEncoder string
+// 	switch codec {
+// 	case "h264":
+// 		bestEncoder = lc.GetBestH264Encoder()
+// 	case "hevc":
+// 		bestEncoder = lc.GetBestHEVCEncoder()
+// 	default:
+// 		return fmt.Errorf("不支持的编码格式: %s", codec)
+// 	}
 
-	log.Printf("Encoder: %s\n", bestEncoder)
-	log.Printf("Starting FFmpeg with codec %s, resolution %s, bitrate %s, frame rate %s\n", bestEncoder, resolution, bitRate, frameRate)
-	// _preset := "ultrafast"
-	// if strings.Contains(bestEncoder, "nvenc") {
-	// 	_preset = "p1"
-	// }
-	// if strings.Contains(bestEncoder, "qsv") {
-	// 	_preset = "veryfast"
-	// }
-	// if strings.Contains(bestEncoder, "amf") {
-	// 	_preset = "speed"
-	// }
-	// 动态生成滤镜链，处理 4K 到目标分辨率的缩放，并修复红蓝反转
-	parts := strings.Split(resolution, "x")
-	width, _ := strconv.Atoi(parts[0])
-	height, _ := strconv.Atoi(parts[1])
-	filterStr := fmt.Sprintf("hwdownload,format=bgr0,colorchannelmixer=rr=0:rb=1:br=1:bb=0,scale=%d:%d,format=nv12", width, height)
-	ffmpegCmd := exec.Command("ffmpeg",
-		"-device", "/dev/dri/card0",
-		"-f", "kmsgrab",
-		"-framerate", frameRate,
-		"-i", "-",
+// 	log.Printf("Encoder: %s\n", bestEncoder)
+// 	log.Printf("Starting FFmpeg with codec %s, resolution %s, bitrate %s, frame rate %s\n", bestEncoder, resolution, bitRate, frameRate)
 
-		// 核心滤镜链：下载 -> 翻转红蓝通道 -> 缩放 -> 转换格式
-		"-vf", filterStr,
+// 	// filterStr := fmt.Sprintf("hwdownload,format=bgr0,colorchannelmixer=rr=0:rb=1:br=1:bb=0,scale=%d:%d,format=nv12", width, height)
+// 	ffmpegCmd := exec.Command("ffmpeg",
+// 		"-device", "/dev/dri/card0",
+// 		"-f", "x11grab",
+// 		"-framerate", frameRate,
+// 		"-i", "-",
 
-		"-c:v", bestEncoder,
-		"-b:v", bitRate,
-		"-maxrate", bitRate,
-		"-g", "60",
-		"-bf", "0",
-		"-f", codec,
-		"pipe:3",
-	)
-	ffmpegCmd.Env = append(os.Environ(), fmt.Sprintf("DISPLAY=:%d", s.Display))
-	ffmpegCmd.Stderr = os.Stderr
-	log.Printf("Running FFmpeg command: %s\n", strings.Join(ffmpegCmd.Args, " "))
+// 		// 核心滤镜链：下载 -> 翻转红蓝通道 -> 缩放 -> 转换格式
+// 		// "-vf", filterStr,
 
-	// 创建匿名管道
-	pr, pw, err := os.Pipe()
-	if err != nil {
-		return err
-	}
+// 		"-c:v", bestEncoder,
+// 		"-b:v", bitRate,
+// 		"-maxrate", bitRate,
+// 		"-g", "60",
+// 		"-bf", "0",
+// 		"-f", codec,
+// 		"pipe:3",
+// 	)
+// 	ffmpegCmd.Env = append(os.Environ(), fmt.Sprintf("DISPLAY=:%d", s.Display))
+// 	ffmpegCmd.Stderr = os.Stderr
+// 	log.Printf("Running FFmpeg command: %s\n", strings.Join(ffmpegCmd.Args, " "))
 
-	ffmpegCmd.ExtraFiles = []*os.File{pw}
-	ffmpegCmd.Stdin = nil
+// 	// 创建匿名管道
+// 	pr, pw, err := os.Pipe()
+// 	if err != nil {
+// 		return err
+// 	}
 
-	if err := ffmpegCmd.Start(); err != nil {
-		log.Printf("FFmpeg 启动失败: %v", err)
-		pw.Close()
-		pr.Close()
-		return err
-	}
+// 	ffmpegCmd.ExtraFiles = []*os.File{pw}
+// 	ffmpegCmd.Stdin = nil
 
-	// 【重要】启动后在父进程关闭写入端，否则会导致读取端无法收到 EOF
-	pw.Close()
+// 	if err := ffmpegCmd.Start(); err != nil {
+// 		log.Printf("FFmpeg 启动失败: %v", err)
+// 		pw.Close()
+// 		pr.Close()
+// 		return err
+// 	}
 
-	s.ffmpegOutput = pr
-	return nil
-}
+// 	// 【重要】启动后在父进程关闭写入端，否则会导致读取端无法收到 EOF
+// 	pw.Close()
+
+// 	s.ffmpegOutput = pr
+// 	return nil
+// }

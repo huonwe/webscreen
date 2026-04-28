@@ -2,45 +2,14 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"log"
-	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
-	"sync"
 	"time"
-	lc "webscreen/linuxCapturer"
 )
 
-func envWithoutKey(env []string, key string) []string {
-	prefix := key + "="
-	filtered := make([]string, 0, len(env))
-	for _, kv := range env {
-		if !strings.HasPrefix(kv, prefix) {
-			filtered = append(filtered, kv)
-		}
-	}
-	return filtered
-}
-
-type WaylandSession struct {
-	Display    string
-	SwaySock   string
-	X11Display string
-	CPUSet     string
-	Cmd        *os.Process
-	Conn       net.Conn
-	Width      int
-	Height     int
-
-	ffmpegOutput io.ReadCloser
-	controller   *lc.InputController
-	cleanupOnce  sync.Once
-}
-
-func NewWaylandSession(tcpPort string, width int, height int, frameRate string, cpuSet string) (*WaylandSession, error) {
+func NewWaylandSession(tcpPort string, width int, height int, frameRate string, cpuSet string) (*Session, error) {
 	xdgRuntimeDir := os.Getenv("XDG_RUNTIME_DIR")
 	if xdgRuntimeDir == "" {
 		xdgRuntimeDir = fmt.Sprintf("/run/user/%d", os.Getuid())
@@ -113,25 +82,27 @@ client.urgent           #bf616a #bf616a #eceff4 #bf616a   #bf616a
 		return nil, err
 	}
 
-	session := &WaylandSession{
-		Cmd:    swayCmd.Process,
-		Width:  width,
-		Height: height,
-		CPUSet: cpuSet,
+	session := &Session{
+		cmdProcess: swayCmd.Process,
+		width:      width,
+		height:     height,
 	}
 
-	err := session.waitLaunchFinished(xdgRuntimeDir)
+	err := session.waitWaylandLaunch(xdgRuntimeDir)
 	if err != nil {
 		return nil, err
 	}
 
 	log.Printf("listening at %s...\n", tcpPort)
-	conn := lc.WaitTCP(tcpPort)
-	session.Conn = conn
+	conn, err := WaitTCP(tcpPort)
+	if err != nil {
+		return nil, fmt.Errorf("等待 TCP 连接失败: %v", err)
+	}
+	session.conn = conn
 	log.Printf("TCP connection established at %s\n", tcpPort)
 
 	var errController error
-	session.controller, errController = lc.NewInputController(lc.CONTROLLER_TYPE_WAYLAND, "", uint16(width), uint16(height))
+	session.controller, errController = NewInputController(CONTROLLER_TYPE_WAYLAND, "", uint16(width), uint16(height))
 	if errController != nil {
 		log.Printf("创建 Wayland 虚拟外设失败, 请检查 /dev/uinput 权限: %v\n", errController)
 	} else {
@@ -146,38 +117,22 @@ client.urgent           #bf616a #bf616a #eceff4 #bf616a   #bf616a
 	return session, nil
 }
 
-func (s *WaylandSession) findX11Display() {
-	tmpDir := "/tmp/.X11-unix"
-	for i := 0; i < 20; i++ {
-		files, _ := filepath.Glob(filepath.Join(tmpDir, "X*"))
-		if len(files) > 0 {
-			for _, f := range files {
-				displayNum := strings.TrimPrefix(filepath.Base(f), "X")
-				s.X11Display = ":" + displayNum
-			}
-			log.Printf("Found Xwayland display: %s\n", s.X11Display)
-			return
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-}
-
-func (s *WaylandSession) waitLaunchFinished(xdgRuntimeDir string) error {
+func (s *Session) waitWaylandLaunch(xdgRuntimeDir string) error {
 	for i := 0; i < 50; i++ {
-		if s.Display == "" {
+		if s.displayName == "" {
 			files, _ := filepath.Glob(filepath.Join(xdgRuntimeDir, "wayland-[0-9]*"))
 			if len(files) > 0 {
-				s.Display = filepath.Base(files[0])
+				s.displayName = filepath.Base(files[0])
 			}
 		}
-		if s.SwaySock == "" {
+		if s.swaySock == "" {
 			files, _ := filepath.Glob(filepath.Join(xdgRuntimeDir, "sway-ipc.*.sock"))
 			if len(files) > 0 {
-				s.SwaySock = filepath.Base(files[0])
+				s.swaySock = filepath.Base(files[0])
 			}
 		}
-		if s.Display != "" && s.SwaySock != "" {
-			log.Printf("Wayland session ready: DISPLAY=%s, SWAYSOCK=%s\n", s.Display, s.SwaySock)
+		if s.displayName != "" && s.swaySock != "" {
+			log.Printf("Wayland session ready: DISPLAY=%s, SWAYSOCK=%s\n", s.displayName, s.swaySock)
 			return nil
 		}
 		time.Sleep(100 * time.Millisecond)
@@ -185,34 +140,8 @@ func (s *WaylandSession) waitLaunchFinished(xdgRuntimeDir string) error {
 	return fmt.Errorf("Sway headless Timeout")
 }
 
-func (s *WaylandSession) CleanUp() {
-	s.cleanupOnce.Do(func() {
-		log.Println("正在清理资源，关闭 Sway...")
-		if s.Conn != nil {
-			s.Conn.Close()
-		}
-		if s.controller != nil {
-			s.controller.Close()
-		}
-		if s.ffmpegOutput != nil {
-			s.ffmpegOutput.Close()
-		}
-		if s.Cmd != nil {
-			s.Cmd.Kill()
-			s.Cmd.Wait()
-		}
-		xdgRuntimeDir := os.Getenv("XDG_RUNTIME_DIR")
-		if xdgRuntimeDir != "" && s.Display != "" {
-			os.Remove(filepath.Join(xdgRuntimeDir, s.Display))
-		}
-		if xdgRuntimeDir != "" && s.SwaySock != "" {
-			os.Remove(filepath.Join(xdgRuntimeDir, s.SwaySock))
-		}
-	})
-}
-
 // 补充类似于 XvfbSession 的 RunCmd 命令
-func (s *WaylandSession) RunCmd(cmdStr string) int {
+func (s *Session) WaylandRunCmd(cmdStr string) int {
 	cmd := exec.Command("bash", "-c", cmdStr)
 
 	xdgRuntimeDir := os.Getenv("XDG_RUNTIME_DIR")
@@ -220,7 +149,7 @@ func (s *WaylandSession) RunCmd(cmdStr string) int {
 		xdgRuntimeDir = fmt.Sprintf("/run/user/%d", os.Getuid())
 	}
 
-	swaySock := s.SwaySock
+	swaySock := s.swaySock
 	if swaySock != "" && !filepath.IsAbs(swaySock) {
 		swaySock = filepath.Join(xdgRuntimeDir, swaySock)
 	}
@@ -228,7 +157,7 @@ func (s *WaylandSession) RunCmd(cmdStr string) int {
 	// 注入 Wayland/Sway 运行时环境给子进程
 	cmd.Env = append(os.Environ(),
 		fmt.Sprintf("XDG_RUNTIME_DIR=%s", xdgRuntimeDir),
-		fmt.Sprintf("WAYLAND_DISPLAY=%s", s.Display),
+		fmt.Sprintf("WAYLAND_DISPLAY=%s", s.displayName),
 	)
 	if swaySock != "" {
 		cmd.Env = append(cmd.Env, fmt.Sprintf("SWAYSOCK=%s", swaySock))
@@ -240,7 +169,7 @@ func (s *WaylandSession) RunCmd(cmdStr string) int {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	log.Printf("RunCmd: %s (WAYLAND_DISPLAY=%s, SWAYSOCK=%s, DISPLAY=%s)", cmdStr, s.Display, swaySock, s.X11Display)
+	log.Printf("RunCmd: %s (WAYLAND_DISPLAY=%s, SWAYSOCK=%s, DISPLAY=%s)", cmdStr, s.displayName, swaySock, s.X11Display)
 
 	if err := cmd.Start(); err != nil {
 		log.Println("启动命令失败:", err)
@@ -251,13 +180,13 @@ func (s *WaylandSession) RunCmd(cmdStr string) int {
 	return 0
 }
 
-func (s *WaylandSession) StartWfRecorder(codec string, resolution string, bitRate string, frameRate string) error {
+func (s *Session) StartWfRecorder(codec string, resolution string, bitRate string, frameRate string) error {
 	var encoder string
 	switch codec {
 	case "h264":
-		encoder = lc.GetBestH264Encoder()
+		encoder = GetBestH264Encoder()
 	case "hevc":
-		encoder = lc.GetBestHEVCEncoder()
+		encoder = GetBestHEVCEncoder()
 	default:
 		return fmt.Errorf("不支持的编码格式: %s", codec)
 	}
@@ -279,7 +208,7 @@ func (s *WaylandSession) StartWfRecorder(codec string, resolution string, bitRat
 	// 2. 构造参数
 	args := []string{
 		"--output", "HEADLESS-1",
-		"-g", fmt.Sprintf("0,0 %dx%d", s.Width, s.Height),
+		"-g", fmt.Sprintf("0,0 %dx%d", s.width, s.height),
 		"--muxer", codec,
 		"--codec", encoder,
 		"--file", "/dev/fd/3",
@@ -305,15 +234,6 @@ func (s *WaylandSession) StartWfRecorder(codec string, resolution string, bitRat
 
 	commandName := "wf-recorder"
 	commandArgs := args
-	if s.CPUSet != "" {
-		if _, err := exec.LookPath("taskset"); err == nil {
-			commandName = "taskset"
-			commandArgs = append([]string{"-c", s.CPUSet, "wf-recorder"}, args...)
-			log.Printf("启用 CPU 绑定: %s", s.CPUSet)
-		} else {
-			log.Printf("taskset 不可用，跳过 CPU 绑定: %s", s.CPUSet)
-		}
-	}
 
 	ffmpegCmd := exec.Command(commandName, commandArgs...)
 
@@ -321,7 +241,7 @@ func (s *WaylandSession) StartWfRecorder(codec string, resolution string, bitRat
 	xdgRuntimeDir := os.Getenv("XDG_RUNTIME_DIR")
 	ffmpegCmd.Env = append(os.Environ(),
 		fmt.Sprintf("XDG_RUNTIME_DIR=%s", xdgRuntimeDir),
-		fmt.Sprintf("WAYLAND_DISPLAY=%s", s.Display),
+		fmt.Sprintf("WAYLAND_DISPLAY=%s", s.displayName),
 	)
 
 	// 将管道写入端交给子进程的 ExtraFiles
@@ -340,7 +260,7 @@ func (s *WaylandSession) StartWfRecorder(codec string, resolution string, bitRat
 	pw.Close()
 
 	// 将读取端赋值给 session，后续的 Scanner 会从这里读
-	s.ffmpegOutput = pr
+	s.processOutput = pr
 
 	return nil
 }

@@ -1,4 +1,4 @@
-package linuxcapturer
+package main
 
 import "github.com/bendahl/uinput"
 

@@ -1,4 +1,4 @@
-package linuxcapturer
+package main
 
 import (
 	"encoding/binary"

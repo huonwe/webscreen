@@ -1,4 +1,4 @@
-package linuxcapturer
+package main
 
 // ================= 定义动作常量 =================
 const WheelStep = 40

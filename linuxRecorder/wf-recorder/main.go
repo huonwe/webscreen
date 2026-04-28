@@ -11,16 +11,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
-
-	lc "webscreen/linuxCapturer"
+	lc "webscreen/linuxRecorder"
 )
-
-// // 配置参数
-// const (
-// 	DisplayNum = 99
-// 	// Resolution = "1920x1080"
-// 	BitDepth = 24 // 24位色深
-// )
 
 func main() {
 	tcpPort := flag.String("tcp_port", "27184", "server listen port")
@@ -28,20 +20,29 @@ func main() {
 	bitRate := flag.String("bitrate", "8M", "streaming bitrate in Mbps")
 	frameRate := flag.String("framerate", "60", "frame rate for capturing")
 	codec := flag.String("codec", "h264", "video codec: h264 or hevc")
+	cpuSet := flag.String("cpu_set", "", "optional CPU affinity for wf-recorder, for example 0 or 0-1")
 	flag.Parse()
-	log.Printf("Starting Xvfb capturer with resolution %s, bitrate %s, framerate %s, codec %s\n", *resolution, *bitRate, *frameRate, *codec)
+	log.Printf("Starting Wayland capturer with resolution %s, bitrate %s, framerate %s, codec %s\n", *resolution, *bitRate, *frameRate, *codec)
 
-	// 启动 Xvfb 虚拟显示器
 	_width, _height := strings.Split(*resolution, "x")[0], strings.Split(*resolution, "x")[1]
-	// 定义清理函数：用于杀死 Xvfb 进程
 	width, err := strconv.Atoi(_width)
-	height, err := strconv.Atoi(_height)
-	session, err := NewXvfbSession(*tcpPort, width, height, 99, 24)
 	if err != nil {
-		log.Printf("无法启动 Xvfb: %v", err)
+		log.Printf("Invalid width: %v", err)
 		return
 	}
-	// 2. 监听 Ctrl+C，确保退出时执行清理
+	height, err := strconv.Atoi(_height)
+	if err != nil {
+		log.Printf("Invalid height: %v", err)
+		return
+	}
+
+	session, err := NewWaylandSession(*tcpPort, width, height, *frameRate, *cpuSet)
+	if err != nil {
+		log.Printf("无法启动 Sway/Wayland: %v", err)
+		return
+	}
+
+	// 监听 Ctrl+C，确保退出时执行清理
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 	go func() {
@@ -53,10 +54,16 @@ func main() {
 	// 确保 main 函数正常结束时也清理
 	defer session.CleanUp()
 
-	log.Println("连接成功，开始 FFmpeg 推流...")
+	log.Println("连接成功，开始 wf-recorder 推流...")
 
-	// FFmpeg 抓取该虚拟屏幕
-	session.StartFFmpeg(*codec, *resolution, *bitRate, *frameRate)
+	// 通过 swaymsg 让 Sway 进程拉起应用，避免直接启动 xterm 时缺少 DISPLAY
+	session.RunCmd("swaymsg exec 'xterm'")
+
+	err = session.StartWfRecorder(*codec, *resolution, *bitRate, *frameRate)
+	if err != nil {
+		log.Printf("推流启动失败: %v", err)
+		return
+	}
 
 	// 数据发送循环
 	scanner := bufio.NewScanner(session.ffmpegOutput)
@@ -65,12 +72,12 @@ func main() {
 	scanner.Split(lc.SplitNALU)
 
 	header := make([]byte, 12)
-
 	var currentPts uint64 = uint64(time.Now().UnixNano() / 1e3)
 	var frameStarted bool = false
 
 	for scanner.Scan() {
 		nalData := scanner.Bytes()
+
 		if len(nalData) == 0 {
 			continue
 		}
@@ -125,7 +132,7 @@ func main() {
 			log.Println("网络发送错误:", err)
 			break
 		}
-	}
 
-	// 循环结束后（通常是 FFmpeg 退出或网络断开），由 defer cleanup() 负责收尾
+	}
+	<-sigChan
 }

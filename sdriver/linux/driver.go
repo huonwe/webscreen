@@ -15,10 +15,8 @@ import (
 	"webscreen/utils"
 )
 
-//go:embed bin/capturer_wf-recorder
-//go:embed bin/capturer_xorg
-//go:embed bin/capturer_xvfb
-var capturerExec embed.FS
+//go:embed bin/recorder
+var recorderExec embed.FS
 
 // sudo killall Xvfb
 type LinuxDriver struct {
@@ -69,37 +67,28 @@ func New(cfg map[string]string) (*LinuxDriver, error) {
 		videoBuffer: comm.NewLinearBuffer(16 * 1024 * 1024),
 	}
 	log.Println("Initializing LinuxDriver with config:", cfg)
-	var execFile []byte
-	switch d.backend {
-	case "wayland":
-		execFile, err = capturerExec.ReadFile("bin/capturer_wf-recorder")
-	case "xorg":
-		execFile, err = capturerExec.ReadFile("bin/capturer_xorg")
-	case "xvfb":
-		execFile, err = capturerExec.ReadFile("bin/capturer_xvfb")
-	default:
-		return nil, fmt.Errorf("unsupported backend: %s", d.backend)
-	}
+
+	execFile, err := recorderExec.ReadFile("bin/recorder")
 
 	if err != nil {
-		log.Printf("[linux driver] 读取 capturer 失败: %v", err)
+		log.Printf("[linux driver] 读取 recorder 失败: %v", err)
 		return nil, err
 	}
-	err = os.WriteFile("capturer", execFile, 0755)
+	err = os.WriteFile("recorder", execFile, 0755)
 	if err != nil {
 		log.Printf("[linux driver] 写入本地文件失败: %v", err)
-		os.Remove("capturer")
+		os.Remove("recorder")
 		return nil, err
 	}
 	if d.ip == "127.0.0.1" || d.ip == "localhost" || d.ip == "" {
 		d.ip = "127.0.0.1"
-		err = LocalStartXvfb("27184", d.resolution, d.bitRate, d.frameRate, d.video_codec)
+		err = LocalStartRecorder("27184", d.resolution, d.bitRate, d.frameRate, d.video_codec, d.backend)
 	} else {
-		err = PushAndStartXvfb(d.user, d.ip, "27184", d.resolution, d.bitRate, d.frameRate, d.video_codec)
+		err = PushAndStartRecorder(d.user, d.ip, "27184", d.resolution, d.bitRate, d.frameRate, d.video_codec, d.backend)
 	}
 	if err != nil {
-		log.Printf("[linux driver] 启动远程 capturer 失败: %v", err)
-		os.Remove("capturer")
+		log.Printf("[linux driver] 启动远程 recorder 失败: %v", err)
+		os.Remove("recorder")
 		return nil, err
 	}
 
@@ -112,8 +101,8 @@ func New(cfg map[string]string) (*LinuxDriver, error) {
 		}
 		time.Sleep(time.Second)
 		if time.Since(startTime) > 5*time.Second {
-			os.Remove("capturer")
-			return nil, fmt.Errorf("Failed to connect to capturer after 5 seconds: %v", err)
+			os.Remove("recorder")
+			return nil, fmt.Errorf("Failed to connect to recorder after 5 seconds: %v", err)
 		}
 	}
 	d.conn = conn
@@ -313,5 +302,5 @@ func (d *LinuxDriver) Stop() {
 	if d.conn != nil {
 		d.conn.Close()
 	}
-	os.Remove("capturer")
+	os.Remove("recorder")
 }

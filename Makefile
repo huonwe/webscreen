@@ -23,15 +23,11 @@ endif
 
 # --- 路径配置 ---
 
-# 1. Capturer 输出路径 (必须固定！为了配合 go:embed)
-CAPTURER_DIR := sdriver/linux/bin
-CAPTURER_XVFB_BIN := capturer_xvfb
-CAPTURER_XORG_BIN := capturer_xorg
-CAPTURER_WL_BIN := capturer_wf-recorder
-CAPTURER_XVFB_OUT := $(CAPTURER_DIR)/$(CAPTURER_XVFB_BIN)
-CAPTURER_XORG_OUT := $(CAPTURER_DIR)/$(CAPTURER_XORG_BIN)
-CAPTURER_WL_OUT := $(CAPTURER_DIR)/$(CAPTURER_WL_BIN)
+# 1. Recorder 输出路径 (必须固定！为了配合 go:embed)
+RECORDER_DIR := sdriver/linux/bin
+RECORDER_BIN := recorder
 
+RECORDER_OUT := $(RECORDER_DIR)/$(RECORDER_BIN)
 # 2. Main 程序输出路径 (可变)
 DIST_DIR ?= .
 SUFFIX ?= 
@@ -39,21 +35,22 @@ MAIN_OUT := $(DIST_DIR)/webscreen$(SUFFIX)$(EXE)
 
 # --- 构建目标 ---
 
-all: build-capturers build-main
+all: build-LinuxRecorder build-main
 
 ci: all
 
-# 构建 capturers
-build-capturers:
-	@echo ">> [1/2] Building Capturers for $(GOOS)/$(GOARCH)..."
-	@echo "   Output Directory (for embed): $(CAPTURER_DIR)"
-	@mkdir -p $(CAPTURER_DIR)
-	go build -v -ldflags "$(LDFLAGS)" -o "$(CAPTURER_XVFB_OUT)" ./linuxCapturer/xvfb
-	go build -v -ldflags "$(LDFLAGS)" -o "$(CAPTURER_XORG_OUT)" ./linuxCapturer/xorg
-	go build -v -ldflags "$(LDFLAGS)" -o "$(CAPTURER_WL_OUT)" ./linuxCapturer/wf-recorder
+# 构建 capturer
+build-LinuxRecorder:
+	@echo ">> [1/2] Building LinuxRecorder for $(GOOS)/$(GOARCH)..."
+	@echo "   Output Directory (for embed): $(RECORDER_DIR)"
+	@mkdir -p $(RECORDER_DIR)
+# 	go build -v -ldflags "$(LDFLAGS)" -o "$(RECORDER_XVFB_OUT)" ./linuxRecorder/xvfb
+# 	go build -v -ldflags "$(LDFLAGS)" -o "$(RECORDER_XORG_OUT)" ./linuxRecorder/xorg
+# 	go build -v -ldflags "$(LDFLAGS)" -o "$(RECORDER_WL_OUT)" ./linuxRecorder/wf-recorder
+	go build -v -ldflags "$(LDFLAGS)" -o "$(RECORDER_OUT)" ./linuxRecorder
 
 # 构建主程序
-build-main: build-capturers
+build-main: build-LinuxRecorder
 	@echo ">> [2/2] Building Main App for $(GOOS)/$(GOARCH)..."
 	@echo "   LDFLAGS: $(LDFLAGS)"
 	@echo "   Output: $(MAIN_OUT)"
@@ -62,5 +59,5 @@ build-main: build-capturers
 
 # 清理
 clean:
-	rm -f webscreen* $(CAPTURER_DIR)/*
+	rm -f webscreen* $(RECORDER_DIR)/*
 	rm -rf dist

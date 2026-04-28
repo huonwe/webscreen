@@ -11,7 +11,6 @@ import (
 	"strings"
 	"syscall"
 	"time"
-	lc "webscreen/linuxCapturer"
 )
 
 func main() {
@@ -21,8 +20,9 @@ func main() {
 	frameRate := flag.String("framerate", "60", "frame rate for capturing")
 	codec := flag.String("codec", "h264", "video codec: h264 or hevc")
 	cpuSet := flag.String("cpu_set", "", "optional CPU affinity for wf-recorder, for example 0 or 0-1")
+	backend := flag.String("backend", "wayland", "capture backend: wayland, xorg, or xvfb")
 	flag.Parse()
-	log.Printf("Starting Wayland capturer with resolution %s, bitrate %s, framerate %s, codec %s\n", *resolution, *bitRate, *frameRate, *codec)
+	log.Printf("Starting %s capturer with resolution %s, bitrate %s, framerate %s, codec %s\n", *backend, *resolution, *bitRate, *frameRate, *codec)
 
 	_width, _height := strings.Split(*resolution, "x")[0], strings.Split(*resolution, "x")[1]
 	width, err := strconv.Atoi(_width)
@@ -36,9 +36,21 @@ func main() {
 		return
 	}
 
-	session, err := NewWaylandSession(*tcpPort, width, height, *frameRate, *cpuSet)
+	var session *Session
+
+	switch *backend {
+	case "wayland":
+		session, err = NewWaylandSession(*tcpPort, width, height, *frameRate, *cpuSet)
+	case "xorg":
+		session, err = NewXorgSession(*tcpPort, width, height, 99, 24, "auto")
+	case "xvfb":
+		session, err = NewXVFBSession(*tcpPort, width, height, 99, 24)
+	default:
+		log.Fatalf("Unsupported backend: %s", *backend)
+	}
+
 	if err != nil {
-		log.Printf("无法启动 Sway/Wayland: %v", err)
+		log.Printf("无法启动 %s: %v", *backend, err)
 		return
 	}
 
@@ -54,22 +66,19 @@ func main() {
 	// 确保 main 函数正常结束时也清理
 	defer session.CleanUp()
 
-	log.Println("连接成功，开始 wf-recorder 推流...")
+	session.RunXterm()
 
-	// 通过 swaymsg 让 Sway 进程拉起应用，避免直接启动 xterm 时缺少 DISPLAY
-	session.RunCmd("swaymsg exec 'xterm'")
-
-	err = session.StartWfRecorder(*codec, *resolution, *bitRate, *frameRate)
+	err = session.ServeRecord(*codec, *resolution, *bitRate, *frameRate)
 	if err != nil {
 		log.Printf("推流启动失败: %v", err)
 		return
 	}
 
 	// 数据发送循环
-	scanner := bufio.NewScanner(session.ffmpegOutput)
+	scanner := bufio.NewScanner(session.processOutput)
 	buf := make([]byte, 1024*1024)
 	scanner.Buffer(buf, 10*1024*1024)
-	scanner.Split(lc.SplitNALU)
+	scanner.Split(SplitNALU)
 
 	header := make([]byte, 12)
 	var currentPts uint64 = uint64(time.Now().UnixNano() / 1e3)
@@ -124,11 +133,11 @@ func main() {
 		binary.BigEndian.PutUint64(header[0:8], pts)
 		binary.BigEndian.PutUint32(header[8:12], uint32(len(nalData)))
 
-		if _, err := session.Conn.Write(header); err != nil {
+		if _, err := session.conn.Write(header); err != nil {
 			log.Println("网络发送错误:", err)
 			break
 		}
-		if _, err := session.Conn.Write(nalData); err != nil {
+		if _, err := session.conn.Write(nalData); err != nil {
 			log.Println("网络发送错误:", err)
 			break
 		}

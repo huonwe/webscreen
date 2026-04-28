@@ -12,8 +12,15 @@ import (
 	"syscall"
 	"time"
 
-	lc "webscreen/linuxCapturer"
+	lc "webscreen/linuxRecorder"
 )
+
+// // 配置参数
+// const (
+// 	DisplayNum = 99
+// 	// Resolution = "1920x1080"
+// 	BitDepth = 24 // 24位色深
+// )
 
 func main() {
 	tcpPort := flag.String("tcp_port", "27184", "server listen port")
@@ -21,58 +28,46 @@ func main() {
 	bitRate := flag.String("bitrate", "8M", "streaming bitrate in Mbps")
 	frameRate := flag.String("framerate", "60", "frame rate for capturing")
 	codec := flag.String("codec", "h264", "video codec: h264 or hevc")
-	xorgDriver := flag.String("xorg_driver", "modesetting", "Xorg driver: auto, nvidia, modesetting, dummy")
 	flag.Parse()
-	log.Printf("Starting X11 capturer with resolution %s, bitrate %s, framerate %s, codec %s, driver %s\n", *resolution, *bitRate, *frameRate, *codec, *xorgDriver)
+	log.Printf("Starting Xvfb capturer with resolution %s, bitrate %s, framerate %s, codec %s\n", *resolution, *bitRate, *frameRate, *codec)
 
-	parts := strings.Split(*resolution, "x")
-	if len(parts) != 2 {
-		log.Printf("Invalid resolution: %s", *resolution)
-		return
-	}
-
-	width, err := strconv.Atoi(parts[0])
+	// 启动 Xvfb 虚拟显示器
+	_width, _height := strings.Split(*resolution, "x")[0], strings.Split(*resolution, "x")[1]
+	// 定义清理函数：用于杀死 Xvfb 进程
+	width, err := strconv.Atoi(_width)
+	height, err := strconv.Atoi(_height)
+	session, err := NewXvfbSession(*tcpPort, width, height, 99, 24)
 	if err != nil {
-		log.Printf("Invalid width: %v", err)
+		log.Printf("无法启动 Xvfb: %v", err)
 		return
 	}
-	height, err := strconv.Atoi(parts[1])
-	if err != nil {
-		log.Printf("Invalid height: %v", err)
-		return
-	}
-
-	session, err := NewX11Session(*tcpPort, width, height, 99, 24, *xorgDriver)
-	if err != nil {
-		log.Printf("无法启动原生 X11 虚拟显示器: %v", err)
-		return
-	}
-
+	// 2. 监听 Ctrl+C，确保退出时执行清理
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 	go func() {
-		<-sigChan
+		<-sigChan // 阻塞直到收到信号
 		session.CleanUp()
 		os.Exit(0)
 	}()
 
+	// 确保 main 函数正常结束时也清理
 	defer session.CleanUp()
 
 	log.Println("连接成功，开始 FFmpeg 推流...")
 
-	if err := session.StartFFmpeg(*codec, *resolution, *bitRate, *frameRate); err != nil {
-		log.Printf("推流启动失败: %v", err)
-		return
-	}
+	// FFmpeg 抓取该虚拟屏幕
+	session.StartFFmpeg(*codec, *resolution, *bitRate, *frameRate)
 
+	// 数据发送循环
 	scanner := bufio.NewScanner(session.ffmpegOutput)
 	buf := make([]byte, 1024*1024)
 	scanner.Buffer(buf, 10*1024*1024)
 	scanner.Split(lc.SplitNALU)
 
 	header := make([]byte, 12)
+
 	var currentPts uint64 = uint64(time.Now().UnixNano() / 1e3)
-	var frameStarted bool
+	var frameStarted bool = false
 
 	for scanner.Scan() {
 		nalData := scanner.Bytes()
@@ -118,7 +113,8 @@ func main() {
 			frameStarted = false
 		}
 
-		binary.BigEndian.PutUint64(header[0:8], currentPts)
+		pts := currentPts
+		binary.BigEndian.PutUint64(header[0:8], pts)
 		binary.BigEndian.PutUint32(header[8:12], uint32(len(nalData)))
 
 		if _, err := session.Conn.Write(header); err != nil {
@@ -130,4 +126,6 @@ func main() {
 			break
 		}
 	}
+
+	// 循环结束后（通常是 FFmpeg 退出或网络断开），由 defer cleanup() 负责收尾
 }

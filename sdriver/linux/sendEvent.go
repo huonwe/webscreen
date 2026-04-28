@@ -10,7 +10,7 @@ func (d *LinuxDriver) SendEvent(event sdriver.Event) error {
 	// log.Printf("X11Driver: Sending event type %T", event)
 	buf := new(bytes.Buffer)
 
-	// 协议常量（与 linuxCapturer/inputController.go 对齐）
+	// 协议常量（与 linuxRecorder/inputController.go 对齐）
 	const (
 		PacketTypeKey   = 0x00
 		PacketTypeMouse = 0x01
