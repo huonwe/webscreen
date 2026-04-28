@@ -19,7 +19,7 @@ func main() {
 	bitRate := flag.String("bitrate", "8M", "streaming bitrate in Mbps")
 	frameRate := flag.String("framerate", "60", "frame rate for capturing")
 	codec := flag.String("codec", "h264", "video codec: h264 or hevc")
-	xorgDriver := flag.String("xorg_driver", "auto", "Xorg driver: auto, nvidia, modesetting, dummy")
+	xorgDriver := flag.String("xorg_driver", "modesetting", "Xorg driver: auto, nvidia, modesetting, dummy")
 	flag.Parse()
 	log.Printf("Starting X11 capturer with resolution %s, bitrate %s, framerate %s, codec %s, driver %s\n", *resolution, *bitRate, *frameRate, *codec, *xorgDriver)
 

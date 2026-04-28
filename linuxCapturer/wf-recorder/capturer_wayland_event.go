@@ -6,6 +6,55 @@ import (
 	"github.com/bendahl/uinput"
 )
 
+var androidToLinuxEvdevMap = map[int32]int32{
+	// 字母
+	29: uinput.KeyA, 30: uinput.KeyB, 31: uinput.KeyC, 32: uinput.KeyD,
+	33: uinput.KeyE, 34: uinput.KeyF, 35: uinput.KeyG, 36: uinput.KeyH,
+	37: uinput.KeyI, 38: uinput.KeyJ, 39: uinput.KeyK, 40: uinput.KeyL,
+	41: uinput.KeyM, 42: uinput.KeyN, 43: uinput.KeyO, 44: uinput.KeyP,
+	45: uinput.KeyQ, 46: uinput.KeyR, 47: uinput.KeyS, 48: uinput.KeyT,
+	49: uinput.KeyU, 50: uinput.KeyV, 51: uinput.KeyW, 52: uinput.KeyX,
+	53: uinput.KeyY, 54: uinput.KeyZ,
+
+	// 数字
+	7: uinput.Key0, 8: uinput.Key1, 9: uinput.Key2, 10: uinput.Key3,
+	11: uinput.Key4, 12: uinput.Key5, 13: uinput.Key6, 14: uinput.Key7,
+	15: uinput.Key8, 16: uinput.Key9,
+
+	// 常用控制键
+	66:  uinput.KeyEnter,
+	67:  uinput.KeyBackspace,
+	112: uinput.KeyDelete,
+	111: uinput.KeyEsc,
+	62:  uinput.KeySpace,
+	61:  uinput.KeyTab,
+	69:  uinput.KeyMinus,
+	70:  uinput.KeyEqual,
+	71:  uinput.KeyLeftbrace,
+	72:  uinput.KeyRightbrace,
+	73:  uinput.KeyBackslash,
+	74:  uinput.KeySemicolon,
+	75:  uinput.KeyApostrophe,
+	68:  uinput.KeyGrave,
+	55:  uinput.KeyComma,
+	56:  uinput.KeyDot,
+	76:  uinput.KeySlash,
+
+	// 修饰键
+	59:  uinput.KeyLeftshift,
+	60:  uinput.KeyRightshift,
+	113: uinput.KeyLeftctrl,
+	114: uinput.KeyRightctrl,
+	57:  uinput.KeyLeftalt,
+	58:  uinput.KeyRightalt,
+
+	// 方向键
+	19: uinput.KeyUp,
+	20: uinput.KeyDown,
+	21: uinput.KeyLeft,
+	22: uinput.KeyRight,
+}
+
 type InputControllerWayland struct {
 	keyboard  uinput.Keyboard
 	mouse     uinput.Mouse
@@ -14,6 +63,11 @@ type InputControllerWayland struct {
 	initPos   bool
 	eventChan chan inputEvent
 	done      chan struct{}
+
+	ctrlPressed  bool
+	shiftPressed bool
+	altPressed   bool
+	metaPressed  bool
 }
 
 type inputEvent struct {
@@ -160,6 +214,8 @@ func (ic *InputControllerWayland) processKeyEventSync(data *keyEventData) {
 		return
 	}
 
+	ic.updateModifierState(data.keyCode, data.action == KeyActionDown)
+
 	if data.action == KeyActionDown {
 		ic.keyboard.KeyPress(int(linuxKeyCode))
 	} else if data.action == KeyActionUp {
@@ -201,33 +257,26 @@ func (ic *InputControllerWayland) HandleKeyboardEvent(action byte, keyCode int32
 	}
 }
 
-// 简单映射部分 Android KeyCode -> Linux Evdev (uinput.Key*)
+func (ic *InputControllerWayland) updateModifierState(androidKeyCode int32, isPress bool) {
+	switch androidKeyCode {
+	case 59, 60:
+		ic.shiftPressed = isPress
+	case 57, 58:
+		ic.altPressed = isPress
+	case 113, 114:
+		ic.ctrlPressed = isPress
+	case 117, 118:
+		ic.metaPressed = isPress
+	}
+}
+
+func (ic *InputControllerWayland) GetModifierState() (ctrl, shift, alt, meta bool) {
+	return ic.ctrlPressed, ic.shiftPressed, ic.altPressed, ic.metaPressed
+}
+
 // Android KeyCode 可以在 keyboard.js 中找到
 func mapAndroidToLinuxEvdev(androidKeyCode int32) int32 {
-	// 参考 https://source.android.com/devices/input/keyboard-devices
-	mapping := map[int32]int32{
-		// 字母
-		29: uinput.KeyA, 30: uinput.KeyB, 31: uinput.KeyC, 32: uinput.KeyD,
-		33: uinput.KeyE, 34: uinput.KeyF, 35: uinput.KeyG, 36: uinput.KeyH,
-		37: uinput.KeyI, 38: uinput.KeyJ, 39: uinput.KeyK, 40: uinput.KeyL,
-		41: uinput.KeyM, 42: uinput.KeyN, 43: uinput.KeyO, 44: uinput.KeyP,
-		45: uinput.KeyQ, 46: uinput.KeyR, 47: uinput.KeyS, 48: uinput.KeyT,
-		49: uinput.KeyU, 50: uinput.KeyV, 51: uinput.KeyW, 52: uinput.KeyX,
-		53: uinput.KeyY, 54: uinput.KeyZ,
-		// 数字
-		7: uinput.Key0, 8: uinput.Key1, 9: uinput.Key2, 10: uinput.Key3,
-		11: uinput.Key4, 12: uinput.Key5, 13: uinput.Key6, 14: uinput.Key7,
-		15: uinput.Key8, 16: uinput.Key9,
-		// 控制键
-		66: uinput.KeyEnter, 67: uinput.KeyBackspace, 112: uinput.KeyDelete,
-		111: uinput.KeyEsc, 62: uinput.KeySpace, 61: uinput.KeyTab,
-		59: uinput.KeyLeftshift, 60: uinput.KeyRightshift,
-		113: uinput.KeyLeftctrl, 114: uinput.KeyRightctrl,
-		57: uinput.KeyLeftalt, 58: uinput.KeyRightalt,
-		// 方向键
-		19: uinput.KeyUp, 20: uinput.KeyDown, 21: uinput.KeyLeft, 22: uinput.KeyRight,
-	}
-	if v, ok := mapping[androidKeyCode]; ok {
+	if v, ok := androidToLinuxEvdevMap[androidKeyCode]; ok {
 		return v
 	}
 	return -1

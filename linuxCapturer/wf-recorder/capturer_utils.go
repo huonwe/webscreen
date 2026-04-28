@@ -33,9 +33,9 @@ func GetBestH264Encoder() string {
 	// }
 
 	// // 1. 检查是否存在瑞芯微硬件编码器 (Rockchip)
-	// if hasEncoder("h264_rkmpp") {
-	// 	return "h264_rkmpp"
-	// }
+	if hasEncoder("h264_rkmpp") {
+		return "h264_rkmpp"
+	}
 
 	// // 2. 检查是否存在 NVIDIA 硬件编码器 (PC N卡)
 	// if hasEncoder("h264_nvenc") {

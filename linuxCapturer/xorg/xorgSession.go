@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -21,7 +22,7 @@ type X11Session struct {
 
 	ffmpegOutput io.ReadCloser
 
-	controller *InputController
+	controller  *InputController
 	cleanupOnce sync.Once
 
 	xorgConfigPath string
@@ -34,9 +35,23 @@ func NewX11Session(tcpPort string, width int, height int, displayNum int, depth 
 		return nil, err
 	}
 
-	xorgCmd := exec.Command("Xorg", fmt.Sprintf(":%d", displayNum), "-config", configPath, "-noreset", "-nolisten", "tcp", "+extension", "GLX", "+extension", "RANDR", "+extension", "RENDER", "-logfile", logPath)
+	// 👇 将 "Xorg" 改为 "X" 或者是绝对路径 "/usr/bin/X"
+	xorgCmd := exec.Command("X",
+		fmt.Sprintf(":%d", displayNum),
+		"-config", configPath,
+		"-noreset",
+		"-nolisten", "tcp",
+		// "-keeptty",  // 之前加的这个可以先注释掉
+		"+extension", "GLX",
+		"+extension", "RANDR",
+		"+extension", "RENDER",
+		"vt7", // 👈 强制告诉 Xorg 去使用 7 号控制台
+		"-logfile", logPath,
+	)
 	xorgCmd.Stderr = os.Stderr
-
+	xorgCmd.Env = append(os.Environ(),
+		"LD_LIBRARY_PATH=/usr/lib/aarch64-linux-gnu/mali:$LD_LIBRARY_PATH",
+	)
 	if err := xorgCmd.Start(); err != nil {
 		return nil, err
 	}
@@ -44,8 +59,8 @@ func NewX11Session(tcpPort string, width int, height int, displayNum int, depth 
 	session := &X11Session{
 		Display:        displayNum,
 		Cmd:            xorgCmd.Process,
-		xorgConfigPath:  configPath,
-		xorgLogPath:     logPath,
+		xorgConfigPath: configPath,
+		xorgLogPath:    logPath,
 	}
 
 	if err := session.waitLaunchFinished(); err != nil {
@@ -112,9 +127,20 @@ func writeXorgConfig(width, height, depth int, xorgDriver string) (string, strin
 		builder.WriteString("    Option \"UseDisplayDevice\" \"None\"\n")
 	case "modesetting":
 		builder.WriteString("    Driver \"modesetting\"\n")
-		builder.WriteString("    Option \"AccelMethod\" \"glamor\"\n")
+		// 你的代码里写了 DRI 3，由于之前我们分析过 Vendor 驱动更稳的是 DRI 2，建议改回 2 试试
 		builder.WriteString("    Option \"DRI\" \"3\"\n")
+		builder.WriteString("    Option \"AccelMethod\" \"glamor\"\n")
+		builder.WriteString("    Option \"kmsdev\" \"/dev/dri/card0\"\n")
+
+		// 👇 核心修改 1：使用 SWcursor 明确强制软件渲染
+		builder.WriteString("    Option \"SWcursor\" \"on\"\n")
+		// 注释掉 HWCursor，防止参数解析冲突
+		// builder.WriteString("    Option \"HWCursor\" \"off\"\n")
+
 		builder.WriteString("    Option \"AllowEmptyInitialConfiguration\" \"True\"\n")
+
+		// 👇 核心修改 2：千万不要开 ShadowPrimary，它会导致软件鼠标无法输出到 DRM Plane
+		// builder.WriteString("    Option \"ShadowPrimary\" \"true\"\n")
 	case "dummy":
 		builder.WriteString("    Driver \"dummy\"\n")
 		builder.WriteString("    VideoRam 256000\n")
@@ -290,43 +316,60 @@ func (s *X11Session) StartFFmpeg(codec string, resolution string, bitRate string
 	}
 
 	log.Printf("Encoder: %s\n", bestEncoder)
-	_preset := "ultrafast"
-	if strings.Contains(bestEncoder, "nvenc") {
-		_preset = "p1"
-	}
-	if strings.Contains(bestEncoder, "qsv") {
-		_preset = "veryfast"
-	}
-	if strings.Contains(bestEncoder, "amf") {
-		_preset = "speed"
-	}
+	// _preset := "ultrafast"
+	// if strings.Contains(bestEncoder, "nvenc") {
+	// 	_preset = "p1"
+	// }
+	// if strings.Contains(bestEncoder, "qsv") {
+	// 	_preset = "veryfast"
+	// }
+	// if strings.Contains(bestEncoder, "amf") {
+	// 	_preset = "speed"
+	// }
+	// 动态生成滤镜链，处理 4K 到目标分辨率的缩放，并修复红蓝反转
+	parts := strings.Split(resolution, "x")
+	width, _ := strconv.Atoi(parts[0])
+	height, _ := strconv.Atoi(parts[1])
+	filterStr := fmt.Sprintf("hwdownload,format=bgr0,colorchannelmixer=rr=0:rb=1:br=1:bb=0,scale=%d:%d,format=nv12", width, height)
 	ffmpegCmd := exec.Command("ffmpeg",
-		"-f", "x11grab",
+		"-device", "/dev/dri/card0",
+		"-f", "kmsgrab",
 		"-framerate", frameRate,
-		"-video_size", resolution,
-		"-i", fmt.Sprintf(":%d", s.Display),
-		"-c:v", bestEncoder,
+		"-i", "-",
+
+		// 核心滤镜链：下载 -> 翻转红蓝通道 -> 缩放 -> 转换格式
+		"-vf", filterStr,
+
+		"-c:v", "h264_rkmpp",
 		"-b:v", bitRate,
 		"-maxrate", bitRate,
 		"-g", "60",
 		"-bf", "0",
-		"-preset", _preset,
-		"-x", "yuv420p",
 		"-f", codec,
-		"-",
+		"pipe:3",
 	)
 	ffmpegCmd.Env = append(os.Environ(), fmt.Sprintf("DISPLAY=:%d", s.Display))
 	ffmpegCmd.Stderr = os.Stderr
 
-	var err error
-	s.ffmpegOutput, err = ffmpegCmd.StdoutPipe()
+	// 创建匿名管道
+	pr, pw, err := os.Pipe()
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
+
+	ffmpegCmd.ExtraFiles = []*os.File{pw}
+	ffmpegCmd.Stdin = nil
 
 	if err := ffmpegCmd.Start(); err != nil {
 		log.Printf("FFmpeg 启动失败: %v", err)
+		pw.Close()
+		pr.Close()
 		return err
 	}
+
+	// 【重要】启动后在父进程关闭写入端，否则会导致读取端无法收到 EOF
+	pw.Close()
+
+	s.ffmpegOutput = pr
 	return nil
 }

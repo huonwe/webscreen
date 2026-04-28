@@ -26,6 +26,9 @@ func WaitTCP(port string) net.Conn {
 }
 
 func GetBestH264Encoder() string {
+	if hasEncoder("h264_rkmpp") {
+		return "h264_rkmpp"
+	}
 	return "libx264"
 }
 

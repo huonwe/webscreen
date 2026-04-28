@@ -105,6 +105,7 @@ client.urgent           #bf616a #bf616a #eceff4 #bf616a   #bf616a
 		// 确保 libinput 被允许扫描设备
 		"WLR_LIBINPUT_NO_DEVICES=0",
 		// 其他你原有的环境变量...
+		"WLR_RENDERER=pixman", // 强制使用软件渲染，避免某些 GPU 驱动的兼容性问题
 	)
 	swayCmd.Stderr = os.Stderr
 
