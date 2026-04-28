@@ -4,38 +4,8 @@ import (
 	"github.com/jezek/xgb"
 	"github.com/jezek/xgb/xproto"
 	"github.com/jezek/xgb/xtest"
-)
 
-// ================= 定义动作常量 =================
-const WheelStep = 40
-
-// 鼠标动作
-const (
-	MouseActionMove = 0
-	MouseActionDown = 1
-	MouseActionUp   = 2
-)
-
-// X11 鼠标按键映射 (标准定义)
-const (
-	MouseBtnLeft      = 1
-	MouseBtnMiddle    = 2
-	MouseBtnRight     = 3
-	MouseBtnWheelUp   = 4
-	MouseBtnWheelDown = 5
-)
-
-// Web 端传入的 Button 掩码 (与你之前的定义保持一致)
-const (
-	WebBtnPrimary   uint32 = 1 << 0 // 左键
-	WebBtnSecondary uint32 = 1 << 1 // 右键 (Web 通常把右键定义为 2)
-	WebBtnTertiary  uint32 = 1 << 2 // 中键
-)
-
-// 键盘动作
-const (
-	KeyActionDown = 0 // 按下
-	KeyActionUp   = 1 // 抬起
+	lc "webscreen/linuxCapturer"
 )
 
 // ================= InputController 结构体 =================
@@ -83,7 +53,7 @@ func (ic *InputController) Close() {
 func (ic *InputController) HandleMouseEvent(action byte, x, y int16, buttons uint32, wheelDeltaX, wheelDeltaY int16) {
 	ic.moveMouse(x, y)
 
-	if action == MouseActionMove && wheelDeltaY == 0 && wheelDeltaX == 0 {
+	if action == lc.MouseActionMove && wheelDeltaY == 0 && wheelDeltaX == 0 {
 		return
 	}
 
@@ -94,9 +64,9 @@ func (ic *InputController) HandleMouseEvent(action byte, x, y int16, buttons uin
 	}
 
 	// 处理点击
-	if action == MouseActionDown || action == MouseActionUp {
+	if action == lc.MouseActionDown || action == lc.MouseActionUp {
 		x11Btn := ic.mapWebBtnToX11(buttons)
-		isPress := (action == MouseActionDown)
+		isPress := (action == lc.MouseActionDown)
 		ic.sendMouseInput(x11Btn, isPress)
 	}
 }
@@ -110,7 +80,7 @@ func (ic *InputController) HandleKeyboardEvent(action byte, keycode byte) {
 		return
 	}
 
-	isPress := (action == KeyActionDown)
+	isPress := (action == lc.KeyActionDown)
 
 	var eventType byte
 	if isPress {
@@ -157,9 +127,9 @@ func (ic *InputController) handleWheel(deltaY int16) {
 	// 注意：Web 的 deltaY > 0 通常是页面向下滚，对应滚轮向下 (Button 5)
 	// 但不同浏览器可能不同，如果发现反了，这里调换一下 4 和 5
 	if deltaY < 0 {
-		button = MouseBtnWheelUp // 4
+		button = lc.MouseBtnWheelUp // 4
 	} else {
-		button = MouseBtnWheelDown // 5
+		button = lc.MouseBtnWheelDown // 5
 	}
 
 	// 计算需要触发几次点击
@@ -171,7 +141,7 @@ func (ic *InputController) handleWheel(deltaY int16) {
 
 	// 比如 delta 是 120，Step 是 40，那就点击 3 次
 	// 至少点击 1 次
-	clicks := int(absDelta / WheelStep)
+	clicks := int(absDelta / lc.WheelStep)
 	if clicks == 0 {
 		clicks = 1
 	}
@@ -196,16 +166,16 @@ func (ic *InputController) handleWheel(deltaY int16) {
 
 // mapWebBtnToX11 将 Web 的按钮掩码映射为 X11 按钮 ID
 func (ic *InputController) mapWebBtnToX11(buttons uint32) byte {
-	if buttons&WebBtnPrimary != 0 {
-		return MouseBtnLeft
+	if buttons&lc.WebBtnPrimary != 0 {
+		return lc.MouseBtnLeft
 	}
-	if buttons&WebBtnSecondary != 0 {
-		return MouseBtnRight // 注意：Web Secondary 对应 X11 右键 (ID 3)
+	if buttons&lc.WebBtnSecondary != 0 {
+		return lc.MouseBtnRight // 注意：Web Secondary 对应 X11 右键 (ID 3)
 	}
-	if buttons&WebBtnTertiary != 0 {
-		return MouseBtnMiddle // Web Tertiary 对应 X11 中键 (ID 2)
+	if buttons&lc.WebBtnTertiary != 0 {
+		return lc.MouseBtnMiddle // Web Tertiary 对应 X11 中键 (ID 2)
 	}
 
 	// 默认左键
-	return MouseBtnLeft
+	return lc.MouseBtnLeft
 }

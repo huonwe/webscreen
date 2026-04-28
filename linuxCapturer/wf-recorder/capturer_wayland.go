@@ -11,6 +11,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	lc "webscreen/linuxCapturer"
 )
 
 func main() {
@@ -19,7 +20,7 @@ func main() {
 	bitRate := flag.String("bitrate", "8M", "streaming bitrate in Mbps")
 	frameRate := flag.String("framerate", "60", "frame rate for capturing")
 	codec := flag.String("codec", "h264", "video codec: h264 or hevc")
-	cpuSet := flag.String("cpu_set", "4-7", "optional CPU affinity for wf-recorder, for example 0 or 0-1")
+	cpuSet := flag.String("cpu_set", "", "optional CPU affinity for wf-recorder, for example 0 or 0-1")
 	flag.Parse()
 	log.Printf("Starting Wayland capturer with resolution %s, bitrate %s, framerate %s, codec %s\n", *resolution, *bitRate, *frameRate, *codec)
 
@@ -68,7 +69,7 @@ func main() {
 	scanner := bufio.NewScanner(session.ffmpegOutput)
 	buf := make([]byte, 1024*1024)
 	scanner.Buffer(buf, 10*1024*1024)
-	scanner.Split(splitNALU)
+	scanner.Split(lc.SplitNALU)
 
 	header := make([]byte, 12)
 	var currentPts uint64 = uint64(time.Now().UnixNano() / 1e3)

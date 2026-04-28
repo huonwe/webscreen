@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	lc "webscreen/linuxCapturer"
 )
 
 type XvfbSession struct {
@@ -43,7 +45,7 @@ func NewXvfbSession(tcpPort string, width int, height int, DisplayNum int, depth
 		return nil, err
 	}
 	log.Printf("listening at %s...\n", tcpPort)
-	conn := WaitTCP(tcpPort)
+	conn := lc.WaitTCP(tcpPort)
 	session.Conn = conn
 	log.Printf("TCP connection established at %s\n", tcpPort)
 	go session.RunXfce4Session()
@@ -148,7 +150,7 @@ func (s *XvfbSession) HandleEvent() {
 			buttons := binary.BigEndian.Uint32(payload[9:13])
 			deltaX := int16(binary.BigEndian.Uint16(payload[13:15]))
 			deltaY := int16(binary.BigEndian.Uint16(payload[15:]))
-			// log.Printf("收到鼠标事件: Action=%d, X=%d, Y=%d, Buttons=0x%X, DeltaX=%d, DeltaY=%d\n", action, x, y, buttons, deltaX, deltaY)
+			// log.Printf("收到鼠标事件: Action=%d, X=%d, Y=%d, Buttons=0x%X, DeltaX=%d, DeltaY=%d\n", action, x, y, buttons, wheelDeltaX, wheelDeltaY)
 
 			if s.controller == nil {
 				log.Println("输入控制器未初始化，无法处理鼠标事件")
@@ -190,9 +192,9 @@ func (s *XvfbSession) StartFFmpeg(codec string, resolution string, bitRate strin
 	var bestEncoder string
 	switch codec {
 	case "h264":
-		bestEncoder = GetBestH264Encoder()
+		bestEncoder = lc.GetBestH264Encoder()
 	case "hevc":
-		bestEncoder = GetBestHEVCEncoder()
+		bestEncoder = lc.GetBestHEVCEncoder()
 	default:
 		return fmt.Errorf("不支持的编码格式: %s", codec)
 	}

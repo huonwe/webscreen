@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	lc "webscreen/linuxCapturer"
 )
 
 func envWithoutKey(env []string, key string) []string {
@@ -126,7 +127,7 @@ client.urgent           #bf616a #bf616a #eceff4 #bf616a   #bf616a
 	}
 
 	log.Printf("listening at %s...\n", tcpPort)
-	conn := WaitTCP(tcpPort)
+	conn := lc.WaitTCP(tcpPort)
 	session.Conn = conn
 	log.Printf("TCP connection established at %s\n", tcpPort)
 
@@ -303,9 +304,9 @@ func (s *WaylandSession) StartWfRecorder(codec string, resolution string, bitRat
 	var encoder string
 	switch codec {
 	case "h264":
-		encoder = GetBestH264Encoder()
+		encoder = lc.GetBestH264Encoder()
 	case "hevc":
-		encoder = GetBestHEVCEncoder()
+		encoder = lc.GetBestHEVCEncoder()
 	default:
 		return fmt.Errorf("不支持的编码格式: %s", codec)
 	}

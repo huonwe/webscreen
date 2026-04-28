@@ -56,7 +56,7 @@ func New(cfg map[string]string) (*LinuxDriver, error) {
 		videoBuffer: comm.NewLinearBuffer(16 * 1024 * 1024),
 	}
 
-	data, err := capturerXvfbData.ReadFile("bin/capturer_xorg")
+	data, err := capturerXvfbData.ReadFile("bin/capturer_wf-recorder")
 	if err != nil {
 		log.Printf("[wf-recorder] 读取 capturer_wf-recorder 失败: %v", err)
 		return nil, err

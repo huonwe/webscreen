@@ -6,13 +6,6 @@ const MOUSE_ACTION_MOVE = 0;
 const MOUSE_ACTION_DOWN = 1;
 const MOUSE_ACTION_UP = 2;
 
-// var mouse_x = 0;
-// var mouse_y = 0;
-let virtualMouse = {
-    x: 0,
-    y: 0,
-    wheelY: 0
-};
 /**
  * Remote Control Mouse Handler
  */
@@ -191,38 +184,24 @@ function flushPendingEvents(actionType, buttonsOverride) {
  * 实际的网络发送逻辑
  */
 function sendControlPacket(action, dx, dy, buttons, wheel) {
-    // if (!window.ws || window.ws.readyState !== WebSocket.OPEN) return;
-
-    // 调试日志：查看发送的具体动作和坐标
-
-    virtualMouse.x += dx;
-    virtualMouse.y += dy;
-    virtualMouse.x = Math.min(virtualMouse.x, remoteVideo.videoWidth ? remoteVideo.videoWidth : virtualMouse.x);
-    virtualMouse.y = Math.min(virtualMouse.y, remoteVideo.videoHeight ? remoteVideo.videoHeight : virtualMouse.y);
-    virtualMouse.x = Math.max(virtualMouse.x, 0);
-    virtualMouse.y = Math.max(virtualMouse.y, 0);
-
-    // console.log(`Send: Act=${action}, x=${virtualMouse.x}, y=${virtualMouse.y}, Btn=${buttons}`);
-    const packet = createMousePacket(action, virtualMouse.x, virtualMouse.y, buttons, 0, -wheel);
-    // window.ws.send(packet);
+    // console.log(`Send: Act=${action}, dx=${dx}, dy=${dy}, Btn=${buttons}`);
+    const packet = createMousePacket(action, dx, dy, buttons, 0, -wheel);
     sendDataChannelMessage(window.dataChannelUnordered, packet);
 }
 
 /**
  * 创建鼠标事件数据包 (18字节)
  */
-function createMousePacket(action, x, y, buttons, wheelDeltaX = 0, wheelDeltaY = 0) {
+function createMousePacket(action, deltaX, deltaY, buttons, wheelDeltaX = 0, wheelDeltaY = 0) {
     const buffer = new ArrayBuffer(18);
     const view = new DataView(buffer);
 
     view.setUint8(0, TYPE_MOUSE); // Type
     view.setUint8(1, action);     // Action
 
-    // 【重要修复】使用 setInt32 处理相对位移
-    // 这样负数 (如 -5) 会被正确写入为补码
-    // Go 端读取 Uint32 后强转 int32 即可还原为 -5
-    view.setInt32(2, x, false); // BigEndian
-    view.setInt32(6, y, false); // BigEndian
+    // 直接写入相对位移，负数补码会被正确处理
+    view.setInt32(2, deltaX, false); // BigEndian
+    view.setInt32(6, deltaY, false); // BigEndian
 
     view.setUint32(10, buttons, false);
 

@@ -1,4 +1,4 @@
-package main
+package linuxcapturer
 
 import (
 	"bytes"
@@ -28,27 +28,27 @@ func WaitTCP(port string) net.Conn {
 // GetBestH264Encoder 自动检测最佳 H.264 编码器
 func GetBestH264Encoder() string {
 
-	// if hasEncoder("h264_v4l2m2m") {
+	// if HasEncoder("h264_v4l2m2m") {
 	// 	return "h264_v4l2m2m"
 	// }
 
 	// // 1. 检查是否存在瑞芯微硬件编码器 (Rockchip)
-	if hasEncoder("h264_rkmpp") {
+	if HasEncoder("h264_rkmpp") {
 		return "h264_rkmpp"
 	}
 
 	// // 2. 检查是否存在 NVIDIA 硬件编码器 (PC N卡)
-	// if hasEncoder("h264_nvenc") {
+	// if HasEncoder("h264_nvenc") {
 	// 	return "h264_nvenc"
 	// }
 
 	// // 3. 检查是否存在 Intel 硬件编码器 (PC 核显)
-	// if hasEncoder("h264_qsv") {
+	// if HasEncoder("h264_qsv") {
 	// 	return "h264_qsv"
 	// }
 
 	// // 4. Android Termux 下常用的硬件编码 (MediaCodec)
-	// if hasEncoder("h264_mediacodec") {
+	// if HasEncoder("h264_mediacodec") {
 	// 	return "h264_mediacodec"
 	// }
 
@@ -59,37 +59,37 @@ func GetBestH264Encoder() string {
 // GetBestHEVCEncoder 自动检测最佳 H.265 (HEVC) 编码器
 func GetBestHEVCEncoder() string {
 	// 1. Rockchip 瑞芯微
-	if hasEncoder("hevc_rkmpp") {
+	if HasEncoder("hevc_rkmpp") {
 		return "hevc_rkmpp"
 	}
 
 	// 2. NVIDIA (PC N卡)
-	if hasEncoder("hevc_nvenc") {
+	if HasEncoder("hevc_nvenc") {
 		return "hevc_nvenc"
 	}
 
 	// 3. Intel QSV (PC 核显)
-	if hasEncoder("hevc_qsv") {
+	if HasEncoder("hevc_qsv") {
 		return "hevc_qsv"
 	}
 
 	// 4. AMD AMF (PC A卡)
-	if hasEncoder("hevc_amf") {
+	if HasEncoder("hevc_amf") {
 		return "hevc_amf"
 	}
 
 	// 5. Apple VideoToolbox (Mac)
-	if hasEncoder("hevc_videotoolbox") {
+	if HasEncoder("hevc_videotoolbox") {
 		return "hevc_videotoolbox"
 	}
 
 	// 6. Android/Termux MediaCodec (手机通用)
-	if hasEncoder("hevc_mediacodec") {
+	if HasEncoder("hevc_mediacodec") {
 		return "hevc_mediacodec"
 	}
 
 	// 7. VAAPI (Linux 通用硬件加速接口)
-	if hasEncoder("hevc_vaapi") {
+	if HasEncoder("hevc_vaapi") {
 		return "hevc_vaapi"
 	}
 
@@ -98,8 +98,8 @@ func GetBestHEVCEncoder() string {
 	return "libx265"
 }
 
-// hasEncoder 运行 ffmpeg -encoders 并检查输出
-func hasEncoder(name string) bool {
+// HasEncoder 运行 ffmpeg -encoders 并检查输出
+func HasEncoder(name string) bool {
 	cmd := exec.Command("ffmpeg", "-encoders")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -108,9 +108,9 @@ func hasEncoder(name string) bool {
 	return strings.Contains(string(out), name)
 }
 
-// splitNALU 是 bufio.SplitFunc 的实现，用于切分 H.264 Annex B 流
+// SplitNALU 是 bufio.SplitFunc 的实现，用于切分 H.264 Annex B 流
 // 它会返回包含起始码（00 00 00 01）在内的完整 NALU
-func splitNALU(data []byte, atEOF bool) (advance int, token []byte, err error) {
+func SplitNALU(data []byte, atEOF bool) (advance int, token []byte, err error) {
 	// log.Println("NALU Data:", string(data))
 
 	if atEOF && len(data) == 0 {
@@ -174,7 +174,7 @@ func splitNALU(data []byte, atEOF bool) (advance int, token []byte, err error) {
 	return 0, nil, nil
 }
 
-func getNalType(data []byte) byte {
+func GetNalType(data []byte) byte {
 	// 简单的辅助函数，用于日志，需跳过起始码
 	// 找到第一个非0字节（通常是1），下一字节就是 header
 	for i := 0; i < len(data)-1; i++ {

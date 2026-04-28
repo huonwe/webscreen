@@ -2,58 +2,10 @@ package main
 
 import (
 	"log"
+	lc "webscreen/linuxCapturer"
 
 	"github.com/bendahl/uinput"
 )
-
-var androidToLinuxEvdevMap = map[int32]int32{
-	// 字母
-	29: uinput.KeyA, 30: uinput.KeyB, 31: uinput.KeyC, 32: uinput.KeyD,
-	33: uinput.KeyE, 34: uinput.KeyF, 35: uinput.KeyG, 36: uinput.KeyH,
-	37: uinput.KeyI, 38: uinput.KeyJ, 39: uinput.KeyK, 40: uinput.KeyL,
-	41: uinput.KeyM, 42: uinput.KeyN, 43: uinput.KeyO, 44: uinput.KeyP,
-	45: uinput.KeyQ, 46: uinput.KeyR, 47: uinput.KeyS, 48: uinput.KeyT,
-	49: uinput.KeyU, 50: uinput.KeyV, 51: uinput.KeyW, 52: uinput.KeyX,
-	53: uinput.KeyY, 54: uinput.KeyZ,
-
-	// 数字
-	7: uinput.Key0, 8: uinput.Key1, 9: uinput.Key2, 10: uinput.Key3,
-	11: uinput.Key4, 12: uinput.Key5, 13: uinput.Key6, 14: uinput.Key7,
-	15: uinput.Key8, 16: uinput.Key9,
-
-	// 常用控制键
-	66:  uinput.KeyEnter,
-	67:  uinput.KeyBackspace,
-	112: uinput.KeyDelete,
-	111: uinput.KeyEsc,
-	62:  uinput.KeySpace,
-	61:  uinput.KeyTab,
-	69:  uinput.KeyMinus,
-	70:  uinput.KeyEqual,
-	71:  uinput.KeyLeftbrace,
-	72:  uinput.KeyRightbrace,
-	73:  uinput.KeyBackslash,
-	74:  uinput.KeySemicolon,
-	75:  uinput.KeyApostrophe,
-	68:  uinput.KeyGrave,
-	55:  uinput.KeyComma,
-	56:  uinput.KeyDot,
-	76:  uinput.KeySlash,
-
-	// 修饰键
-	59:  uinput.KeyLeftshift,
-	60:  uinput.KeyRightshift,
-	113: uinput.KeyLeftctrl,
-	114: uinput.KeyRightctrl,
-	57:  uinput.KeyLeftalt,
-	58:  uinput.KeyRightalt,
-
-	// 方向键
-	19: uinput.KeyUp,
-	20: uinput.KeyDown,
-	21: uinput.KeyLeft,
-	22: uinput.KeyRight,
-}
 
 type InputControllerWayland struct {
 	keyboard  uinput.Keyboard
@@ -173,34 +125,34 @@ func (ic *InputControllerWayland) processMouseEventSync(data *mouseEventData) {
 		}
 	}
 
-	if (data.buttons & WebBtnPrimary) != 0 {
-		if data.action == MouseActionDown {
+	if (data.buttons & lc.WebBtnPrimary) != 0 {
+		if data.action == lc.MouseActionDown {
 			if err := ic.mouse.LeftPress(); err != nil {
 				log.Printf("mouse left press failed: %v", err)
 			}
-		} else if data.action == MouseActionUp {
+		} else if data.action == lc.MouseActionUp {
 			if err := ic.mouse.LeftRelease(); err != nil {
 				log.Printf("mouse left release failed: %v", err)
 			}
 		}
 	}
-	if (data.buttons & WebBtnSecondary) != 0 {
-		if data.action == MouseActionDown {
+	if (data.buttons & lc.WebBtnSecondary) != 0 {
+		if data.action == lc.MouseActionDown {
 			if err := ic.mouse.RightPress(); err != nil {
 				log.Printf("mouse right press failed: %v", err)
 			}
-		} else if data.action == MouseActionUp {
+		} else if data.action == lc.MouseActionUp {
 			if err := ic.mouse.RightRelease(); err != nil {
 				log.Printf("mouse right release failed: %v", err)
 			}
 		}
 	}
-	if (data.buttons & WebBtnTertiary) != 0 {
-		if data.action == MouseActionDown {
+	if (data.buttons & lc.WebBtnTertiary) != 0 {
+		if data.action == lc.MouseActionDown {
 			if err := ic.mouse.MiddlePress(); err != nil {
 				log.Printf("mouse middle press failed: %v", err)
 			}
-		} else if data.action == MouseActionUp {
+		} else if data.action == lc.MouseActionUp {
 			if err := ic.mouse.MiddleRelease(); err != nil {
 				log.Printf("mouse middle release failed: %v", err)
 			}
@@ -214,11 +166,11 @@ func (ic *InputControllerWayland) processKeyEventSync(data *keyEventData) {
 		return
 	}
 
-	ic.updateModifierState(data.keyCode, data.action == KeyActionDown)
+	ic.updateModifierState(data.keyCode, data.action == lc.KeyActionDown)
 
-	if data.action == KeyActionDown {
+	if data.action == lc.KeyActionDown {
 		ic.keyboard.KeyPress(int(linuxKeyCode))
-	} else if data.action == KeyActionUp {
+	} else if data.action == lc.KeyActionUp {
 		ic.keyboard.KeyUp(int(linuxKeyCode))
 	}
 }
@@ -276,7 +228,7 @@ func (ic *InputControllerWayland) GetModifierState() (ctrl, shift, alt, meta boo
 
 // Android KeyCode 可以在 keyboard.js 中找到
 func mapAndroidToLinuxEvdev(androidKeyCode int32) int32 {
-	if v, ok := androidToLinuxEvdevMap[androidKeyCode]; ok {
+	if v, ok := lc.AndroidToLinuxEvdevMap[androidKeyCode]; ok {
 		return v
 	}
 	return -1

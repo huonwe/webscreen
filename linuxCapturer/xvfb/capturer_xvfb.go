@@ -11,6 +11,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	lc "webscreen/linuxCapturer"
 )
 
 // // 配置参数
@@ -60,7 +62,7 @@ func main() {
 	scanner := bufio.NewScanner(session.ffmpegOutput)
 	buf := make([]byte, 1024*1024)
 	scanner.Buffer(buf, 10*1024*1024)
-	scanner.Split(splitNALU)
+	scanner.Split(lc.SplitNALU)
 
 	header := make([]byte, 12)
 

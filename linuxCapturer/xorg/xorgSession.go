@@ -13,6 +13,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	lc "webscreen/linuxCapturer"
 )
 
 type X11Session struct {
@@ -69,7 +71,7 @@ func NewX11Session(tcpPort string, width int, height int, displayNum int, depth 
 	}
 
 	log.Printf("listening at %s...\n", tcpPort)
-	conn := WaitTCP(tcpPort)
+	conn := lc.WaitTCP(tcpPort)
 	session.Conn = conn
 	log.Printf("TCP connection established at %s\n", tcpPort)
 
@@ -308,9 +310,9 @@ func (s *X11Session) StartFFmpeg(codec string, resolution string, bitRate string
 	var bestEncoder string
 	switch codec {
 	case "h264":
-		bestEncoder = GetBestH264Encoder()
+		bestEncoder = lc.GetBestH264Encoder()
 	case "hevc":
-		bestEncoder = GetBestHEVCEncoder()
+		bestEncoder = lc.GetBestHEVCEncoder()
 	default:
 		return fmt.Errorf("不支持的编码格式: %s", codec)
 	}
