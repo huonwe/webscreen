@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"syscall"
 	"time"
 	"webscreen/linuxRecorder/config"
 )
@@ -56,11 +55,10 @@ func (s *Session) launchWaylandSession(width int, height int, frameRate int) err
 		// 其他你原有的环境变量...
 		"WLR_RENDERER=pixman", // 强制使用软件渲染，避免某些 GPU 驱动的兼容性问题
 	)
-	swayCmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	if err := swayCmd.Start(); err != nil {
+
+	if err := s.SpawnProcess(swayCmd, "Sway"); err != nil {
 		return err
 	}
-	s.processes = append(s.processes, swayCmd.Process)
 	return nil
 }
 
@@ -115,17 +113,12 @@ func (s *Session) WaylandRunCmd(cmdStr string) int {
 
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	if err := cmd.Start(); err != nil {
+
+	// swaymsg 本身是个执行完就会马上退出的短命命令
+	if err := s.SpawnProcess(cmd, "swaymsg"); err != nil {
 		log.Println("启动命令失败:", err)
 		return -1
 	}
-	// swaymsg 本身是个执行完就会马上退出的短命命令，不要把它放入 Session 统一监控中
-	// 否则 Wait 收尸时它早就因为先早退出而变成僵尸。
-	// 我们直接启动 goroutine 来 Wait 它
-	go func() {
-		cmd.Wait()
-	}()
 	return 0
 }
 
@@ -148,33 +141,48 @@ func (s *Session) StartWfRecorder(codec string, resolution string, bitRate strin
 		return err
 	}
 
-	_preset := "ultrafast"
-	bitRate = "1M"
-
 	// 2. 构造参数
 	args := []string{
 		"--output", "HEADLESS-1",
-		"-g", fmt.Sprintf("0,0 %dx%d", s.width, s.height),
 		"--muxer", codec,
 		"--codec", encoder,
 		"--file", "/dev/fd/3",
 		"-x", "yuv420p",
 		"-D",
-		"-p", "preset=" + _preset,
+		"-p", "preset=veryfast",
 		"-p", "tune=zerolatency",
 	}
+
+	// 根据编码格式设置不同的参数
+	if codec == "h264" {
+		// H.264 特定参数
+		args = append(args,
+			"-p", "profile=baseline", // WebRTC 推荐用 Baseline Profile
+			"-p", "level=4.1", // 支持 1920x1080
+			"-p", "x264-params=sliced-threads=0:slices=1:aq-mode=2",
+		)
+	} else if codec == "hevc" {
+		// HEVC 特定参数
+		args = append(args,
+			"-p", "profile=main", // HEVC Main Profile
+			// "-p", fmt.Sprintf("x265-params=vbv-maxrate=%s:vbv-bufsize=%s:keyint=120:min-keyint=120:scenecut=0", bitRate, bitRate),
+			// HEVC 的 level 用不同的格式表示，如果需要设置用这个
+			// "-p", "level=120", // Level 4.0 (120 = 4.0 * 30)
+		)
+	}
+	log.Printf("Starting wf-recorder with codec %s, encoder %s, resolution %s, bitrate %s, framerate %d\n", codec, encoder, resolution, bitRate, frameRate)
+
+	// 通用参数
 	args = append(args,
-		// --- 以下是针对 WebRTC 的关键优化 ---
-		// "-p", "profile=baseline", // 强制使用 Baseline Profile，这是 WebRTC 的最爱
-		// "-p", "level=3.1", // 限制 Level，避免超出浏览器硬解能力上限
-		// "-p", "g=60", // 缩短 GOP，强制每 30 帧（0.5秒）出一个关键帧
-		"-p", "x264-params=sliced-threads=0:slices=1", // 【关键修复】禁用多线程切片，确保每帧只有一个 VCL NALU
-		"-p", "slices=1", // 【关键修复】禁用多 slice 编码，确保每帧只有一个 VCL NALU
-		// "-p", "keyint_min=60", // 最小关键帧间隔
-		// "-p", "scenecut=0", // 关闭场景切换检测，确保 GOP 长度绝对固定
-		// "-p", "intra-refresh=1", // 【重点】开启周期内帧刷新，WebRTC 最爱，能消除 I 帧带来的瞬间带宽波动
-		"-p", "bf=0", // 禁用 B 帧
 		"-p", "b="+bitRate,
+		"-p", "slices=1", // 禁用多 slice 编码
+		// "-b", "0", // wf-recorder 的 -b 参数是用来禁用 B 帧的（WebRTC 不支持）
+		// --- 关键帧控制（改善丢包恢复） ---
+		"-p", "g=120", // GOP 长度 120 帧（2秒@60fps）
+		"-p", "keyint_min=120", // 最小关键帧间隔
+		"-p", "scenecut=0", // 禁用场景切换，GOP 长度固定
+		// --- 码率和质量 ---
+		// "-p", "rc-lookahead=30", // 增加码率控制前视缓冲
 	)
 
 	commandName := "wf-recorder"
@@ -195,7 +203,7 @@ func (s *Session) StartWfRecorder(codec string, resolution string, bitRate strin
 	cmd.Stderr = os.Stderr
 
 	// 4. 启动
-	if err := cmd.Start(); err != nil {
+	if err := s.SpawnProcess(cmd, "wf-recorder"); err != nil {
 		return err
 	}
 
@@ -203,6 +211,5 @@ func (s *Session) StartWfRecorder(codec string, resolution string, bitRate strin
 	pw.Close()
 
 	s.recorderOutput = pr
-	s.processes = append(s.processes, cmd.Process)
 	return nil
 }

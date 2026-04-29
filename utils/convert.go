@@ -1,6 +1,9 @@
 package utils
 
-import "strconv"
+import (
+	"fmt"
+	"strconv"
+)
 
 func ParseBitrate(bitrateStr string) (int, error) {
 	var bitrate int
@@ -26,7 +29,7 @@ func ParseBitrate(bitrateStr string) (int, error) {
 	var err error
 	bitrate, err = strconv.Atoi(bitrateStr)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("invalid bitrate format: %s", bitrateStr)
 	}
 
 	return bitrate * multiplier, nil

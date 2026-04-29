@@ -8,11 +8,9 @@ import (
 	"log"
 	"net"
 	"os"
-	"strconv"
 	"time"
 	"webscreen/sdriver"
 	"webscreen/sdriver/comm"
-	"webscreen/utils"
 )
 
 //go:embed bin/recorder
@@ -35,6 +33,7 @@ type LinuxDriver struct {
 
 	lastSPS []byte
 	lastPPS []byte
+	lastVPS []byte // 新增 HEVC 的 VPS 存储
 	lastIDR []byte
 }
 
@@ -49,11 +48,11 @@ func New(cfg map[string]string) (*LinuxDriver, error) {
 	if !ok || video_bit_rate_str == "" {
 		video_bit_rate_str = "4M" // 默认 4 Mbps
 	}
-	video_bit_rate, err := utils.ParseBitrate(video_bit_rate_str)
-	if err != nil {
-		return nil, fmt.Errorf("invalid video bit rate: %v", err)
-	}
-	log.Printf("Parsed video bit rate: %d bps\n", video_bit_rate)
+	// video_bit_rate, err := utils.ParseBitrate(video_bit_rate_str)
+	// if err != nil {
+	// 	return nil, fmt.Errorf("invalid video bit rate: %v", err)
+	// }
+	log.Printf("Parsed video bit rate: %s\n", video_bit_rate_str)
 	d := &LinuxDriver{
 		videoChan: make(chan sdriver.AVBox, 10), // 适当增大缓冲防止阻塞
 		// ip:          cfg["ip"],
@@ -61,7 +60,7 @@ func New(cfg map[string]string) (*LinuxDriver, error) {
 		backend:     cfg["backend"],
 		resolution:  cfg["resolution"],
 		frameRate:   cfg["frame_rate"],
-		bitRate:     strconv.Itoa(video_bit_rate),
+		bitRate:     video_bit_rate_str,
 		video_codec: cfg["video_codec"],
 
 		videoBuffer: comm.NewLinearBuffer(16 * 1024 * 1024),
@@ -171,37 +170,72 @@ func (d *LinuxDriver) handleConnection() {
 			continue
 		}
 
-		// 解析 NAL Header (第一个字节)
-		nalHeader := nalData[0]
-		nalType := nalHeader & 0x1F
-
+		// 解析 NAL Header
+		var nalType byte
+		switch d.video_codec {
+		case "h265", "hevc":
+			// HEVC NALU Header 是 2 字节，Type 在第一个字节的 1-6 bit
+			nalHeader := nalData[0]
+			nalType = (nalHeader & 0x7E) >> 1
+		case "h264":
+			// H.264 NALU Header 是 1 字节，Type 在低 5 bit
+			nalHeader := nalData[0]
+			nalType = nalHeader & 0x1F
+		default:
+			log.Printf("Unknown video codec: %s", d.video_codec)
+			continue
+		}
 		isKeyFrame := false
 		// log.Printf("Processing NALU Type: %d", nalType)
 
-		switch nalType {
-		case 6, 9: // SEI, AUD
-			// log.Printf("Received SEI, PTS=%d, Size=%d bytes", pts, len(nalData))
-			log.Println("Received SEI/AUD:", string(nalData))
-			continue
-		case 7: // SPS
-			// log.Printf("Received SPS, PTS=%d, Size=%d bytes", pts, len(nalData))
-			d.lastSPS = make([]byte, len(nalData))
-			copy(d.lastSPS, nalData)
-			continue
-		case 8: // PPS
-			// log.Printf("Received PPS, PTS=%d, Size=%d bytes", pts, len(nalData))
-			d.lastPPS = make([]byte, len(nalData))
-			copy(d.lastPPS, nalData)
-			// log.Println("PPS Data:", nalData)
-			continue
-		case 5: // IDR (关键帧)
-			// log.Printf("Received IDR frame, PTS=%d, Size=%d bytes", pts, len(nalData))
-			d.lastIDR = make([]byte, len(nalData))
-			copy(d.lastIDR, nalData)
-			isKeyFrame = true
-			waitForKeyFrame = false // 【重点新增】成功捕获首个关键帧，解除拦截状态！
-		default:
-			// log.Printf("Received non-key frame (NALU Type=%d), PTS=%d, Size=%d bytes", nalType, pts, len(nalData))
+		if d.video_codec == "h265" || d.video_codec == "hevc" {
+			switch nalType {
+			case 32: // VPS
+				d.lastVPS = make([]byte, len(nalData))
+				copy(d.lastVPS, nalData)
+				continue
+			case 33: // SPS
+				d.lastSPS = make([]byte, len(nalData))
+				copy(d.lastSPS, nalData)
+				continue
+			case 34: // PPS
+				d.lastPPS = make([]byte, len(nalData))
+				copy(d.lastPPS, nalData)
+				continue
+			case 39, 40: // SEI
+				continue
+			case 19, 20, 21: // IDR_W_RADL, IDR_N_LP, CRA_NUT (各种关键帧)
+				d.lastIDR = make([]byte, len(nalData))
+				copy(d.lastIDR, nalData)
+				isKeyFrame = true
+				waitForKeyFrame = false
+			}
+		} else {
+			switch nalType {
+			case 6, 9: // SEI, AUD
+				// log.Printf("Received SEI, PTS=%d, Size=%d bytes", pts, len(nalData))
+				log.Println("Received SEI/AUD:", string(nalData))
+				continue
+			case 7: // SPS
+				// log.Printf("Received SPS, PTS=%d, Size=%d bytes", pts, len(nalData))
+				d.lastSPS = make([]byte, len(nalData))
+				copy(d.lastSPS, nalData)
+				continue
+			case 8: // PPS
+				// log.Printf("Received PPS, PTS=%d, Size=%d bytes", pts, len(nalData))
+				d.lastPPS = make([]byte, len(nalData))
+				copy(d.lastPPS, nalData)
+				// log.Println("PPS Data:", nalData)
+				continue
+			case 5: // IDR (关键帧)
+				// log.Printf("Received IDR frame, PTS=%d, Size=%d bytes", pts, len(nalData))
+				d.lastIDR = make([]byte, len(nalData))
+				copy(d.lastIDR, nalData)
+				isKeyFrame = true
+				waitForKeyFrame = false // 【重点新增】成功捕获首个关键帧，解除拦截状态！
+			default:
+				// log.Printf("Received non-key frame (NALU Type=%d), PTS=%d, Size=%d bytes", nalType, pts, len(nalData))
+			}
 		}
 		if waitForKeyFrame {
 			log.Printf("Dropping non-key frame (NALU Type=%d) before first IDR", nalType)
@@ -211,7 +245,13 @@ func (d *LinuxDriver) handleConnection() {
 		var sendData []byte
 		if isKeyFrame {
 			startCode := []byte{0x00, 0x00, 0x00, 0x01}
-			sendData = make([]byte, 0, len(d.lastSPS)+len(d.lastPPS)+len(payloadBuf)+12)
+			sendData = make([]byte, 0, len(d.lastVPS)+len(d.lastSPS)+len(d.lastPPS)+len(payloadBuf)+16)
+			if d.video_codec == "h265" || d.video_codec == "hevc" {
+				if len(d.lastVPS) > 0 {
+					sendData = append(sendData, startCode...)
+					sendData = append(sendData, d.lastVPS...)
+				}
+			}
 			if len(d.lastSPS) > 0 {
 				sendData = append(sendData, startCode...)
 				sendData = append(sendData, d.lastSPS...)
@@ -294,7 +334,7 @@ func (d *LinuxDriver) MediaMeta() sdriver.MediaMeta {
 	return sdriver.MediaMeta{
 		Width:      1920,
 		Height:     1080,
-		VideoCodec: "h264",
+		VideoCodec: d.video_codec,
 		AudioCodec: "",
 	}
 }

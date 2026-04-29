@@ -314,11 +314,12 @@ func (ic *InputController) HandleKeyboardEvent(action byte, keyCode int32) {
 
 	isPress := action == KeyActionDown
 
+	// log.Printf("Keyboard Event - Action: %d, KeyCode: %d", action, keyCode)
 	if ic.controllerType == CONTROLLER_TYPE_WAYLAND {
 		linuxKeyCode, ok := AndroidToLinuxEvdevMap[keyCode]
 		if ok && linuxKeyCode > 0 {
 			if isPress {
-				_ = ic.keyboard.KeyPress(int(linuxKeyCode))
+				_ = ic.keyboard.KeyDown(int(linuxKeyCode))
 			} else {
 				_ = ic.keyboard.KeyUp(int(linuxKeyCode))
 			}

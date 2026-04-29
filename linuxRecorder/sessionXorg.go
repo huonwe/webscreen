@@ -43,10 +43,10 @@ func (s *Session) launchXorgSession(width int, height int, frameRate int) error 
 			"LD_LIBRARY_PATH=/usr/lib/aarch64-linux-gnu/mali:$LD_LIBRARY_PATH",
 		)
 	}
-	if err := xorgCmd.Start(); err != nil {
+
+	if err := s.SpawnProcess(xorgCmd, "Xorg"); err != nil {
 		return err
 	}
-	s.processes = append(s.processes, xorgCmd.Process)
 	return nil
 
 }
@@ -88,7 +88,8 @@ func (s *Session) StartFFmpeg(codec string, resolution string, bitRate string, f
 	switch codec {
 	case "h264":
 		bestEncoder = GetBestH264Encoder()
-	case "hevc":
+	case "h265", "hevc":
+		codec = "hevc" // 统一格式名，供 ffmpeg 的 -f 参数使用
 		bestEncoder = GetBestHEVCEncoder()
 	default:
 		return fmt.Errorf("不支持的编码格式: %s", codec)
@@ -106,13 +107,9 @@ func (s *Session) StartFFmpeg(codec string, resolution string, bitRate string, f
 		_preset = "speed"
 	}
 
-	// if bitRate == "" || bitRate == "0" {
-	bitRate = "1M"
-	// }
 	// If want to use kmsgrab, the command would be like this:
 	// ffmpeg -f kmsgrab -framerate 30 -i - -vf "hwdownload,format=bgr0,colorchannelmixer=rr=0:rb=1:br=1:bb=0,scale=1280:720,format=nv12" -c:v h264_nvenc -b:v 4M -maxrate 4M -g 60 -bf 0 -preset p1 -x yuv420p -f h264 -
-	// filterStr := fmt.Sprintf("hwdownload,format=bgr0,colorchannelmixer=rr=0:rb=1:br=1:bb=0,scale=%d:%d,format=nv12", width, height)
-	cmd := exec.CommandContext(s.ctx, "ffmpeg",
+	cmdArgs := []string{
 		"-f", "x11grab",
 		"-framerate", strconv.Itoa(frameRate),
 		"-video_size", resolution, // 使用定义的变量
@@ -122,18 +119,29 @@ func (s *Session) StartFFmpeg(codec string, resolution string, bitRate string, f
 		"-c:v", bestEncoder,
 		"-b:v", bitRate,
 		"-maxrate", bitRate,
-		"-g", "60",
-		"-bf", "0",
+		"-g", "120", // GOP 长度 120 帧（2秒@60fps）
+		"-bf", "0", // 禁用 B 帧
 		"-preset", _preset,
-		// "-tune", "zerolatency",
-		// "-p", "x264-params=sliced-threads=0:slices=1", // 禁用多线程切片，确保每帧只有一个 VCL NALU
-		// "-p", "slices=1", // 禁用多 slice 编码，确保每帧只有一个 VCL NALU
-		"-x", "yuv420p",
-		// "-D",
+		"-pix_fmt", "yuv420p", // 注意 FFmpeg 是 -pix_fmt 而不是 -x
+	}
 
-		"-f", codec,
+	if codec == "h264" {
+		cmdArgs = append(cmdArgs,
+			"-profile:v", "baseline",
+			"-level", "4.1",
+		)
+	} else if codec == "hevc" {
+		cmdArgs = append(cmdArgs,
+			"-profile:v", "main",
+		)
+	}
+
+	cmdArgs = append(cmdArgs,
+		"-f", codec, // 强制输出裸流 (h264/hevc)
 		"pipe:3",
 	)
+
+	cmd := exec.CommandContext(s.ctx, "ffmpeg", cmdArgs...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Env = append(os.Environ(), fmt.Sprintf("DISPLAY=%s", s.X11Display))
 	cmd.Stderr = os.Stderr
@@ -148,7 +156,7 @@ func (s *Session) StartFFmpeg(codec string, resolution string, bitRate string, f
 	cmd.ExtraFiles = []*os.File{pw}
 	cmd.Stdin = nil
 
-	if err := cmd.Start(); err != nil {
+	if err := s.SpawnProcess(cmd, "FFmpeg"); err != nil {
 		log.Printf("FFmpeg 启动失败: %v", err)
 		pw.Close()
 		pr.Close()
@@ -158,7 +166,6 @@ func (s *Session) StartFFmpeg(codec string, resolution string, bitRate string, f
 	// 【重要】启动后在父进程关闭写入端，否则会导致读取端无法收到 EOF
 	pw.Close()
 
-	s.processes = append(s.processes, cmd.Process)
 	s.recorderOutput = pr
 	return nil
 }
@@ -167,24 +174,19 @@ func (s *Session) X11RunXfce4Session() {
 	// 等待 1 秒让 Xvfb 初始化完成
 	cmd := exec.CommandContext(s.ctx, "dbus-run-session", "xfce4-session")
 	cmd.Env = append(os.Environ(), "DISPLAY="+s.X11Display)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	if err := cmd.Start(); err != nil {
+	if err := s.SpawnProcess(cmd, "xfce4-session"); err != nil {
 		log.Println("failed to start Xfce4 session:", err)
 	}
-	s.processes = append(s.processes, cmd.Process)
 }
 
 func (s *Session) X11RunCmd(cmdStr string) {
 	cmd := exec.CommandContext(s.ctx, "bash", "-c", cmdStr)
 	cmd.Env = append(os.Environ(), "DISPLAY="+s.X11Display)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	if err := cmd.Start(); err != nil {
+
+	// 对于直接通过 runCmd 运行的随意短命令，我们也走统一后台防僵尸处理即可
+	if err := s.SpawnProcess(cmd, "x11-runcmd"); err != nil {
 		log.Println("failed to run command:", err)
 	}
-
-	go func() {
-		cmd.Wait()
-	}()
 }
 
 func (s *Session) waitX11Ready() error {

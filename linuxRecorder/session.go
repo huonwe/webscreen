@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -39,9 +40,44 @@ type Session struct {
 	// FFmpeg/wf-recorder output (for logging/debugging)
 	recorderOutput io.ReadCloser
 
-	// Others
-	cleanupOnce sync.Once
-	processes   []*os.Process
+	// Lifecycle management
+	cleanupOnce  sync.Once
+	cleanupMutex sync.Mutex
+	cleanupFuncs []func()
+}
+
+func (s *Session) PushCleanup(f func()) {
+	s.cleanupMutex.Lock()
+	defer s.cleanupMutex.Unlock()
+	s.cleanupFuncs = append(s.cleanupFuncs, f)
+}
+
+func (s *Session) SpawnProcess(cmd *exec.Cmd, name string) error {
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("failed to start %s: %v", name, err)
+	}
+
+	pid := cmd.Process.Pid
+	log.Printf("Started %s with PID %d", name, pid)
+
+	s.PushCleanup(func() {
+		log.Printf("Killing process %s (Group PID: %d)...", name, pid)
+		syscall.Kill(-pid, syscall.SIGKILL)
+		syscall.Kill(pid, syscall.SIGKILL) // 回退补刀
+	})
+
+	// 后台等待进程，专门负责收尸
+	go func() {
+		err := cmd.Wait()
+		if err != nil {
+			log.Printf("Process %s (PID: %d) exited with error: %v", name, pid, err)
+		} else {
+			log.Printf("Process %s (PID: %d) exited cleanly.", name, pid)
+		}
+	}()
+
+	return nil
 }
 
 func NewSession(sessionType string, ctx context.Context) (*Session, error) {
@@ -154,43 +190,18 @@ func (s *Session) SetupController() error {
 
 func (s *Session) CleanUp() {
 	s.cleanupOnce.Do(func() {
-		if s.processes != nil {
-			// **反向遍历**，优先杀后启动的进程（或者分别发信号后异步 Wait，避免因为某个阻塞导致僵尸进程堆积）
-			for i := len(s.processes) - 1; i >= 0; i-- {
-				proc := s.processes[i]
-				if proc == nil {
-					continue
-				}
-				log.Printf("Killing process group PID %d...\n", proc.Pid)
-				// 对此进程及其子进程发送 SIGKILL
-				syscall.Kill(-proc.Pid, syscall.SIGKILL)
-				// 防止有些由于 Setpgid 尚未生效，也对本身发一份 SIGKILL 以防万一
-				syscall.Kill(proc.Pid, syscall.SIGKILL)
-			}
+		log.Println("Starting Session Cleanup...")
 
-			// 单独去 Wait，确认资源回收，防僵尸
-			for i := len(s.processes) - 1; i >= 0; i-- {
-				proc := s.processes[i]
-				if proc == nil {
-					continue
-				}
-				log.Printf("Waiting for process PID %d...\n", proc.Pid)
-				// 防止 wait 无限阻塞，特别是 wf-recorder 内部线程不干净的问题
-				done := make(chan struct{})
-				go func(p *os.Process) {
-					p.Wait()
-					close(done)
-				}(proc)
+		s.cleanupMutex.Lock()
+		funcs := s.cleanupFuncs
+		s.cleanupFuncs = nil // 防止重复执行
+		s.cleanupMutex.Unlock()
 
-				select {
-				case <-done:
-					log.Printf("Process PID %d reaped.\n", proc.Pid)
-				case <-time.After(3 * time.Second): // 给 3 秒时间收尸
-					log.Printf("Warning: Waiting for process PID %d timed out.\n", proc.Pid)
-				}
-			}
-			log.Println("All child processes killed and reaped.")
+		// 后进先出 (LIFO)，先清理由于依赖而后启动的组件（比如录制），最后清理底座（Sway/Xorg）
+		for i := len(funcs) - 1; i >= 0; i-- {
+			funcs[i]()
 		}
+
 		if s.conn != nil {
 			s.conn.Close()
 		}

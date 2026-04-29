@@ -563,12 +563,12 @@ function saveDeviceConfig() {
                 // If it's the bitrate we might parse it to scale if user writes 8M, but wait, the older code parsed it.
                 // Here we can just accept raw string. For bitrate we'd just want them to enter proper bits. 
                 // But for ease of use, we run parseBitrate only if it is video_bit_rate and string ends in K/M/G.
-                if (key === 'video_bit_rate') {
-                    const parsed = parseBitrate(val + (val.match(/[KMG]/i) ? '' : 'M'));
-                    drv[key] = String(parsed);
-                } else {
+                // if (key === 'video_bit_rate') {
+                //     const parsed = parseBitrate(val + (val.match(/[KMG]/i) ? '' : 'M'));
+                //     drv[key] = String(parsed);
+                // } else {
                     drv[key] = val;
-                }
+                // }
             } else {
                 delete drv[key];
             }

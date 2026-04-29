@@ -17,7 +17,7 @@ import (
 func main() {
 	tcpPort := flag.Int("tcp_port", 27184, "server listen port")
 	resolution := flag.String("resolution", "1920x1080", "virtual display resolution")
-	bitRate := flag.String("bitrate", "8M", "streaming bitrate in Mbps")
+	bitRate := flag.String("bitrate", "8M", "streaming bitrate, e.g. 4M, 800K, 1000000")
 	frameRate := flag.Int("framerate", 60, "frame rate for capturing")
 	codec := flag.String("codec", "h264", "video codec: h264 or hevc")
 	// cpuSet := flag.String("cpu_set", "", "optional CPU affinity for wf-recorder, for example 0 or 0-1")

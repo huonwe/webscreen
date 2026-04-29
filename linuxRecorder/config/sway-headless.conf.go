@@ -5,7 +5,7 @@ import "fmt"
 const swayHeadlessConf = `
 # 基础配置
 xwayland enable
-output HEADLESS-1 resolution %dx%d@%sHz position 0 0
+output HEADLESS-1 resolution %dx%d@%sHz position 0 0 scale %s
 
 # === 外观与美化配置 ===
 
@@ -36,8 +36,19 @@ client.urgent           #bf616a #bf616a #eceff4 #bf616a   #bf616a
 # bar {
 #     mode invisible
 # }
+
+# 6. 设置 XWayland DPI (矢量清晰放大)
+exec echo "Xft.dpi: %d" | xrdb -merge
 `
 
 func GetSwayHeadlessConf(width int, height int, frameRate string) string {
-	return fmt.Sprintf(swayHeadlessConf, width, height, frameRate)
+	// 默认 scale 1.0 (避免拉伸模糊), dpi 192 (200% 矢量放大)
+	return GetSwayHeadlessConfWithScale(width, height, frameRate, "2.0", 192)
+}
+
+// GetSwayHeadlessConfWithScale 返回 Sway 无头配置，可以设置 DPI 缩放
+// scale: 缩放因子，例如 "1.0"(100%)
+// dpi: X11 缩放 DPI (96 为 100%, 192 为 200%)
+func GetSwayHeadlessConfWithScale(width int, height int, frameRate string, scale string, dpi int) string {
+	return fmt.Sprintf(swayHeadlessConf, width, height, frameRate, scale, dpi)
 }
