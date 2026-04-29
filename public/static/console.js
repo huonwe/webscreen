@@ -179,19 +179,43 @@ function renderDeviceList() {
 
         // Construct config tags
         let tagsHtml = '';
-        if (config.device_type === 'linux') {
-             if (drv.resolution) tagsHtml += `<span class="px-2 py-0.5 rounded-md bg-[#333] text-xs text-gray-300 font-mono">${drv.resolution}</span>`;
-             if (drv.frameRate) tagsHtml += `<span class="px-2 py-0.5 rounded-md bg-[#333] text-xs text-gray-300 font-mono">${drv.frameRate}FPS</span>`;
-        } else {
-            if (drv.max_fps) tagsHtml += `<span class="px-2 py-0.5 rounded-md bg-[#333] text-xs text-gray-300 font-mono">${drv.max_fps}FPS</span>`;
-            if (drv.video_bit_rate) tagsHtml += `<span class="px-2 py-0.5 rounded-md bg-[#333] text-xs text-gray-300 font-mono">${formatBitrate(drv.video_bit_rate)}</span>`;
-            if (drv.video_codec) tagsHtml += `<span class="px-2 py-0.5 rounded-md bg-[#333] text-xs text-gray-300 font-mono uppercase">${drv.video_codec}</span>`;
-            if (drv.audio === 'true') {
-                tagsHtml += `<span class="px-2 py-0.5 rounded-md bg-[#333] text-xs text-gray-300 font-mono">Audio</span>`;
-            } else {
-                tagsHtml += `<span class="px-2 py-0.5 rounded-md bg-[#333] text-xs text-gray-300 font-mono line-through">Audio</span>`;
+        let dtype = config.device_type === 'xvfb' ? 'linux' : config.device_type;
+        const cacheKey = `${dtype}_${serial}`;
+        
+        const generateBadges = (schema, currentValues) => {
+            if (!schema) return '';
+            let html = '';
+            let schemaArray = Array.isArray(schema) ? schema : [];
+            for (const param of schemaArray) {
+                if (param.badge) {
+                    const key = param.name;
+                    let currentValue = currentValues[key];
+                    if (currentValue === undefined) currentValue = param.default;
+                    
+                    if (param.type === 'boolean') {
+                        const isTrue = currentValue === true || currentValue === 'true';
+                        let localizedLabel = i18n.t(key);
+                        if (!localizedLabel || localizedLabel === key) localizedLabel = key;
+                        if (isTrue) {
+                            html += `<span class="px-2 py-0.5 rounded-md bg-[#333] text-xs text-gray-300 font-mono">${localizedLabel}</span>`;
+                        } else {
+                            html += `<span class="px-2 py-0.5 rounded-md bg-[#333] text-xs text-gray-300 font-mono line-through opacity-70">${localizedLabel}</span>`;
+                        }
+                    } else if (currentValue !== undefined && currentValue !== '') {
+                        let displayVal = currentValue;
+                        if (key === 'video_bit_rate') displayVal = formatBitrate(displayVal);
+                        if (key === 'max_fps' || key === 'frameRate') displayVal += 'FPS';
+                        if (key === 'video_codec') displayVal = String(displayVal).toUpperCase();
+                        
+                        html += `<span class="px-2 py-0.5 rounded-md bg-[#333] text-xs text-gray-300 font-mono">${displayVal}</span>`;
+                    }
+                }
             }
-        }
+            return html;
+        };
+
+        tagsHtml += generateBadges(schemaCache['universal'], config);
+        tagsHtml += generateBadges(schemaCache[cacheKey], drv);
 
         const card = document.createElement('div');
         card.className = `card ${isIgnored ? 'opacity-40 grayscale' : ''} rounded-[24px] p-5 flex flex-col justify-between h-full border border-transparent hover:border-[#444] group transition-all`;
@@ -257,6 +281,33 @@ async function fetchDevices() {
         const devices = Array.isArray(data.devices) ? data.devices : [];
         console.log('Fetched devices:', devices);
         knownDevices = devices;
+
+        // Fetch schemas for all devices to render badges
+        const schemaPromises = [];
+        if (!schemaCache['universal']) {
+            schemaPromises.push(
+                fetch('/api/device/configDescription?device_type=universal')
+                .then(r => r.json())
+                .then(s => schemaCache['universal'] = s)
+                .catch(e => console.error(e))
+            );
+        }
+        for (const device of devices) {
+            let activeConfigSerial = typeof device === 'string' ? device : device.device_id;
+            let dtype = device.device_type;
+            if (dtype === 'xvfb') dtype = 'linux';
+            const cacheKey = `${dtype}_${activeConfigSerial}`;
+            if (!schemaCache[cacheKey]) {
+                schemaPromises.push(
+                    fetch(`/api/device/configDescription?device_type=${dtype}&device_id=${encodeURIComponent(activeConfigSerial)}`)
+                    .then(r => r.json())
+                    .then(s => schemaCache[cacheKey] = s)
+                    .catch(e => console.error(e))
+                );
+            }
+        }
+        await Promise.all(schemaPromises);
+
         const serials = devices.map(d => d.device_id);
         pruneDeviceConfigs(serials);
         devices.forEach(d => ensureDeviceConfig(d));
@@ -339,6 +390,8 @@ async function pairDevice() {
 }
 
 let currentConfigSchema = {};
+let currentUniversalSchema = {};
+let schemaCache = {}; // { 'universal': [...], 'type_id': [...] }
 
 function startStream(serial) {
     const device = knownDevices.find(d => d.device_id === serial);
@@ -352,7 +405,8 @@ function startStream(serial) {
         device_id: config.device_id || serial,
         device_ip: config.device_ip || '0',
         device_port: config.device_port || '0',
-        av_sync: config.av_sync || false, 
+        av_sync: config.av_sync || false,
+        use_local_timestamp: config.use_local_timestamp || false,
         driver_config: drv
     };
     
@@ -393,6 +447,7 @@ function closeModal(id) {
     if (id === 'configModal') {
         activeConfigSerial = null;
         currentConfigSchema = {};
+        currentUniversalSchema = {};
     }
 }
 
@@ -401,32 +456,46 @@ async function showConfigModal(serial) {
     const device = knownDevices.find(d => d.device_id === serial) || { device_id: serial };
     const config = ensureDeviceConfig(device);
 
-    document.getElementById('configAVSync').checked = config.av_sync || false;
     document.getElementById('configModalTitle').textContent = i18n.t('config_device_title', {serial: serial});
     
     const dynamicContainer = document.getElementById('dynamicSettings');
+    const universalContainer = document.getElementById('universalSettings');
     dynamicContainer.innerHTML = `<div class="flex justify-center py-8"><div class="spinner"></div></div>`;
+    if (universalContainer) universalContainer.innerHTML = `<div class="flex justify-center py-8"><div class="spinner"></div></div>`;
     openModal('configModal');
 
     // For compatibility with older versions, treat 'xvfb' as 'linux' for config schema purposes
     if (config.device_type === 'xvfb') {
         config.device_type = 'linux';
     }
+    
     try {
-        const res = await fetch(`/api/device/configDescription?device_type=${config.device_type}&device_id=${encodeURIComponent(device.device_id)}`);
-        if (!res.ok) throw new Error('Failed to fetch config description');
-        const schema = await res.json();
-        currentConfigSchema = schema;
+        const [resDyn, resUni] = await Promise.all([
+            fetch(`/api/device/configDescription?device_type=${config.device_type}&device_id=${encodeURIComponent(device.device_id)}`),
+            fetch(`/api/device/configDescription?device_type=universal`)
+        ]);
+        
+        if (!resDyn.ok) throw new Error('Failed to fetch dynamic config description');
+        const schemaDyn = await resDyn.json();
+        currentConfigSchema = schemaDyn;
+        renderDynamicConfigForm(schemaDyn, config.driver_config || {}, 'dynamicSettings', 'dyn_');
 
-        renderDynamicConfigForm(schema, config.driver_config || {});
+        if (resUni.ok) {
+            const schemaUni = await resUni.json();
+            currentUniversalSchema = schemaUni;
+            // The top-level configs are properties directly on the config item
+            renderDynamicConfigForm(schemaUni, config, 'universalSettings', 'uni_');
+        }
     } catch (e) {
         console.error(e);
         dynamicContainer.innerHTML = `<div class="text-red-400 text-sm text-center py-4">Failed to load configuration schema.</div>`;
+        if (universalContainer) universalContainer.innerHTML = '';
     }
 }
 
-function renderDynamicConfigForm(schema, currentValues) {
-    const container = document.getElementById('dynamicSettings');
+function renderDynamicConfigForm(schema, currentValues, containerId = 'dynamicSettings', prefix = 'dyn_') {
+    const container = document.getElementById(containerId);
+    if (!container) return;
     container.innerHTML = '';
 
     const panel = document.createElement('div');
@@ -445,7 +514,11 @@ function renderDynamicConfigForm(schema, currentValues) {
 
         const label = document.createElement('label');
         label.className = 'block text-xs font-medium text-gray-400 ml-1';
-        label.textContent = key + (param.required ? ' *' : '');
+        let localizedLabel = i18n.t(key);
+        if (!localizedLabel || localizedLabel === key) {
+            localizedLabel = key;
+        }
+        label.textContent = localizedLabel + (param.required ? ' *' : '');
         label.title = param.description || '';
 
         let input;
@@ -457,13 +530,14 @@ function renderDynamicConfigForm(schema, currentValues) {
             
             const checkLabel = document.createElement('label');
             checkLabel.className = 'text-sm font-medium text-gray-300 cursor-pointer select-none ml-1';
-            checkLabel.textContent = key;
+            checkLabel.textContent = localizedLabel;
             checkLabel.title = param.description || '';
 
             input = document.createElement('input');
             input.type = 'checkbox';
             input.className = 'md-switch';
-            input.id = `dyn_${key}`;
+            input.id = `${prefix}${key}`;
+            checkLabel.setAttribute('for', input.id);
             
             // Allow string 'true' or boolean true
             input.checked = currentValue === true || currentValue === 'true';
@@ -482,7 +556,7 @@ function renderDynamicConfigForm(schema, currentValues) {
             const wrap = document.createElement('div');
             input = document.createElement('select');
             input.className = 'md-input w-full px-3 py-2 rounded-lg text-white text-sm appearance-none bg-[url("data:image/svg+xml;base64,PHN2ZyBmaWxsPSIjZmZmIiBoZWlnaHQ9IjI0IiB2aWV3Qm94PSIwIDAgMjQgMjQiIHdpZHRoPSIyNCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBkPSJNNyAxMGw1IDUgNS01eiIvPjwvc3ZnPg==")] bg-no-repeat bg-right';
-            input.id = `dyn_${key}`;
+            input.id = `${prefix}${key}`;
 
             if (!param.required) {
                 const opt = document.createElement('option');
@@ -512,7 +586,7 @@ function renderDynamicConfigForm(schema, currentValues) {
             input = document.createElement('input');
             input.type = param.type === 'integer' ? 'number' : 'text';
             input.className = 'md-input w-full px-3 py-2 rounded-lg text-white text-sm';
-            input.id = `dyn_${key}`;
+            input.id = `${prefix}${key}`;
             input.value = currentValue !== undefined ? currentValue : '';
             if (param.default) {
                 input.placeholder = `${param.default}`;
@@ -540,17 +614,15 @@ function saveDeviceConfig() {
     const device = knownDevices.find(d => d.device_id === activeConfigSerial);
     const config = ensureDeviceConfig(device);
 
-    config.av_sync = document.getElementById('configAVSync').checked;
-
     if (!config.driver_config) config.driver_config = {};
     const drv = config.driver_config;
 
-    let schemaArray = Array.isArray(currentConfigSchema) ? currentConfigSchema : [];
+    let dynArray = Array.isArray(currentConfigSchema) ? currentConfigSchema : [];
     if (!Array.isArray(currentConfigSchema)) {
-        schemaArray = Object.entries(currentConfigSchema).map(([k, v]) => ({ name: k, ...v }));
+        dynArray = Object.entries(currentConfigSchema).map(([k, v]) => ({ name: k, ...v }));
     }
 
-    for (const param of schemaArray) {
+    for (const param of dynArray) {
         const key = param.name;
         const input = document.getElementById(`dyn_${key}`);
         if (!input) continue;
@@ -560,17 +632,31 @@ function saveDeviceConfig() {
         } else {
             const val = input.value.trim();
             if (val) {
-                // If it's the bitrate we might parse it to scale if user writes 8M, but wait, the older code parsed it.
-                // Here we can just accept raw string. For bitrate we'd just want them to enter proper bits. 
-                // But for ease of use, we run parseBitrate only if it is video_bit_rate and string ends in K/M/G.
-                // if (key === 'video_bit_rate') {
-                //     const parsed = parseBitrate(val + (val.match(/[KMG]/i) ? '' : 'M'));
-                //     drv[key] = String(parsed);
-                // } else {
-                    drv[key] = val;
-                // }
+                drv[key] = val;
             } else {
                 delete drv[key];
+            }
+        }
+    }
+
+    let uniArray = Array.isArray(currentUniversalSchema) ? currentUniversalSchema : [];
+    if (!Array.isArray(currentUniversalSchema)) {
+        uniArray = Object.entries(currentUniversalSchema).map(([k, v]) => ({ name: k, ...v }));
+    }
+
+    for (const param of uniArray) {
+        const key = param.name;
+        const input = document.getElementById(`uni_${key}`);
+        if (!input) continue;
+
+        if (param.type === 'boolean') {
+            config[key] = input.checked;
+        } else {
+            const val = input.value.trim();
+            if (val) {
+                config[key] = val;
+            } else {
+                delete config[key];
             }
         }
     }

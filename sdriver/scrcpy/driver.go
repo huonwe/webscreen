@@ -55,12 +55,13 @@ type ScrcpyDriver struct {
 	scid      string
 	// socketName string
 
-	cacheMutex         sync.RWMutex
-	LastVPS            []byte
-	LastSPS            []byte
-	LastPPS            []byte
-	LastIDR            []byte
-	LastPTS            time.Duration
+	cacheMutex sync.RWMutex
+	LastVPS    []byte
+	LastSPS    []byte
+	LastPPS    []byte
+	LastIDR    []byte
+	// LastPTS            time.Duration
+	LastPTS            uint64
 	LastIDRRequestTime time.Time
 }
 
@@ -289,14 +290,14 @@ func New(config map[string]string) (*ScrcpyDriver, error) {
 		"cleanup":   "true",
 		"log_level": "info",
 
-		// "video_encoder":  "c2.rk.hevc.encoder",
+		"video_encoder": config["video_encoder"],
 	}
 	if use_video_codec_options == "true" {
 		options["video_codec_options"] = video_codec_options // bitrate-mode=2 to enable CBR
 	}
-	// if config["new_display"] == "true" {
-	// 	options["new_display"] = config["new_display"]
-	// }
+	if config["new_display"] == "true" {
+		options["new_display"] = fmt.Sprintf("%s/%d", config["resolution"], max_fps)
+	}
 
 	da.adbClient.StartScrcpyServer(options)
 	da.options = options

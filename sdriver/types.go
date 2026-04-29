@@ -1,14 +1,21 @@
 package sdriver
 
-import "time"
-
 // type DriverConfig map[string]string
+type ConfigParamDescription struct {
+	Name     string   `json:"name"`
+	Type     string   `json:"type"`
+	Required bool     `json:"required"`
+	Default  any      `json:"default,omitempty"`
+	Options  []string `json:"options,omitempty"`
+	// if true, the frontend can show this config param more prominently, like in a badge or highlight it in the UI, to indicate it's important or commonly used.
+	Badge bool `json:"badge,omitempty"`
 
+	Description string `json:"description"`
+}
 type AVBox struct {
-	Data       []byte        // H.264/H.265/AV1/.../Opus 裸流数据
-	PTS        time.Duration // 相对开始时间的 PTS (Presentation Timestamp)
-	IsKeyFrame bool          // 是否关键帧 (对 Video 很重要)
-	IsConfig   bool          // 是否配置帧 (如果是配置帧, duration 应该为 0)
+	Data       []byte // H.264/H.265/AV1/.../Opus 裸流数据
+	PTS        uint64 // 相对开始时间的 PTS (Presentation Timestamp)
+	NoDuration bool   // 是否不占用时间轴（如某些特殊的配置帧）
 }
 
 type MediaMeta struct {
@@ -17,15 +24,6 @@ type MediaMeta struct {
 	Height     uint32 `json:"height"`
 	FPS        uint32 `json:"fps"`
 	AudioCodec string `json:"audio_codec"`
-}
-
-type ConfigParamDescription struct {
-	Name        string   `json:"name"`
-	Type        string   `json:"type"`
-	Required    bool     `json:"required"`
-	Default     any      `json:"default,omitempty"`
-	Options     []string `json:"options,omitempty"`
-	Description string   `json:"description"`
 }
 
 type DriverCaps struct {

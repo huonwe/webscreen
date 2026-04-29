@@ -107,13 +107,13 @@ func (d *DummyDriver) RequestIDR(firstFrame bool) {
 
 	if len(sps) > 0 {
 		select {
-		case d.videoCh <- sdriver.AVBox{Data: sps, PTS: 0, IsKeyFrame: false, IsConfig: true}:
+		case d.videoCh <- sdriver.AVBox{Data: sps, PTS: 0, NoDuration: true}:
 		default:
 		}
 	}
 	if len(pps) > 0 {
 		select {
-		case d.videoCh <- sdriver.AVBox{Data: pps, PTS: 0, IsKeyFrame: false, IsConfig: true}:
+		case d.videoCh <- sdriver.AVBox{Data: pps, PTS: 0, NoDuration: true}:
 		default:
 		}
 	}
@@ -219,6 +219,9 @@ func (d *DummyDriver) loop() {
 				isConfig = nalType == 7 || nalType == 8
 				isVCL = !isConfig && nalType != 6 // Exclude SEI
 			}
+			if false {
+				fmt.Println(isIDR)
+			}
 
 			// 你的业务逻辑：存储 SPS/PPS
 			if isConfig {
@@ -242,9 +245,8 @@ func (d *DummyDriver) loop() {
 			// 这里我们先不计算 PTS，交给 Agent 去累加，或者在这里简单处理
 			box := sdriver.AVBox{
 				Data:       nalData,
-				PTS:        0, // 这里填 0，由 Agent 根据接收频率或固定帧率计算
-				IsKeyFrame: isIDR,
-				IsConfig:   isConfig,
+				PTS:        0,        // 这里填 0，由 Agent 根据接收频率或固定帧率计算
+				NoDuration: isConfig, // 配置帧不占用时间轴
 			}
 
 			select {

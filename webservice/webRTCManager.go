@@ -45,8 +45,9 @@ type Subscriber struct {
 }
 
 type DeviceBroadcaster struct {
-	VideoTrack  *webrtc.TrackLocalStaticSample
-	AudioTrack  *webrtc.TrackLocalStaticSample
+	PayloadType uint8
+	VideoTrack  *webrtc.TrackLocalStaticRTP
+	AudioTrack  *webrtc.TrackLocalStaticRTP
 	Agent       *sagent.Agent
 	Subscribers map[uint32]*Subscriber
 	Lock        sync.RWMutex
@@ -240,7 +241,7 @@ func (manager *WebRTCManager) Start(deviceIdentifier string, receiptNo uint32, a
 	manager.setCleanup(sub.PeerConnection, deviceIdentifier, receiptNo)
 
 	// Data Channel
-	sub.setDataChannelCallback(agent.SendEvent)
+	sub.setDataChannelCallback(agent.HandleEvent)
 
 	// No need to startPushAVSample / startPushEvent loops anymore
 	// The tracks are shared and filled by the Agent loop started in ensureAgent
@@ -257,13 +258,7 @@ func (manager *WebRTCManager) ensureAgent(deviceIdentifier string, receiptNo uin
 	}
 
 	if broadcaster.Agent == nil {
-		agent := sagent.New(agentConfig)
-
-		// Need temporary unlock to wait on PC? No, PC is async.
-		// WaitAndGetFinalCodecParams might block, but we need meaningful codec params.
-		// However, all subscribers are added to the SAME track, so the codec is negotiated once?
-		// Actually, Pion's LocalTrack handles multiple encodings if configured, or just one.
-		// We assume all browsers support H.264/H.265.
+		agent := sagent.New(agentConfig, broadcaster.VideoTrack, broadcaster.AudioTrack)
 
 		broadcaster.Lock.RLock()
 		sub := broadcaster.Subscribers[receiptNo]
@@ -294,25 +289,7 @@ func (manager *WebRTCManager) ensureAgent(deviceIdentifier string, receiptNo uin
 
 		broadcaster.Agent = agent
 		agent.InitDriver(finalCodec)
-		agent.Start()
-
-		// START THE SHARED BROADCAST LOOP
-		// Video Loop
-		go func() {
-			for videoSample := range agent.VideoStream() {
-				if err := broadcaster.VideoTrack.WriteSample(videoSample); err != nil {
-					// log.Printf("Error writing video to track: %v", err)
-				}
-			}
-		}()
-		// Audio Loop
-		go func() {
-			for audioSample := range agent.AudioStream() {
-				if err := broadcaster.AudioTrack.WriteSample(audioSample); err != nil {
-					// log.Printf("Error writing audio to track: %v", err)
-				}
-			}
-		}()
+		go agent.Start()
 
 		// Event Loop (Agent -> Browser)
 		go func() {
@@ -590,7 +567,7 @@ func getMimeTypeFromConfig(config sagent.AgentConfig) (string, string) {
 	return videoMimeType, audioMimeType
 }
 
-func createAVTrack(videoMimeType, audioMimeType string, AVSync bool) (*webrtc.TrackLocalStaticSample, *webrtc.TrackLocalStaticSample) {
+func createAVTrack(videoMimeType, audioMimeType string, AVSync bool) (*webrtc.TrackLocalStaticRTP, *webrtc.TrackLocalStaticRTP) {
 	mark := fmt.Sprintf("%d", time.Now().UnixNano())
 	trackID := fmt.Sprintf("%s-%s", "webscreen-track", randomString(8))
 	trackIDVideo := trackID + "-" + mark + "-video"
@@ -598,16 +575,16 @@ func createAVTrack(videoMimeType, audioMimeType string, AVSync bool) (*webrtc.Tr
 	streamID := fmt.Sprintf("%s-%s", "webscreen-stream", randomString(8))
 	streamIDVideo := streamID + "-" + mark + "-video"
 	streamIDAudio := streamID + "-" + mark + "-audio"
-	if !AVSync {
+	if AVSync {
 		streamIDVideo = streamID + "-" + mark
 		streamIDAudio = streamID + "-" + mark
 	}
 
-	trackVideo, err := webrtc.NewTrackLocalStaticSample(webrtc.RTPCodecCapability{MimeType: videoMimeType}, trackIDVideo, streamIDVideo)
+	trackVideo, err := webrtc.NewTrackLocalStaticRTP(webrtc.RTPCodecCapability{MimeType: videoMimeType}, trackIDVideo, streamIDVideo)
 	if err != nil {
 		log.Printf("Failed to create track for MIME type %s: %v", videoMimeType, err)
 	}
-	trackAudio, err := webrtc.NewTrackLocalStaticSample(webrtc.RTPCodecCapability{MimeType: audioMimeType}, trackIDAudio, streamIDAudio)
+	trackAudio, err := webrtc.NewTrackLocalStaticRTP(webrtc.RTPCodecCapability{MimeType: audioMimeType}, trackIDAudio, streamIDAudio)
 	if err != nil {
 		log.Printf("Failed to create audio track for MIME type %s: %v", audioMimeType, err)
 	}

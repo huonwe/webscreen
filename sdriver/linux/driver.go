@@ -270,9 +270,8 @@ func (d *LinuxDriver) handleConnection() {
 		// 4. 发送 AVBox
 		d.videoChan <- sdriver.AVBox{
 			Data:       sendData,
-			PTS:        time.Duration(pts) * time.Microsecond,
-			IsKeyFrame: isKeyFrame,
-			IsConfig:   false,
+			PTS:        pts,
+			NoDuration: false,
 		}
 		// naltype := nalData[0] & 0x1F
 		// log.Printf("Sent AVBox: NALU Type=%d, PTS=%d, Size=%d bytes, IsKeyFrame=%v\n", naltype, pts, len(sendData), isKeyFrame)

@@ -3,7 +3,6 @@ package scrcpy
 import (
 	"bytes"
 	"log"
-	"time"
 	"webscreen/sdriver"
 )
 
@@ -100,10 +99,10 @@ func (da *ScrcpyDriver) sendCachedKeyFrame() {
 	merged_data = append(merged_data, startCode...)
 	merged_data = append(merged_data, cachedIDR...)
 	log.Println("⚡ Sending cached key frame and parameter sets")
-	da.VideoChan <- sdriver.AVBox{Data: merged_data, PTS: lastPTS, IsKeyFrame: true, IsConfig: false}
+	da.VideoChan <- sdriver.AVBox{Data: merged_data, PTS: lastPTS, NoDuration: true}
 }
 
-func (da *ScrcpyDriver) sendWithCachedConfigFrame(PTS time.Duration, IDRFrame []byte) {
+func (da *ScrcpyDriver) sendWithCachedConfigFrame(PTS uint64, IDRFrame []byte) {
 	da.cacheMutex.RLock()
 	cachedVPS := createCopy(da.LastVPS)
 	cachedSPS := createCopy(da.LastSPS)
@@ -129,5 +128,5 @@ func (da *ScrcpyDriver) sendWithCachedConfigFrame(PTS time.Duration, IDRFrame []
 	// 	log.Printf("  Part %d: NALU Type=%d, Size=%d bytes\n", i, (part[0]>>1)&0x3F, len(part))
 	// }
 
-	da.VideoChan <- sdriver.AVBox{Data: merged_data, PTS: PTS, IsKeyFrame: true, IsConfig: false}
+	da.VideoChan <- sdriver.AVBox{Data: merged_data, PTS: PTS, NoDuration: false}
 }

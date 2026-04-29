@@ -121,6 +121,9 @@ func (wm *WebMaster) handleDeviceConfigDescription(c *gin.Context) {
 	case sagent.DEVICE_TYPE_LINUX:
 		desc := linuxDriver.ConfigDescription()
 		c.JSON(200, desc)
+	case "universal":
+		desc := sagent.ConfigDescription()
+		c.JSON(200, desc)
 	default:
 		c.JSON(400, gin.H{"error": "Unsupported device type"})
 		return

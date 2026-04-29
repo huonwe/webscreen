@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"io"
 	"log"
-	"time"
+
 	// "bytes"
 	"webscreen/sdriver"
 )
@@ -24,7 +24,7 @@ func (da *ScrcpyDriver) convertVideoFrame() {
 			log.Println("Failed to read scrcpy frame header:", err)
 			return
 		}
-		da.LastPTS = time.Duration(header.PTS) * time.Microsecond
+		da.LastPTS = header.PTS
 		// showFrameHeaderInfo(frame.Header)
 		frameSize := int(header.Size)
 
@@ -36,13 +36,13 @@ func (da *ScrcpyDriver) convertVideoFrame() {
 			return
 		}
 		switch da.mediaMeta.VideoCodec {
-			case "h265":
-				nalTypeF = func(payloadBuf byte) byte { return (payloadBuf >> 1) & 0x3F }
-			case "h264":
-				nalTypeF = func(payloadBuf byte) byte { return payloadBuf & 0x1F }
-			default:
-				log.Println("Unknown codec type for NALU parsing:", da.mediaMeta.VideoCodec)
-				continue
+		case "h265":
+			nalTypeF = func(payloadBuf byte) byte { return (payloadBuf >> 1) & 0x3F }
+		case "h264":
+			nalTypeF = func(payloadBuf byte) byte { return payloadBuf & 0x1F }
+		default:
+			log.Println("Unknown codec type for NALU parsing:", da.mediaMeta.VideoCodec)
+			continue
 		}
 		nalType = nalTypeF(payloadBuf[4]) // 注意：payloadBuf 前 4 字节是起始码
 		// log.Printf("ScrcpyDriver: isKeyFrame=%v, nal Type=%v, Size=%d bytes\n", header.IsKeyFrame, nalType, len(payloadBuf))
@@ -68,8 +68,7 @@ func (da *ScrcpyDriver) convertVideoFrame() {
 				da.VideoChan <- sdriver.AVBox{
 					Data:       payloadBuf,
 					PTS:        da.LastPTS,
-					IsKeyFrame: true,
-					IsConfig:   false,
+					NoDuration: true,
 				}
 				continue
 			default:
@@ -82,15 +81,10 @@ func (da *ScrcpyDriver) convertVideoFrame() {
 			continue
 		}
 
-		select {
-		case da.VideoChan <- sdriver.AVBox{
+		da.VideoChan <- sdriver.AVBox{
 			Data:       payloadBuf[4:],
-			PTS:        da.LastPTS,
-			IsConfig:   false,
-			IsKeyFrame: false,
-		}:
-		default:
-			log.Println("Video channel full, skip...")
+			PTS:        header.PTS,
+			NoDuration: false,
 		}
 	}
 }
@@ -119,9 +113,9 @@ func (da *ScrcpyDriver) convertAudioFrame() {
 		// }
 
 		da.AudioChan <- sdriver.AVBox{
-			Data:     payloadBuf,
-			PTS:      time.Duration(header.PTS) * time.Microsecond,
-			IsConfig: false,
+			Data:       payloadBuf,
+			PTS:        header.PTS,
+			NoDuration: false,
 		}
 
 	}

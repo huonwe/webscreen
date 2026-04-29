@@ -21,19 +21,23 @@ type Agent struct {
 	audioCh   <-chan sdriver.AVBox
 	controlCh chan sdriver.Event
 
-	// 用于音视频推流的 PTS 记录
-	lastVideoPTS time.Duration
-	lastAudioPTS time.Duration
-	baseTime     time.Time
+	// WebRTC 相关
+	videoTrack        *webrtc.TrackLocalStaticRTP
+	audioTrack        *webrtc.TrackLocalStaticRTP
+	startTime         time.Time
+	useLocalTimestamp bool
 }
 
 // ========================
 // SAgent 负责初始化driver并接受来自sdriver的数据，并处理来自前端的控制命令。
 // 提供一系列Hook
 // ========================
-func New(config AgentConfig) *Agent {
+func New(config AgentConfig, videoTrack *webrtc.TrackLocalStaticRTP, audioTrack *webrtc.TrackLocalStaticRTP) *Agent {
 	sa := &Agent{
-		config: config,
+		config:            config,
+		videoTrack:        videoTrack,
+		audioTrack:        audioTrack,
+		useLocalTimestamp: config.UseLocalTimestamp,
 	}
 	log.Printf("Driver config: %+v", config.DriverConfig)
 	return sa
@@ -100,7 +104,9 @@ func (sa *Agent) Capabilities() sdriver.DriverCaps {
 
 func (sa *Agent) Start() {
 	sa.driver.Start()
-	sa.baseTime = time.Now()
+	sa.startTime = time.Now() // 服务器基准时间线
+	go sa.ServeVideoStream()
+	go sa.ServeAudioStream()
 
 	sa.driver.RequestIDR(true)
 }
@@ -109,7 +115,7 @@ func (sa *Agent) PLIRequest() {
 	sa.driver.RequestIDR(false)
 }
 
-func (sa *Agent) SendEvent(raw []byte) error {
+func (sa *Agent) HandleEvent(raw []byte) error {
 	if !sa.driverCaps.CanControl {
 		return fmt.Errorf("driver does not support control events")
 	}
