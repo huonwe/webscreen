@@ -39,6 +39,7 @@ func New(config AgentConfig, videoTrack *webrtc.TrackLocalStaticRTP, audioTrack 
 		audioTrack:        audioTrack,
 		useLocalTimestamp: config.UseLocalTimestamp,
 	}
+	log.Printf("AVSync: %v, UseLocalTimestamp: %v", config.AVSync, config.UseLocalTimestamp)
 	log.Printf("Driver config: %+v", config.DriverConfig)
 	return sa
 }
