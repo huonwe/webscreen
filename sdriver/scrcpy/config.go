@@ -39,7 +39,7 @@ func ConfigDescription(opt string) []sdriver.ConfigParamDescription {
 		{
 			Name:        "video_codec",
 			Type:        "string",
-			Required:    false,
+			Required:    true,
 			Default:     "h264",
 			Options:     []string{"h264", "h265"},
 			Badge:       true,
