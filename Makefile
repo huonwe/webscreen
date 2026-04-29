@@ -39,15 +39,12 @@ all: build-LinuxRecorder build-main
 
 ci: all
 
-# 构建 capturer
+# 构建 Linux Recorder
 build-LinuxRecorder:
-	@echo ">> [1/2] Building LinuxRecorder for $(GOOS)/$(GOARCH)..."
+	@echo ">> [1/2] Building LinuxRecorder for linux/$(GOARCH)..."
 	@echo "   Output Directory (for embed): $(RECORDER_DIR)"
 	@mkdir -p $(RECORDER_DIR)
-# 	go build -v -ldflags "$(LDFLAGS)" -o "$(RECORDER_XVFB_OUT)" ./linuxRecorder/xvfb
-# 	go build -v -ldflags "$(LDFLAGS)" -o "$(RECORDER_XORG_OUT)" ./linuxRecorder/xorg
-# 	go build -v -ldflags "$(LDFLAGS)" -o "$(RECORDER_WL_OUT)" ./linuxRecorder/wf-recorder
-	go build -v -ldflags "$(LDFLAGS)" -o "$(RECORDER_OUT)" ./linuxRecorder
+	GOOS=linux go build -v -ldflags "$(LDFLAGS)" -o "$(RECORDER_OUT)" ./linuxRecorder
 
 # 构建主程序
 build-main: build-LinuxRecorder
