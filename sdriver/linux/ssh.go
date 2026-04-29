@@ -38,5 +38,13 @@ func LocalStartRecorder(tcpPort, resolution, bitrate, frameRate, codec, backend 
 	execCmd.Stderr = os.Stderr
 
 	log.Printf("Starting local recorder...")
-	return execCmd.Start()
+	if err := execCmd.Start(); err != nil {
+		return err
+	}
+	// 在后台 Wait，防止自身变成僵尸进程
+	go func() {
+		execCmd.Wait()
+		log.Println("Local recorder exited.")
+	}()
+	return nil
 }

@@ -6,17 +6,25 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"syscall"
 	"time"
+	"webscreen/linuxRecorder/config"
 )
 
-func NewWaylandSession(tcpPort string, width int, height int, frameRate string, cpuSet string) (*Session, error) {
+func (s *Session) initWaylandEnv() error {
 	xdgRuntimeDir := os.Getenv("XDG_RUNTIME_DIR")
 	if xdgRuntimeDir == "" {
 		xdgRuntimeDir = fmt.Sprintf("/run/user/%d", os.Getuid())
+		err := os.MkdirAll(xdgRuntimeDir, 0700)
+		if err != nil {
+			return fmt.Errorf("Create XDG_RUNTIME_DIR Failed: %v", err)
+		}
 		os.Setenv("XDG_RUNTIME_DIR", xdgRuntimeDir)
 	}
-	os.MkdirAll(xdgRuntimeDir, 0700)
 
+	s.xdgRuntimeDir = xdgRuntimeDir
+
+	// 启动前清理残留的 Wayland Socket 和 Sway IPC Socket，避免冲突
 	files, _ := filepath.Glob(filepath.Join(xdgRuntimeDir, "wayland-[0-9]*"))
 	for _, f := range files {
 		os.Remove(f)
@@ -25,46 +33,18 @@ func NewWaylandSession(tcpPort string, width int, height int, frameRate string, 
 	for _, f := range files {
 		os.Remove(f)
 	}
+	return nil
+}
 
-	swayConfig := filepath.Join(xdgRuntimeDir, "sway-headless.conf")
-	configContent := fmt.Sprintf(`# 基础配置
-xwayland enable
-output HEADLESS-1 resolution %dx%d@%sHz position 0 0
-
-# === 外观与美化配置 ===
-
-# 1. 设置背景壁纸 (fill 模式会按比例缩放并裁剪填满屏幕)
-output HEADLESS-1 bg /home/hiroi/Downloads/124956717_p0.png fill
-
-# 2. 全局字体设置
-font pango:sans-serif 11
-
-# 3. 窗口边框与间距 (现代平铺桌面风格)
-# 取消默认的粗大标题栏，改为 2 像素的纯色边框
-default_border pixel 2
-default_floating_border normal
-
-# 设置窗口之间的缝隙，让壁纸能透出来
-gaps inner 8
-gaps outer 4
-
-# 4. 窗口颜色配置 (基于优雅的 Nord 主题配色)
-# 格式：class                 border  backgr. text    indicator child_border
-client.focused          #88c0d0 #434c5e #eceff4 #8fbcbb   #88c0d0
-client.focused_inactive #3b4252 #2e3440 #d8dee9 #4c566a   #4c566a
-client.unfocused        #2e3440 #2e3440 #d8dee9 #2e3440   #2e3440
-client.urgent           #bf616a #bf616a #eceff4 #bf616a   #bf616a
-
-# 5. 状态栏配置 (可选)
-# 如果你只想要一个纯净的画面（比如为了无干扰地跑特定应用），可以取消下面 bar 的注释来隐藏默认的底部状态栏
-# bar {
-#     mode invisible
-# }
-`, width, height, frameRate)
-	// configContent := ""
+func (s *Session) launchWaylandSession(width int, height int, frameRate int) error {
+	if s.xdgRuntimeDir == "" {
+		return fmt.Errorf("XDG_RUNTIME_DIR is not set")
+	}
+	swayConfig := filepath.Join(s.xdgRuntimeDir, "sway-headless.conf")
+	configContent := config.GetSwayHeadlessConf(width, height, fmt.Sprintf("%d", frameRate))
 	os.WriteFile(swayConfig, []byte(configContent), 0600)
 
-	swayCmd := exec.Command("sway", "-c", swayConfig)
+	swayCmd := exec.CommandContext(s.ctx, "sway", "-c", swayConfig)
 	// swayEnv := envWithoutKey(os.Environ(), "WLR_LIBINPUT_NO_DEVICES")
 	swayCmd.Env = append(os.Environ(),
 		// 必须同时开启 headless 和 libinput
@@ -76,49 +56,20 @@ client.urgent           #bf616a #bf616a #eceff4 #bf616a   #bf616a
 		// 其他你原有的环境变量...
 		"WLR_RENDERER=pixman", // 强制使用软件渲染，避免某些 GPU 驱动的兼容性问题
 	)
-	swayCmd.Stderr = os.Stderr
-
+	swayCmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if err := swayCmd.Start(); err != nil {
-		return nil, err
+		return err
 	}
-
-	session := &Session{
-		sessionType: "wayland",
-		cmdProcess:  swayCmd.Process,
-		width:       width,
-		height:      height,
-	}
-
-	err := session.waitWaylandLaunch(xdgRuntimeDir)
-	if err != nil {
-		return nil, err
-	}
-
-	log.Printf("listening at %s...\n", tcpPort)
-	conn, err := WaitTCP(tcpPort)
-	if err != nil {
-		return nil, fmt.Errorf("等待 TCP 连接失败: %v", err)
-	}
-	session.conn = conn
-	log.Printf("TCP connection established at %s\n", tcpPort)
-
-	var errController error
-	session.controller, errController = NewInputController(CONTROLLER_TYPE_WAYLAND, "", uint16(width), uint16(height))
-	if errController != nil {
-		log.Printf("创建 Wayland 虚拟外设失败, 请检查 /dev/uinput 权限: %v\n", errController)
-	} else {
-		log.Println("成功创建 Wayland 虚拟 TouchPad / Keyboard!")
-	}
-
-	go func() {
-		if err := session.controller.ServeControlConn(conn); err != nil {
-			log.Println("控制连接关闭:", err)
-		}
-	}()
-	return session, nil
+	s.processes = append(s.processes, swayCmd.Process)
+	return nil
 }
 
-func (s *Session) waitWaylandLaunch(xdgRuntimeDir string) error {
+func (s *Session) waitWaylandReady() error {
+	xdgRuntimeDir := os.Getenv("XDG_RUNTIME_DIR")
+	if xdgRuntimeDir == "" {
+		xdgRuntimeDir = fmt.Sprintf("/run/user/%d", os.Getuid())
+		log.Printf("Warn: XDG_RUNTIME_DIR not set, defaulting to %s\n", xdgRuntimeDir)
+	}
 	for i := 0; i < 50; i++ {
 		if s.displayName == "" {
 			files, _ := filepath.Glob(filepath.Join(xdgRuntimeDir, "wayland-[0-9]*"))
@@ -143,7 +94,7 @@ func (s *Session) waitWaylandLaunch(xdgRuntimeDir string) error {
 
 // 补充类似于 XvfbSession 的 RunCmd 命令
 func (s *Session) WaylandRunCmd(cmdStr string) int {
-	cmd := exec.Command("bash", "-c", cmdStr)
+	cmd := exec.CommandContext(s.ctx, "swaymsg", "exec", cmdStr)
 
 	xdgRuntimeDir := os.Getenv("XDG_RUNTIME_DIR")
 	if xdgRuntimeDir == "" {
@@ -155,38 +106,36 @@ func (s *Session) WaylandRunCmd(cmdStr string) int {
 		swaySock = filepath.Join(xdgRuntimeDir, swaySock)
 	}
 
-	// 注入 Wayland/Sway 运行时环境给子进程
 	cmd.Env = append(os.Environ(),
 		fmt.Sprintf("XDG_RUNTIME_DIR=%s", xdgRuntimeDir),
-		fmt.Sprintf("WAYLAND_DISPLAY=%s", s.displayName),
 	)
 	if swaySock != "" {
 		cmd.Env = append(cmd.Env, fmt.Sprintf("SWAYSOCK=%s", swaySock))
 	}
-	if s.X11Display != "" {
-		cmd.Env = append(cmd.Env, fmt.Sprintf("DISPLAY=%s", s.X11Display))
-	}
 
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-
-	log.Printf("RunCmd: %s (WAYLAND_DISPLAY=%s, SWAYSOCK=%s, DISPLAY=%s)", cmdStr, s.displayName, swaySock, s.X11Display)
-
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if err := cmd.Start(); err != nil {
 		log.Println("启动命令失败:", err)
 		return -1
 	}
-	// 不在此处 Wait() 阻塞主线程，因为图形程序可能会一直前台运行
-	// cmd.Wait()
+	// swaymsg 本身是个执行完就会马上退出的短命命令，不要把它放入 Session 统一监控中
+	// 否则 Wait 收尸时它早就因为先早退出而变成僵尸。
+	// 我们直接启动 goroutine 来 Wait 它
+	go func() {
+		cmd.Wait()
+	}()
 	return 0
 }
 
-func (s *Session) StartWfRecorder(codec string, resolution string, bitRate string, frameRate string) error {
+func (s *Session) StartWfRecorder(codec string, resolution string, bitRate string, frameRate int) error {
 	var encoder string
 	switch codec {
 	case "h264":
 		encoder = GetBestH264Encoder()
-	case "hevc":
+	case "hevc", "h265":
+		codec = "hevc" // wf-recorder 里统一叫 hevc
 		encoder = GetBestHEVCEncoder()
 	default:
 		return fmt.Errorf("不支持的编码格式: %s", codec)
@@ -230,34 +179,30 @@ func (s *Session) StartWfRecorder(codec string, resolution string, bitRate strin
 
 	commandName := "wf-recorder"
 	commandArgs := args
-
-	ffmpegCmd := exec.Command(commandName, commandArgs...)
-
+	cmd := exec.CommandContext(s.ctx, commandName, commandArgs...)
 	// 3. 设置子进程环境
 	xdgRuntimeDir := os.Getenv("XDG_RUNTIME_DIR")
-	ffmpegCmd.Env = append(os.Environ(),
+	cmd.Env = append(os.Environ(),
 		fmt.Sprintf("XDG_RUNTIME_DIR=%s", xdgRuntimeDir),
 		fmt.Sprintf("WAYLAND_DISPLAY=%s", s.displayName),
 	)
 
 	// 将管道写入端交给子进程的 ExtraFiles
-	ffmpegCmd.ExtraFiles = []*os.File{pw}
+	cmd.ExtraFiles = []*os.File{pw}
 
 	// 关掉 stdin，防止任何交互提示卡住进程
-	ffmpegCmd.Stdin = nil
-	ffmpegCmd.Stderr = os.Stderr
+	cmd.Stdin = nil
+	cmd.Stderr = os.Stderr
 
 	// 4. 启动
-	if err := ffmpegCmd.Start(); err != nil {
+	if err := cmd.Start(); err != nil {
 		return err
 	}
 
 	// 【重要】启动后在父进程关闭写入端，否则会导致读取端无法收到 EOF
 	pw.Close()
 
-	// 将读取端赋值给 session，后续的 Scanner 会从这里读
-	s.processOutput = pr
-	log.Printf("Started wf-recorder with PID %d, streaming to session.processOutput\n", ffmpegCmd.Process.Pid)
-
+	s.recorderOutput = pr
+	s.processes = append(s.processes, cmd.Process)
 	return nil
 }

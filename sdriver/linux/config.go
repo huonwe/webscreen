@@ -9,7 +9,7 @@ func ConfigDescription() []sdriver.ConfigParamDescription {
 			Type:     "string",
 			Required: true,
 			Default:  "wayland",
-			Options:  []string{"wayland", "xorg", "xvfb"},
+			Options:  []string{"sway", "xorg", "xvfb"},
 			Description: "capture backend to use, e.g. 'wayland' for wf-recorder, " +
 				"'xorg' for x11+kmsgrab, 'xvfb' for Xvfb + kmsgrab",
 		},

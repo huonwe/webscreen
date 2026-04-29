@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"encoding/binary"
 	"flag"
 	"log"
@@ -14,15 +15,15 @@ import (
 )
 
 func main() {
-	tcpPort := flag.String("tcp_port", "27184", "server listen port")
+	tcpPort := flag.Int("tcp_port", 27184, "server listen port")
 	resolution := flag.String("resolution", "1920x1080", "virtual display resolution")
 	bitRate := flag.String("bitrate", "8M", "streaming bitrate in Mbps")
-	frameRate := flag.String("framerate", "60", "frame rate for capturing")
+	frameRate := flag.Int("framerate", 60, "frame rate for capturing")
 	codec := flag.String("codec", "h264", "video codec: h264 or hevc")
-	cpuSet := flag.String("cpu_set", "", "optional CPU affinity for wf-recorder, for example 0 or 0-1")
+	// cpuSet := flag.String("cpu_set", "", "optional CPU affinity for wf-recorder, for example 0 or 0-1")
 	backend := flag.String("backend", "wayland", "capture backend: wayland, xorg, or xvfb")
 	flag.Parse()
-	log.Printf("Starting %s capturer with resolution %s, bitrate %s, framerate %s, codec %s\n", *backend, *resolution, *bitRate, *frameRate, *codec)
+	log.Printf("Starting %s capturer with resolution %s, bitrate %s, framerate %d, codec %s\n", *backend, *resolution, *bitRate, *frameRate, *codec)
 
 	_width, _height := strings.Split(*resolution, "x")[0], strings.Split(*resolution, "x")[1]
 	width, err := strconv.Atoi(_width)
@@ -38,20 +39,26 @@ func main() {
 
 	var session *Session
 
-	switch *backend {
-	case "wayland":
-		session, err = NewWaylandSession(*tcpPort, width, height, *frameRate, *cpuSet)
-	case "xorg":
-		session, err = NewXorgSession(*tcpPort, width, height, 99, 24, "auto")
-	case "xvfb":
-		session, err = NewXVFBSession(*tcpPort, width, height, 99, 24)
-	default:
-		log.Fatalf("Unsupported backend: %s", *backend)
+	parentCtx := context.Background()
+	ctx, cancel := context.WithCancel(parentCtx)
+	defer cancel()
+	session, err = NewSession(*backend, ctx)
+	if err != nil {
+		log.Printf("Failed to create session  %s: %v", *backend, err)
+		return
+	}
+	err = session.LaunchSession(width, height, *frameRate)
+	if err != nil {
+		log.Fatal("Failed to launch session: ", err)
+	}
+	err = session.WaitSessionReady(*tcpPort)
+	if err != nil {
+		log.Fatal("Failed to setup session: ", err)
 	}
 
+	err = session.SetupController()
 	if err != nil {
-		log.Printf("无法启动 %s: %v", *backend, err)
-		return
+		log.Printf("Warning: Failed to setup controller: %v", err)
 	}
 
 	// 监听 Ctrl+C，确保退出时执行清理
@@ -68,22 +75,22 @@ func main() {
 
 	log.Printf("Recorder initialized with backend: %s", *backend)
 
-	go session.RunXterm()
+	go session.RunCmd("xterm")
 
-	err = session.ServeRecord(*codec, *resolution, *bitRate, *frameRate)
+	err = session.StartRecord(*codec, *resolution, *bitRate, *frameRate)
 	if err != nil {
 		log.Printf("推流启动失败: %v", err)
 		return
 	}
 
-	processOutput := session.processOutput
-	if processOutput == nil {
+	recorderOutput := session.recorderOutput
+	if recorderOutput == nil {
 		log.Println("录制流未初始化，退出")
 		return
 	}
 
 	// 数据发送循环
-	scanner := bufio.NewScanner(processOutput)
+	scanner := bufio.NewScanner(recorderOutput)
 	buf := make([]byte, 1024*1024)
 	scanner.Buffer(buf, 10*1024*1024)
 	scanner.Split(SplitNALU)

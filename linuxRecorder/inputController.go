@@ -12,11 +12,6 @@ import (
 	"github.com/jezek/xgb/xtest"
 )
 
-const (
-	CONTROLLER_TYPE_X11     = "xtest"
-	CONTROLLER_TYPE_WAYLAND = "uinput"
-)
-
 // InputController 负责处理多后端的底层输入操作
 type InputController struct {
 	controllerType string
@@ -252,32 +247,30 @@ func (ic *InputController) HandleTouchEvent(action, ptrID byte, x, y, pressure u
 		}
 
 		finger := ic.touch.GetContacts()[ptrID%10] // 取模以防 ptrID 超出范围
-		finger.TouchDownAt(int32(x), int32(y))
 
-		finger.TouchUp()
+		switch action {
+		case TouchActionDown, TouchActionMove:
+			finger.TouchDownAt(int32(x), int32(y))
+		case TouchActionUp:
+			finger.TouchUp()
+		}
+
 		return
 	} else {
 		// X11: 将归一化坐标映射到根窗口绝对坐标
 		// absX := scaleNormalizedToRange(x, ic.rootWidth)
 		// absY := scaleNormalizedToRange(y, ic.rootHeight)
 		xproto.WarpPointer(ic.conn, 0, ic.root, 0, 0, 0, 0, int16(x), int16(y))
+
+		// X11/XTest 原生态不支持多点触控（由于X11核心协议是在触摸屏流行之前设计的）。
+		// 在这里我们将单点触控降级为鼠标操作来实现基本的“点击”和“滑动”：
+		switch action {
+		case TouchActionDown:
+			ic.triggerMouseButton(MouseBtnLeft, true)
+		case TouchActionUp:
+			ic.triggerMouseButton(MouseBtnLeft, false)
+		}
 	}
-
-	if action == TouchActionUp {
-		ic.touch.GetContacts()[ptrID%10].TouchUp()
-	}
-
-	// 处理按键状态：按 touch.js 约定 buttons=1 代表主键
-	// buttonID := byte(MouseBtnLeft)
-	// if buttons&0x02 != 0 {
-	// 	buttonID = byte(MouseBtnRight)
-	// }
-
-	// if action == TouchActionDown {
-	// 	ic.triggerMouseButton(buttonID, true)
-	// } else if action == TouchActionUp {
-	// 	ic.triggerMouseButton(buttonID, false)
-	// }
 }
 
 // triggerMouseButton 屏蔽底层差异，执行点击动作

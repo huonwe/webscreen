@@ -2,31 +2,10 @@ package main
 
 import (
 	"bytes"
-	"log"
-	"net"
 	"os"
 	"os/exec"
 	"strings"
 )
-
-func WaitTCP(port string) (net.Conn, error) {
-	var err error
-	var conn net.Conn
-	listener, err := net.Listen("tcp", ":"+port)
-	if err != nil {
-		log.Println("Failed to start video listener:", err)
-		return nil, err
-	}
-	conn, err = listener.Accept()
-	if err != nil {
-		log.Println("Failed to accept connection:", err)
-		return nil, err
-	}
-	listener.Close()
-	log.Println("TCP connection established:", port)
-
-	return conn, nil
-}
 
 // GetBestH264Encoder 自动检测最佳 H.264 编码器
 func GetBestH264Encoder() string {
