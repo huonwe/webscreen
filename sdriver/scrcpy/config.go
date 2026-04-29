@@ -21,14 +21,6 @@ func ConfigDescription(opt string) []sdriver.ConfigParamDescription {
 
 	return []sdriver.ConfigParamDescription{
 		{
-			Name:        "video",
-			Type:        "boolean",
-			Required:    true,
-			Default:     true,
-			Badge:       true,
-			Description: "enable video stream",
-		},
-		{
 			Name:        "audio",
 			Type:        "boolean",
 			Required:    true,
@@ -104,6 +96,13 @@ func ConfigDescription(opt string) []sdriver.ConfigParamDescription {
 			Type:        "string",
 			Required:    false,
 			Description: "new display resolution, e.g. 1920x1080",
+		},
+		{
+			Name:        "no_video_codec_options",
+			Type:        "boolean",
+			Required:    false,
+			Default:     false,
+			Description: "If you face issues with video streaming, you can try to enable this to remove video_codec_options options",
 		},
 	}
 }
