@@ -55,6 +55,8 @@ func (s *Session) launchWaylandSession(width int, height int, frameRate int) err
 		// 其他你原有的环境变量...
 		"WLR_RENDERER=pixman", // 强制使用软件渲染，避免某些 GPU 驱动的兼容性问题
 	)
+	swayCmd.Stdout = os.Stdout
+	swayCmd.Stderr = os.Stderr
 
 	if err := s.SpawnProcess(swayCmd, "Sway"); err != nil {
 		return err
