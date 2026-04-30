@@ -289,6 +289,10 @@ func New(config map[string]string) (*ScrcpyDriver, error) {
 
 		"video_encoder": config["video_encoder"],
 	}
+	if config["video_encoder"] != "" {
+		options["video_encoder"] = config["video_encoder"]
+		log.Printf("Using user-specified video encoder: %s", config["video_encoder"])
+	}
 	if config["no_video_codec_options"] == "true" {
 		delete(options, "video_codec_options")
 		log.Println("User requested to disable video codec options, ignoring all codec options.")
