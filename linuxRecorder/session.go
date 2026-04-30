@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bufio"
 	"context"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"log"
@@ -186,6 +188,39 @@ func (s *Session) SetupController() error {
 		}
 	}
 	return nil
+}
+
+func (s *Session) ServePushFrames() {
+	if s.recorderOutput == nil {
+		log.Println("Recorder output is not initialized, cannot serve frames.")
+		return
+	}
+	scanner := bufio.NewScanner(s.recorderOutput)
+	buf := make([]byte, 1024*1024)
+	scanner.Buffer(buf, 10*1024*1024)
+	scanner.Split(SplitNALU)
+	header := make([]byte, 12)
+
+	for scanner.Scan() {
+		nalData := scanner.Bytes()
+		if len(nalData) == 0 {
+			continue
+		}
+
+		pts := uint64(time.Now().UnixNano() / 1e3)
+		binary.BigEndian.PutUint64(header[0:8], pts)
+		binary.BigEndian.PutUint32(header[8:12], uint32(len(nalData)))
+
+		framePacket := append(header, nalData...)
+		_, err := s.conn.Write(framePacket)
+		if err != nil {
+			log.Printf("Failed to send frame data: %v", err)
+			return
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		log.Printf("Error reading recorder output: %v", err)
+	}
 }
 
 func (s *Session) CleanUp() {

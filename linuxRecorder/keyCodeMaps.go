@@ -41,6 +41,7 @@ var AndroidToLinuxEvdevMap = map[int32]int32{
 	60:  uinput.KeyRightshift,
 	113: uinput.KeyLeftctrl,
 	114: uinput.KeyRightctrl,
+	115: uinput.KeyCapslock,
 	57:  uinput.KeyLeftalt,
 	58:  uinput.KeyRightalt,
 
@@ -124,8 +125,7 @@ var AndroidToX11KeycodeMap = map[int]byte{
 	57:  64,  // ALT_LEFT
 	58:  108, // ALT_RIGHT
 	113: 37,  // CTRL_LEFT
-	114: 105, // CTRL_RIGHT
-	117: 133, // META_LEFT (Windows key / Super)
+	114: 105, // CTRL_RIGHT	117: 133, // META_LEFT (Windows key / Super)
 	118: 134, // META_RIGHT
 
 	// Function keys (Android KEYCODE_F1-F12 = 131-142, X11 = 67-78)
