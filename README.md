@@ -24,34 +24,33 @@ Android supports ([scrcpy](https://github.com/Genymobile/scrcpy)):
 - Video, Audio, Control
 - UHID Devices (Mouse, Keyboard, Gamepad)
 - Clipboard Sync
-- Multi-finger, pressure
+- Touch (Multi-finger, pressure)
 - H.264/H.265
 - Multi-Connection
 - Maybe more...
 
-Linux supports (xvfb):
-
+Linux supports (Xvfb/Xorg/Sway):
 - Video, Control
+- Touch
+- H.264/H.265
+- GPU (Xorg/Sway)
 
 ## Prerequisites
 
 For device side, please refer to [scrcpy](https://github.com/Genymobile/scrcpy/blob/master/README.md#prerequisites)
 
-For server side, you'd better have `adb` and `xvfb, ffmpeg, xfce4 (if need this feature, optional)` in your PATH first.
+For server side, you'd better have `adb` and `xvfb, ffmpeg, xfce4, sway, wf-recorder (if need this feature, optional)` in your PATH first.
 
 ```bash
-# for Termux
-pkg install android-tools
-# clone the repo and build
+# Build by yourself:
 git clone https://github.com/huonwe/webscreen.git
 cd webscreen
-go build -o sdriver/xvfb/bin/capturer_xvfb ./capturer
-go build -ldflags "-checklinkname=0"
+make
 
-# for Debian
+# Use pre-built binary:
 apt install adb
-# if you want to stream xvfb display
-apt install xvfb ffmpeg xfce4
+# if you want to stream Linux display
+apt install xvfb ffmpeg xfce4 sway wf-recorder
 # then you can directly use pre-built binary
 ```
 
