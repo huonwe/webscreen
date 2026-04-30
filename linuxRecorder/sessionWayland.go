@@ -43,7 +43,7 @@ func (s *Session) launchWaylandSession(width int, height int, frameRate int) err
 	configContent := config.GetSwayHeadlessConf(width, height, fmt.Sprintf("%d", frameRate))
 	os.WriteFile(swayConfig, []byte(configContent), 0600)
 
-	swayCmd := exec.CommandContext(s.ctx, "sway", "-c", swayConfig)
+	swayCmd := exec.CommandContext(s.ctx, "sway", "--unsupported-gpu", "-c", swayConfig)
 	// swayEnv := envWithoutKey(os.Environ(), "WLR_LIBINPUT_NO_DEVICES")
 	swayCmd.Env = append(os.Environ(),
 		// 必须同时开启 headless 和 libinput
