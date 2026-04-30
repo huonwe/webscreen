@@ -281,7 +281,7 @@ func New(config map[string]string) (*ScrcpyDriver, error) {
 		"video_codec":         config["video_codec"],
 		"video_codec_options": video_codec_options, // bitrate-mode=2 to enable CBR
 		"audio":               config["audio"],
-		"audio_bit_rate":      config["audio_bit_rate"],
+		// "audio_bit_rate":      config["audio_bit_rate"],
 		// "audio_codec_options": "durationUs=10000", // 10ms
 		"control":   config["control"],
 		"cleanup":   "true",
