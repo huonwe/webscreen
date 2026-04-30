@@ -8,14 +8,14 @@ func ConfigDescription() []ConfigParamDescription {
 			Type:        "boolean",
 			Required:    true,
 			Default:     false,
-			Description: "synchronize video and audio streams based on their PTS. Useful when driver provides reliable PTS.",
+			Description: "Enable A/V sync. Useful when watching videos.",
 		},
 		{
 			Name:        "use_local_timestamp",
 			Type:        "boolean",
 			Required:    true,
 			Default:     true,
-			Description: "use local timestamp as PTS for AV sync instead of driver-provided PTS (useful when driver does not provide reliable PTS)",
+			Description: "Use local timestamp instead of device timestamp. This may reduce latency but the video may be less smooth.",
 		},
 	}
 }
