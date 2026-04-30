@@ -10,7 +10,7 @@ output HEADLESS-1 resolution %dx%d@%sHz position 0 0 scale %s
 # === 外观与美化配置 ===
 
 # 1. 设置背景壁纸 (fill 模式会按比例缩放并裁剪填满屏幕)
-output HEADLESS-1 bg /home/hiroi/Downloads/124956717_p0.png fill
+#output HEADLESS-1 bg xxx.png fill
 
 # 2. 全局字体设置
 font pango:sans-serif 11
