@@ -1,6 +1,7 @@
 package scrcpy
 
 type ScrcpyOptions struct {
+	SCID         string `json:"scid"`
 	Version      string `json:"version"`
 	MaxSize      string `json:"max_size"`
 	MaxFPS       string `json:"max_fps"`
@@ -9,6 +10,10 @@ type ScrcpyOptions struct {
 	VideoCodec        string `json:"video_codec"`
 	VideoCodecOptions string `json:"video_codec_options"`
 	NewDisplay        string `json:"new_display"`
+	Video             bool   `json:"video"`
+	Audio             bool   `json:"audio"`
+	Control           bool   `json:"control"`
+	TunnelForward     bool   `json:"tunnel_forward"`
 }
 
 // type ConnectOptions struct {

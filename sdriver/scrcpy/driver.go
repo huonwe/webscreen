@@ -54,6 +54,12 @@ type ScrcpyDriver struct {
 	LastIDRRequestTime time.Time
 }
 
+func setDefault(config map[string]string, key string, value string) {
+	if strings.TrimSpace(config[key]) == "" {
+		config[key] = value
+	}
+}
+
 // 一个ScrcpyDriver对应一个scrcpy实例，通过本地端口建立三个连接：视频、音频、控制
 func New(config map[string]string) (*ScrcpyDriver, error) {
 	var err error
@@ -87,15 +93,22 @@ func New(config map[string]string) (*ScrcpyDriver, error) {
 	}
 
 	localPort := SCRCPY_PROXY_PORT_DEFAULT
+	remoteADBDirect := da.adbClient.transportErr == nil &&
+		da.adbClient.transport != nil &&
+		da.adbClient.transport.Capabilities().SupportsDirectAbs
 
-	da.adbClient.ReverseRemove(fmt.Sprintf("localabstract:scrcpy_%s", da.scid))
-	err = da.adbClient.Reverse(fmt.Sprintf("localabstract:scrcpy_%s", da.scid), "tcp:"+localPort)
-	if err != nil {
-		log.Printf("[scrcpy] Set up reverse tunnel failed: %v", err)
-		// listener.Close()
-		return nil, err
+	if remoteADBDirect {
+		log.Printf("[scrcpy] using remote adb direct socket mode for localabstract:scrcpy_%s", da.scid)
+	} else {
+		da.adbClient.ReverseRemove(fmt.Sprintf("localabstract:scrcpy_%s", da.scid))
+		err = da.adbClient.Reverse(fmt.Sprintf("localabstract:scrcpy_%s", da.scid), "tcp:"+localPort)
+		if err != nil {
+			log.Printf("[scrcpy] Set up reverse tunnel failed: %v", err)
+			// listener.Close()
+			return nil, err
+		}
+		log.Printf("[scrcpy] set up reverse tunnel success: localabstract:scrcpy_%s -> tcp:%s", da.scid, localPort)
 	}
-	log.Printf("[scrcpy] set up reverse tunnel success: localabstract:scrcpy_%s -> tcp:%s", da.scid, localPort)
 
 	if !da.adbClient.SupportOpusAudio() {
 		config["audio"] = "false"
@@ -108,13 +121,23 @@ func New(config map[string]string) (*ScrcpyDriver, error) {
 		return nil, err
 	}
 	os.Remove(SCRCPY_SERVER_LOCAL_PATH)
-	listener, err := net.Listen("tcp", ":"+localPort)
-	if err != nil {
-		log.Printf("[scrcpy] Listen port failed: %v", err)
-		return nil, err
+	var listener net.Listener
+	if !remoteADBDirect {
+		listener, err = net.Listen("tcp", ":"+localPort)
+		if err != nil {
+			log.Printf("[scrcpy] Listen port failed: %v", err)
+			return nil, err
+		}
 	}
 	// da.adbClient.cancel()
 	log.Printf("[scrcpy] driver config: %v", config)
+	setDefault(config, "audio", "false")
+	setDefault(config, "control", "true")
+	setDefault(config, "video_codec", "h264")
+	setDefault(config, "video_bit_rate", "8M")
+	setDefault(config, "max_size", "1280")
+	setDefault(config, "max_fps", "60")
+
 	video_codec_options := ""
 	max_size, err := strconv.Atoi(config["max_size"])
 	if err != nil {
@@ -124,10 +147,7 @@ func New(config map[string]string) (*ScrcpyDriver, error) {
 	if err != nil {
 		max_fps = 120
 	}
-	video_bit_rate_str, ok := config["video_bit_rate"]
-	if !ok || video_bit_rate_str == "" {
-		config["video_bit_rate"] = "4M" // 默认 4 Mbps
-	}
+	video_bit_rate_str := config["video_bit_rate"]
 	video_bit_rate, err := utils.ParseBitrate(video_bit_rate_str)
 	if err != nil {
 		return nil, fmt.Errorf("invalid video bit rate: %v", err)
@@ -278,6 +298,9 @@ func New(config map[string]string) (*ScrcpyDriver, error) {
 
 		"video_encoder": config["video_encoder"],
 	}
+	if remoteADBDirect {
+		options["tunnel_forward"] = "true"
+	}
 	if config["video_encoder"] != "" {
 		options["video_encoder"] = config["video_encoder"]
 		log.Printf("Using user-specified video encoder: %s", config["video_encoder"])
@@ -294,6 +317,14 @@ func New(config map[string]string) (*ScrcpyDriver, error) {
 	da.options = options
 	// log.Println("Scrcpy server started successfully")
 	// conns := make([]net.Conn, 3)
+
+	if remoteADBDirect {
+		if err := da.connectRemoteADBSockets(options); err != nil {
+			return nil, err
+		}
+		return da, nil
+	}
+
 	log.Println("start tcp listening")
 
 	// 设置一个总的超时时间，如果在这个时间内没有建立所有连接，就认为失败
@@ -363,6 +394,87 @@ func New(config map[string]string) (*ScrcpyDriver, error) {
 func (da *ScrcpyDriver) ShowDeviceInfo() {
 	log.Printf("[scrcpy] Device Name: %s", da.deviceName)
 	log.Printf("[scrcpy] media Meta: %v", da.mediaMeta)
+}
+
+func (da *ScrcpyDriver) connectRemoteADBSockets(options map[string]string) error {
+	socketName := fmt.Sprintf("scrcpy_%s", da.scid)
+	connect := func(label string) (net.Conn, error) {
+		conn, err := da.adbClient.ConnectLocalAbstractWithRetry(socketName, 12*time.Second)
+		if err != nil {
+			return nil, fmt.Errorf("failed to connect remote adb %s socket: %v", label, err)
+		}
+		return conn, nil
+	}
+
+	var firstConn net.Conn
+	var videoConn net.Conn
+	var audioConn net.Conn
+	var controlConn net.Conn
+
+	if options["video"] == "true" {
+		conn, err := connect("video")
+		if err != nil {
+			return err
+		}
+		videoConn = conn
+		if firstConn == nil {
+			firstConn = conn
+		}
+	}
+	if options["audio"] == "true" {
+		conn, err := connect("audio")
+		if err != nil {
+			return err
+		}
+		audioConn = conn
+		if firstConn == nil {
+			firstConn = conn
+		}
+	}
+	if options["control"] == "true" {
+		conn, err := connect("control")
+		if err != nil {
+			return err
+		}
+		controlConn = conn
+		if firstConn == nil {
+			firstConn = conn
+		}
+	}
+
+	if firstConn == nil {
+		return fmt.Errorf("no scrcpy sockets enabled")
+	}
+
+	dummy := make([]byte, 1)
+	if _, err := io.ReadFull(firstConn, dummy); err != nil {
+		return fmt.Errorf("failed to read scrcpy forward dummy byte: %v", err)
+	}
+	if err := da.readDeviceMeta(firstConn); err != nil {
+		return fmt.Errorf("failed to read device metadata: %v", err)
+	}
+	log.Printf("[scrcpy] Connected Device: %s", da.deviceName)
+
+	if videoConn != nil {
+		if err := da.assignConn(videoConn); err != nil {
+			videoConn.Close()
+			return err
+		}
+	}
+	if audioConn != nil {
+		if err := da.assignConn(audioConn); err != nil {
+			audioConn.Close()
+			return err
+		}
+	}
+	if controlConn != nil {
+		da.controlConn = controlConn
+		da.capabilities.CanControl = true
+		da.capabilities.CanUHID = true
+		da.capabilities.CanClipboard = true
+		log.Println("Scrcpy Control Connection Established")
+	}
+	return nil
 }
 
 func (da *ScrcpyDriver) EncoderList() []string {
