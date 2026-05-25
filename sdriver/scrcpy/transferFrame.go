@@ -72,6 +72,7 @@ func (da *ScrcpyDriver) convertVideoFrame() {
 			case 5, 19, 20, 21: // H.264 IDR / H.265 IDR_W_RADL
 				da.sendWithCachedConfigFrame(da.LastPTS, payloadBuf)
 				da.LastIDR = createCopy(payloadBuf[4:]) // 去掉起始码
+				// log.Printf("Cached new IDR frame, size=%d bytes\n", len(da.LastIDR))
 				continue
 			case 6, 39, 40: // H.264 SEI / H.265 Prefix/Suffix SEI
 				payloadBuf = PruneSEI(payloadBuf, da.mediaMeta.VideoCodec)
