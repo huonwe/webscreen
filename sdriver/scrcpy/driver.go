@@ -79,6 +79,7 @@ func New(config map[string]string) (*ScrcpyDriver, error) {
 		log.Printf("[scrcpy] read scrcpy-server failed: %v", err)
 		return nil, err
 	}
+	SCRCPY_SERVER_LOCAL_PATH := os.TempDir() + "/scrcpy-server"
 	err = os.WriteFile(SCRCPY_SERVER_LOCAL_PATH, data, 0755)
 	if err != nil {
 		log.Printf("[scrcpy] write scrcpy-server to local file failed: %v", err)
