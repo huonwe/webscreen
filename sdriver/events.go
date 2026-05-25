@@ -150,6 +150,10 @@ func (e UHIDDestroyEvent) Type() EventType {
 	return EVENT_TYPE_UHID_DESTROY
 }
 
+type StartAppEvent struct {
+	PackageName string
+}
+
 type IDRReqEvent struct{}
 
 func (e IDRReqEvent) Type() EventType {
