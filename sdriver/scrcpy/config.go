@@ -3,7 +3,6 @@ package scrcpy
 import (
 	"context"
 	"embed"
-	"strings"
 	"webscreen/sdriver"
 )
 
@@ -21,14 +20,18 @@ var scrcpyServerData embed.FS
 // Receive an optional params
 func ConfigDescription(opt string) []sdriver.ConfigParamDescription {
 	deviceID := opt
-	var encoderListStr string
+	var encoderList []string
+	// var appList []string
 	if deviceID != "" {
 		adbClient := NewADBClient(deviceID, "", context.Background())
-		encoderList := adbClient.SupportedVideoEncoderList()
-		encoderListStr = strings.Join(encoderList, ",")
+		encoderList = adbClient.SupportedVideoEncoderList()
+		// appList = adbClient.AppList("3")
+		// encoderListStr = strings.Join(encoderList, ",")
+		// appListStr = strings.Join(appList, ",")
 		adbClient.Stop()
 	} else {
-		encoderListStr = ""
+		encoderList = []string{}
+		// appList = []string{}
 	}
 
 	return []sdriver.ConfigParamDescription{
@@ -58,16 +61,11 @@ func ConfigDescription(opt string) []sdriver.ConfigParamDescription {
 			Description: "video codec to use",
 		},
 		{
-			Name:     "video_encoder",
-			Type:     "string",
-			Required: false,
-			Badge:    true,
-			Options: func() []string {
-				if encoderListStr == "" {
-					return nil
-				}
-				return strings.Split(encoderListStr, ",")
-			}(),
+			Name:        "video_encoder",
+			Type:        "string",
+			Required:    false,
+			Badge:       true,
+			Options:     encoderList,
 			Description: "video encoder to use, e.g. 'omx' for hardware encoding on Raspberry Pi",
 		},
 		{
@@ -109,6 +107,13 @@ func ConfigDescription(opt string) []sdriver.ConfigParamDescription {
 			Required:    false,
 			Description: "new display resolution, e.g. 1920x1080",
 		},
+		// {
+		// 	Name:        "start_app",
+		// 	Type:        "string",
+		// 	Required:    false,
+		// 	Options:     appList,
+		// 	Description: "package name of the app to start",
+		// },
 		{
 			Name:        "no_video_codec_options",
 			Type:        "boolean",

@@ -184,3 +184,40 @@ func (c *ADBClient) SupportedVideoEncoderList() []string {
 	}
 	return encoders
 }
+
+func (c *ADBClient) AppList(t string) []string {
+	switch t {
+	case "3":
+		// 3rd party apps
+		t = " -3"
+	case "2":
+		// system apps
+		t = " -2"
+	default:
+		t = ""
+	}
+	cmdStr := "pm list packages" + t
+	var args []string
+	if c.deviceSerial != "" {
+		args = append(args, "-s", c.deviceSerial)
+	}
+	args = append(args, "shell", cmdStr)
+
+	cmd := exec.CommandContext(c.ctx, "adb", args...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Printf("Failed to get app list: %v", err)
+		return nil
+	}
+
+	outputStr := string(output)
+	var apps []string
+	lines := strings.Split(outputStr, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "package:") {
+			apps = append(apps, strings.TrimPrefix(line, "package:"))
+		}
+	}
+	return apps
+}
