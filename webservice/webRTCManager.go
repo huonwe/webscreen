@@ -432,44 +432,44 @@ func batchRegisterCodecH264(m *webrtc.MediaEngine) {
 		log.Println("RegisterCodec H264 failed:", err)
 	}
 	// Baseline Profile
-	// err = m.RegisterCodec(webrtc.RTPCodecParameters{
-	// 	RTPCodecCapability: webrtc.RTPCodecCapability{
-	// 		MimeType:    webrtc.MimeTypeH264,
-	// 		ClockRate:   90000,
-	// 		Channels:    0,
-	// 		SDPFmtpLine: "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f",
-	// 		RTCPFeedback: []webrtc.RTCPFeedback{
-	// 			{Type: "transport-cc", Parameter: ""},
-	// 			{Type: "ccm", Parameter: "fir"},
-	// 			{Type: "nack", Parameter: ""},
-	// 			{Type: "nack", Parameter: "pli"},
-	// 		},
-	// 	},
-	// 	PayloadType: PAYLOAD_TYPE_H264_PROFILE_BASELINE_3_1,
-	// }, webrtc.RTPCodecTypeVideo)
-	// if err != nil {
-	// 	log.Println("RegisterCodec H264 failed:", err)
-	// }
+	err = m.RegisterCodec(webrtc.RTPCodecParameters{
+		RTPCodecCapability: webrtc.RTPCodecCapability{
+			MimeType:    webrtc.MimeTypeH264,
+			ClockRate:   90000,
+			Channels:    0,
+			SDPFmtpLine: "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f",
+			RTCPFeedback: []webrtc.RTCPFeedback{
+				{Type: "transport-cc", Parameter: ""},
+				{Type: "ccm", Parameter: "fir"},
+				{Type: "nack", Parameter: ""},
+				{Type: "nack", Parameter: "pli"},
+			},
+		},
+		PayloadType: PAYLOAD_TYPE_H264_PROFILE_BASELINE_3_1,
+	}, webrtc.RTPCodecTypeVideo)
+	if err != nil {
+		log.Println("RegisterCodec H264 failed:", err)
+	}
 	// baseline profile for iphone safari
-	// err = m.RegisterCodec(webrtc.RTPCodecParameters{
-	// 	RTPCodecCapability: webrtc.RTPCodecCapability{
-	// 		MimeType:    webrtc.MimeTypeH264,
-	// 		ClockRate:   90000,
-	// 		Channels:    0,
-	// 		SDPFmtpLine: "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=420c1f",
-	// 		RTCPFeedback: []webrtc.RTCPFeedback{
-	// 			{Type: "transport-cc", Parameter: ""},
-	// 			{Type: "ccm", Parameter: "fir"},
-	// 			{Type: "nack", Parameter: ""},
-	// 			{Type: "nack", Parameter: "pli"},
-	// 		},
-	// 	},
-	// 	PayloadType: PAYLOAD_TYPE_H264_PROFILE_BASELINE_3_1_0C,
-	// }, webrtc.RTPCodecTypeVideo)
-	// if err != nil {
-	// 	log.Println("RegisterCodec H264 failed:", err)
-	// }
-	// log.Println("Registered H264 codec")
+	err = m.RegisterCodec(webrtc.RTPCodecParameters{
+		RTPCodecCapability: webrtc.RTPCodecCapability{
+			MimeType:    webrtc.MimeTypeH264,
+			ClockRate:   90000,
+			Channels:    0,
+			SDPFmtpLine: "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=420c1f",
+			RTCPFeedback: []webrtc.RTCPFeedback{
+				{Type: "transport-cc", Parameter: ""},
+				{Type: "ccm", Parameter: "fir"},
+				{Type: "nack", Parameter: ""},
+				{Type: "nack", Parameter: "pli"},
+			},
+		},
+		PayloadType: PAYLOAD_TYPE_H264_PROFILE_BASELINE_3_1_0C,
+	}, webrtc.RTPCodecTypeVideo)
+	if err != nil {
+		log.Println("RegisterCodec H264 failed:", err)
+	}
+	log.Println("Registered H264 codec")
 }
 
 func batchRegisterCodecH265(m *webrtc.MediaEngine) {

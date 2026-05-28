@@ -577,8 +577,9 @@ func readCodecID(conn net.Conn) string {
 	return string(codecBuf)
 }
 
-func createCopy(src []byte) []byte {
+func createCopy(src []byte, context string) []byte {
 	if len(src) == 0 {
+		log.Printf("createCopy called with src length: %d, context: %s", len(src), context)
 		log.Println("createCopy called with empty src")
 		return nil
 	}

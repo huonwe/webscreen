@@ -60,17 +60,17 @@ func (da *ScrcpyDriver) updateCache(payload []byte, codec string) {
 		switch nalType {
 		case 32: // VPS
 			// log.Println("cached VPS")
-			da.LastVPS = createCopy(nal)
+			da.LastVPS = createCopy(nal, "LastVPS")
 		case 7, 33: // SPS
 			// log.Println("cached SPS")
 			da.updateVideoMetaFromSPS(nal, codec)
-			da.LastSPS = createCopy(nal)
+			da.LastSPS = createCopy(nal, "LastSPS")
 		case 8, 34: // PPS
 			// log.Println("cached PPS")
-			da.LastPPS = createCopy(nal)
+			da.LastPPS = createCopy(nal, "LastPPS")
 		case 5, 19, 20, 21: // IDR
 			// log.Println("cached IDR")
-			da.LastIDR = createCopy(nal)
+			da.LastIDR = createCopy(nal, "LastIDR")
 		default:
 			// 其他类型暂不处理
 		}
@@ -80,10 +80,10 @@ func (da *ScrcpyDriver) updateCache(payload []byte, codec string) {
 func (da *ScrcpyDriver) sendCachedKeyFrame() {
 	da.cacheMutex.RLock()
 	log.Printf("Sending cached key frame with VPS/SPS/PPS: VPS=%d bytes, SPS=%d bytes, PPS=%d bytes, IDR=%d bytes\n", len(da.LastVPS), len(da.LastSPS), len(da.LastPPS), len(da.LastIDR))
-	cachedVPS := createCopy(da.LastVPS)
-	cachedSPS := createCopy(da.LastSPS)
-	cachedPPS := createCopy(da.LastPPS)
-	cachedIDR := createCopy(da.LastIDR)
+	cachedVPS := createCopy(da.LastVPS, "sendCachedKeyFrame VPS")
+	cachedSPS := createCopy(da.LastSPS, "sendCachedKeyFrame SPS")
+	cachedPPS := createCopy(da.LastPPS, "sendCachedKeyFrame PPS")
+	cachedIDR := createCopy(da.LastIDR, "sendCachedKeyFrame IDR")
 	lastPTS := da.LastPTS
 	da.cacheMutex.RUnlock()
 
@@ -104,13 +104,13 @@ func (da *ScrcpyDriver) sendCachedKeyFrame() {
 
 func (da *ScrcpyDriver) sendWithCachedConfigFrame(PTS uint64, IDRFrame []byte) {
 	da.cacheMutex.RLock()
-	cachedVPS := createCopy(da.LastVPS)
-	cachedSPS := createCopy(da.LastSPS)
-	cachedPPS := createCopy(da.LastPPS)
+	cachedSPS := createCopy(da.LastSPS, "sendWithCachedConfigFrame SPS")
+	cachedPPS := createCopy(da.LastPPS, "sendWithCachedConfigFrame PPS")
 	da.cacheMutex.RUnlock()
 
 	var merged_data []byte
-	if len(cachedVPS) > 0 {
+	if len(da.LastVPS) > 0 {
+		cachedVPS := createCopy(da.LastVPS, "sendWithCachedConfigFrame VPS")
 		merged_data = append(merged_data, startCode...)
 		merged_data = append(merged_data, cachedVPS...)
 	}
