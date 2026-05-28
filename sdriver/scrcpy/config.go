@@ -71,7 +71,8 @@ func ConfigDescription(opt string) []sdriver.ConfigParamDescription {
 		{
 			Name:        "video_bit_rate",
 			Type:        "string",
-			Required:    false,
+			Required:    true,
+			Default:     "8M",
 			Badge:       true,
 			Description: "video bit rate in bits per second, e.g. 20M for 20,000,000 bps",
 		},
