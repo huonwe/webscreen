@@ -36,13 +36,13 @@ func (wm *WebMaster) handleScreenWS(c *gin.Context) {
 		log.Println("Failed to upgrade to websocket:", err)
 		return
 	}
+	defer conn.Close()
 
 	config := sagent.AgentConfig{}
 	err = conn.ReadJSON(&config)
 	if err != nil {
 		log.Println("Failed to read connection options:", err)
 		conn.WriteJSON(map[string]any{"status": "error", "message": err.Error(), "stage": "webrtc_init"})
-		conn.Close()
 		return
 	}
 	log.Printf("Received connection driver config: %+v", config.DriverConfig)
@@ -58,13 +58,11 @@ func (wm *WebMaster) handleScreenWS(c *gin.Context) {
 	if err != nil {
 		log.Println("Failed to handle new connection:", err)
 		conn.WriteJSON(map[string]any{"status": "error", "message": err.Error(), "stage": "webrtc_init"})
-		conn.Close()
 		return
 	}
 	if finalSDP == "" {
 		log.Println("Failed to create WebRTC connection")
 		conn.WriteJSON(map[string]any{"status": "error", "message": "Failed to create WebRTC connection", "stage": "webrtc_init"})
-		conn.Close()
 		return
 	}
 	log.Println("deviceIdentifier:", deviceIdentifier, "receiptNo:", receiptNo)
@@ -74,7 +72,6 @@ func (wm *WebMaster) handleScreenWS(c *gin.Context) {
 	if !exists {
 		log.Printf("Failed to get subscriber for device %s", deviceIdentifier)
 		conn.WriteJSON(map[string]any{"status": "error", "message": "Failed to get subscriber", "stage": "webrtc_init"})
-		conn.Close()
 		return
 	}
 Loop:
@@ -83,7 +80,6 @@ Loop:
 		case webrtc.PeerConnectionStateFailed, webrtc.PeerConnectionStateClosed:
 			log.Printf("Peer connection for device %s is in state %s, closing WebSocket", deviceIdentifier, sub.PeerConnection.ConnectionState())
 			conn.WriteJSON(map[string]any{"status": "error", "message": "Peer connection failed or closed", "stage": "webrtc_connection"})
-			conn.Close()
 			return
 		case webrtc.PeerConnectionStateConnected:
 			break Loop
@@ -96,20 +92,61 @@ Loop:
 	if err != nil {
 		log.Printf("Failed to start WebRTC session for device %s: %v", deviceIdentifier, err)
 		conn.WriteJSON(map[string]any{"status": "error", "message": err.Error(), "stage": "webrtc_start"})
-		conn.Close()
 		return
 	}
 	agent, exists := wm.WebRTCManager.GetAgent(deviceIdentifier)
 	if !exists {
 		log.Printf("Failed to get agent for device %s", deviceIdentifier)
 		conn.WriteJSON(map[string]any{"status": "error", "message": "Failed to get agent", "stage": "webrtc_metainfo"})
-		conn.Close()
 		return
 	}
 	capabilities := agent.Capabilities()
 	log.Printf("Driver Capabilities: %+v", capabilities)
 	media_meta := agent.GetMediaMeta()
 	conn.WriteJSON(map[string]interface{}{"status": "ok", "capabilities": capabilities, "media_meta": media_meta, "stage": "webrtc_metainfo"})
+
+	// Keep consuming the signaling connection after SDP negotiation. Gorilla
+	// processes close, ping and pong control frames while reading, and the
+	// browser also uses this socket for explicit key-frame requests.
+	const (
+		requestKeyFrameType = byte(0x63)
+		pongWait            = 50 * time.Second
+		pingPeriod          = 20 * time.Second
+	)
+
+	conn.SetReadLimit(64 * 1024)
+	_ = conn.SetReadDeadline(time.Now().Add(pongWait))
+	conn.SetPongHandler(func(string) error {
+		return conn.SetReadDeadline(time.Now().Add(pongWait))
+	})
+
+	pingDone := make(chan struct{})
+	defer close(pingDone)
+	go func() {
+		ticker := time.NewTicker(pingPeriod)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				if err := conn.WriteControl(websocket.PingMessage, nil, time.Now().Add(5*time.Second)); err != nil {
+					return
+				}
+			case <-pingDone:
+				return
+			}
+		}
+	}()
+
+	for {
+		messageType, payload, err := conn.ReadMessage()
+		if err != nil {
+			log.Printf("WebSocket signaling channel closed for device %s: %v", deviceIdentifier, err)
+			return
+		}
+		if messageType == websocket.BinaryMessage && len(payload) > 0 && payload[0] == requestKeyFrameType {
+			agent.PLIRequest()
+		}
+	}
 }
 
 // func (wm *WebMaster) removeScreenSession(deviceIdentifier string) {
