@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+	"webscreen/utils"
 )
 
 type ADBClient struct {
@@ -115,7 +116,12 @@ func (c *ADBClient) SupportOpusAudio() bool {
 
 	// 3. 执行命令并捕获输出
 	// 使用 c.ctx 以便在父 Context 取消时能够中止命令
-	cmd := exec.CommandContext(c.ctx, "adb", args...)
+	adbPath, err := utils.GetADBPath()
+	if err != nil {
+		log.Printf("Failed to get ADB path: %v", err)
+		return false
+	}
+	cmd := exec.CommandContext(c.ctx, adbPath, args...)
 
 	output, err := cmd.CombinedOutput() // 同时获取 stdout 和 stderr
 	if err != nil {
@@ -151,12 +157,16 @@ func (c *ADBClient) SupportedVideoEncoderList() []string {
 		args = append(args, "-s", c.deviceSerial)
 	}
 	args = append(args, "shell", cmdStr)
-
-	cmd := exec.CommandContext(c.ctx, "adb", args...)
+	adbPath, err := utils.GetADBPath()
+	if err != nil {
+		log.Printf("Failed to get ADB path: %v", err)
+		return []string{}
+	}
+	cmd := exec.CommandContext(c.ctx, adbPath, args...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		log.Printf("Failed to get supported encoders: %v", err)
-		return nil
+		return []string{}
 	}
 
 	outputStr := string(output)
@@ -207,7 +217,7 @@ func (c *ADBClient) AppList(t string) []string {
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		log.Printf("Failed to get app list: %v", err)
-		return nil
+		return []string{}
 	}
 
 	outputStr := string(output)
