@@ -63,7 +63,7 @@ func (wm *WebMaster) handleUnlock(c *gin.Context) {
 
 	token, err := wm.GenerateToken()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Token 生成失败"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Token Generation Failed"})
 		return
 	}
 	c.SetCookie("auth_token", token, 3600*2, "/", "", false, true)

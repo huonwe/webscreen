@@ -17,12 +17,10 @@ var publicFS embed.FS
 func main() {
 	host := flag.String("host", "0.0.0.0", "host to bind the server to")
 	port := flag.String("port", "8081", "server port")
-	pin := flag.String("pin", "123456", "initial PIN for web access")
+	pin := flag.String("pin", "", "initial PIN for web access")
 	flag.Parse()
 	// pin should be 6 digits and only digits
-	if *pin == "DISABLED" {
-		*pin = ""
-	} else {
+	if *pin != "" {
 		if len(*pin) != 6 {
 			log.Fatal("PIN must be exactly 6 digits")
 		}
@@ -31,6 +29,10 @@ func main() {
 				log.Fatal("PIN must contain only digits")
 			}
 		}
+	}
+
+	if *pin == "" {
+		log.Println("Warning: Since v1.3.6, the default PIN is empty, which means no PIN is required to access the web interface.")
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
