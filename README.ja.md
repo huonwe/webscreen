@@ -56,7 +56,7 @@ apt install xvfb ffmpeg xfce4
 
 ## 使用方法
 
-最新の [リリース](https://github.com/huonwe/webscreen/releases) をダウンロードし、プログラムを実行してください。デフォルトのポートは `8079` ですが、 `-port 8080` で指定できます。6桁の PIN コードも必要です（デフォルトは '123456'）。コマンド例：`./webscreen -port 8080 -pin 555555`
+最新の [リリース](https://github.com/huonwe/webscreen/releases) をダウンロードし、プログラムを実行してください。デフォルトのポートは `8079` ですが、 `-port 8080` で指定できます。6桁の PIN コードも必要です（デフォルトは なし）。コマンド例：`./webscreen -port 8080 -pin 555555`
 その後、お好みのブラウザを開き、`<あなたの IP>:<あなたのポート>` にアクセスしてください。
 
 または、自分でビルドすることもできます。通常は `go build` を実行するだけでビルドできます。ただし、`Termux` 上でビルドする場合は、 `go build -ldflags "-checklinkname=0"` を実行する必要があります。
