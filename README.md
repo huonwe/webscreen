@@ -86,7 +86,7 @@ services:
     environment:
       - GIN_MODE=release
       - PORT=8081
-      - PIN=DISABLED
+      - PIN=123456
 ```
 
 For full version which including Linux desktop environment:
@@ -113,7 +113,7 @@ services:
     environment:
       - GIN_MODE=release
       - PORT=8081
-      - PIN=DISABLED
+      - PIN=123456
 ```
 
 `host` network mode is recommended because of UDP traffic and device connection.
