@@ -288,7 +288,12 @@ func (manager *WebRTCManager) ensureAgent(deviceIdentifier string, receiptNo uin
 		}
 
 		broadcaster.Agent = agent
-		agent.InitDriver(finalCodec)
+		err = agent.InitDriver(finalCodec)
+		if err != nil {
+			log.Printf("Failed to initialize agent for device %s: %v", deviceIdentifier, err)
+			manager.Unlock()
+			return err
+		}
 		go agent.Start()
 
 		// Event Loop (Agent -> Browser)

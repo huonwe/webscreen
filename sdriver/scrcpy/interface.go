@@ -10,7 +10,7 @@ func (sd *ScrcpyDriver) GetReceivers() (<-chan sdriver.AVBox, <-chan sdriver.AVB
 	return sd.VideoChan, sd.AudioChan, sd.ControlChan
 }
 
-func (sd *ScrcpyDriver) Start() {
+func (sd *ScrcpyDriver) Start() error {
 	log.Println("ScrcpyDriver: Start called")
 	if sd.videoConn != nil {
 		go sd.convertVideoFrame()
@@ -21,6 +21,7 @@ func (sd *ScrcpyDriver) Start() {
 	if sd.controlConn != nil {
 		go sd.transferControlMsg()
 	}
+	return nil
 }
 
 func (sd *ScrcpyDriver) UpdateDriverConfig(config map[string]string) error {

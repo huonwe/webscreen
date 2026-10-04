@@ -111,10 +111,11 @@ func New(cfg map[string]string) (*LinuxDriver, error) {
 	return d, nil
 }
 
-func (d *LinuxDriver) Start() {
+func (d *LinuxDriver) Start() error {
 	// 启动视频监听
 	go d.handleConnection()
 	log.Println("LinuxDriver started, listening for connections...")
+	return nil
 }
 
 func (d *LinuxDriver) UpdateDriverConfig(config map[string]string) error {

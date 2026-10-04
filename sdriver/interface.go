@@ -4,7 +4,7 @@ type SDriver interface {
 	GetReceivers() (<-chan AVBox, <-chan AVBox, chan Event)
 	SendEvent(event Event) error
 
-	Start()
+	Start() error
 	Pause()
 
 	RequestIDR(firstFrame bool)

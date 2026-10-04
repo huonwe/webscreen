@@ -108,7 +108,11 @@ func (sa *Agent) Capabilities() sdriver.DriverCaps {
 }
 
 func (sa *Agent) Start() {
-	sa.driver.Start()
+	err := sa.driver.Start()
+	if err != nil {
+		log.Printf("Failed to start driver: %v", err)
+		return
+	}
 	sa.startTime = time.Now() // 服务器基准时间线
 	go sa.ServeVideoStream()
 	go sa.ServeAudioStream()
