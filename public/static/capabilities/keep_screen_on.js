@@ -25,9 +25,6 @@
             }
         }
 
-        // 在需要常亮时调用
-        requestWakeLock();
-
         // 当页面不再需要常亮或页面切换到后台时释放
         document.addEventListener('visibilitychange', () => {
             if (wakeLock !== null && document.visibilityState === 'visible') {
