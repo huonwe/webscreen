@@ -3,7 +3,7 @@
 [简体中文](README.zh.md)
 [日本語](README.ja.md)
 
-![For Android (rooted) and FnOS, please see this fork](https://github.com/youyoudezhuzhu/webscreen)
+[For Android (rooted) and FnOS, please see this fork](https://github.com/youyoudezhuzhu/webscreen)
 
 ## ℹ️ About
 
