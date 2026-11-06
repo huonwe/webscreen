@@ -16,6 +16,12 @@ import (
 // It checks the current directory, then the system PATH.
 // If not found, it downloads ADB from Google's repository.
 func GetADBPath() (string, error) {
+	if IsLocalRootMode() {
+		// On the device itself there is no adb and none is needed: the scrcpy
+		// server is started locally and reached through the abstract socket.
+		return "", fmt.Errorf("webscreen is running on the device itself (root mode), adb is neither available nor required")
+	}
+
 	exeName := "adb"
 	if runtime.GOOS == "windows" {
 		exeName = "adb.exe"

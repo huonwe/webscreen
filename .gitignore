@@ -1,8 +1,10 @@
-webscreen
+/webscreen
 recorder
 adb
 
 test
+
+devices.json
 
 # docker related
 .env

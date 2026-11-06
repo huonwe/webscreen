@@ -369,6 +369,8 @@ async function updateUIBasedOnCapabilities(caps) {
         }
 
         await loadScript('/static/capabilities/keep_screen_on.js');
+        // 受控端黑屏（隐私保护）——与设备能力无关，始终加载
+        await loadScript('/static/capabilities/backlight.js');
 
     }
 

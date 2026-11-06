@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"webscreen/sdriver/scrcpy"
 	"webscreen/utils"
 )
 
@@ -19,13 +20,34 @@ func ExecADB(args ...string) error {
 	return cmd.Run()
 }
 
-// GetDevices returns a list of connected devices
+// GetDevices returns a list of connected devices.
+// In on-device (root) mode the device itself is the only available device.
 func GetDevices() ([]AndroidDevice, error) {
+	if utils.IsLocalRootMode() {
+		return []AndroidDevice{
+			{
+				DeviceID: scrcpy.LocalDeviceName(),
+				IP:       "127.0.0.1",
+				Port:     0,
+				Status:   "connected",
+			},
+		}, nil
+	}
+
 	adbPath, err := utils.GetADBPath()
 	if err != nil {
 		return nil, err
 	}
-	cmd := exec.Command(adbPath, "devices")
+
+	// 设备管理器在跑时以它的结果为准：那里区分了 USB / Wi-Fi、带授权状态、
+	// 用户自定义名称与热插拔跟踪。首次轮询尚未完成时退回下面的直接解析。
+	if m := GetManager(); m != nil {
+		if legacy := m.legacyDevices(); len(legacy) > 0 {
+			return legacy, nil
+		}
+	}
+
+	cmd := exec.Command(adbPath, "devices", "-l")
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, err
@@ -39,21 +61,36 @@ func GetDevices() ([]AndroidDevice, error) {
 		}
 		parts := strings.Fields(line)
 		if len(parts) >= 2 {
+			transport := TransportWiFi
+			for _, f := range parts[2:] {
+				if strings.HasPrefix(f, "usb:") {
+					transport = TransportUSB
+				}
+			}
+			if strings.Contains(parts[0], ":") {
+				transport = TransportWiFi
+			}
 			switch parts[1] {
 			case "device":
 				adbDevices = append(adbDevices, AndroidDevice{
-					DeviceID: parts[0],
-					Status:   "connected",
+					DeviceID:   parts[0],
+					Status:     "connected",
+					Connection: transport,
+					State:      StatusOnline,
 				})
 			case "offline":
 				adbDevices = append(adbDevices, AndroidDevice{
-					DeviceID: parts[0],
-					Status:   "offline",
+					DeviceID:   parts[0],
+					Status:     "offline",
+					Connection: transport,
+					State:      StatusOffline,
 				})
 			case "unauthorized":
 				adbDevices = append(adbDevices, AndroidDevice{
-					DeviceID: parts[0],
-					Status:   "unauthorized",
+					DeviceID:   parts[0],
+					Status:     "unauthorized",
+					Connection: transport,
+					State:      StatusUnauthorized,
 				})
 			}
 		}

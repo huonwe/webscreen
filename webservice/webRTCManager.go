@@ -3,6 +3,8 @@ package webservice
 import (
 	"fmt"
 	"log"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 	sagent "webscreen/streamAgent"
@@ -45,12 +47,41 @@ type Subscriber struct {
 }
 
 type DeviceBroadcaster struct {
-	PayloadType uint8
-	VideoTrack  *webrtc.TrackLocalStaticRTP
-	AudioTrack  *webrtc.TrackLocalStaticRTP
-	Agent       *sagent.Agent
+	PayloadType    uint8
+	VideoTrack     *webrtc.TrackLocalStaticRTP
+	AudioTrack     *webrtc.TrackLocalStaticRTP
+	Agent          *sagent.Agent
+	AgentConfigKey string
+	// CodecKey holds the MIME types the cached tracks were created for. The
+	// tracks carry their codec, so they must be recreated when the codec
+	// changes instead of being reused for an incompatible session.
+	CodecKey    string
 	Subscribers map[uint32]*Subscriber
 	Lock        sync.RWMutex
+}
+
+// agentConfigKey builds a comparable key of everything that shapes the driver,
+// so that a changed setting rebuilds the pipeline (SDP is per connection and
+// therefore ignored).
+func agentConfigKey(config sagent.AgentConfig) string {
+	keys := make([]string, 0, len(config.DriverConfig))
+	for k := range config.DriverConfig {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	var sb strings.Builder
+	sb.WriteString(config.DeviceType)
+	sb.WriteString("|")
+	sb.WriteString(config.DeviceID)
+	sb.WriteString("|")
+	for _, k := range keys {
+		sb.WriteString(k)
+		sb.WriteString("=")
+		sb.WriteString(config.DriverConfig[k])
+		sb.WriteString(";")
+	}
+	sb.WriteString(fmt.Sprintf("|av=%v|ts=%v", config.AVSync, config.UseLocalTimestamp))
+	return sb.String()
 }
 
 type WebRTCManager struct {
@@ -132,8 +163,20 @@ func (manager *WebRTCManager) NewSubscriber(deviceIdentifier string, clientSDP s
 	}
 
 	// 1. Get or Create Broadcaster (and its tracks)
+	//
+	// The cached tracks carry the codec they were created for, so a codec change
+	// (e.g. H.264 -> H.265) has to recreate them: reusing an H.265 track in an
+	// H.264 session makes AddTrack/SetLocalDescription fail with "codec is not
+	// supported by remote", and the stream then stays broken until the server is
+	// restarted.
+	codecKey := videoMimeType + "+" + audioMimeType
 	manager.Lock()
 	broadcaster, exists := manager.broadcasters[deviceIdentifier]
+	if exists && broadcaster.CodecKey != codecKey {
+		log.Printf("[webrtc] codec changed for %s: %s -> %s, recreating tracks",
+			deviceIdentifier, broadcaster.CodecKey, codecKey)
+		exists = false
+	}
 	if !exists {
 		videoTrack, audioTrack := createAVTrack(videoMimeType, audioMimeType, AgentConfig.AVSync)
 		if videoTrack == nil && audioTrack == nil {
@@ -142,12 +185,15 @@ func (manager *WebRTCManager) NewSubscriber(deviceIdentifier string, clientSDP s
 			return "", 0, fmt.Errorf("failed to create media tracks")
 		}
 
-		broadcaster = &DeviceBroadcaster{
-			VideoTrack:  videoTrack,
-			AudioTrack:  audioTrack,
-			Subscribers: make(map[uint32]*Subscriber),
+		if broadcaster == nil {
+			broadcaster = &DeviceBroadcaster{
+				Subscribers: make(map[uint32]*Subscriber),
+			}
+			manager.broadcasters[deviceIdentifier] = broadcaster
 		}
-		manager.broadcasters[deviceIdentifier] = broadcaster
+		broadcaster.VideoTrack = videoTrack
+		broadcaster.AudioTrack = audioTrack
+		broadcaster.CodecKey = codecKey
 	}
 	manager.Unlock()
 
@@ -257,6 +303,17 @@ func (manager *WebRTCManager) ensureAgent(deviceIdentifier string, receiptNo uin
 		return fmt.Errorf("broadcaster should exist at this point")
 	}
 
+	configKey := agentConfigKey(agentConfig)
+	if broadcaster.Agent != nil && (!broadcaster.Agent.Alive() || broadcaster.AgentConfigKey != configKey) {
+		// The previous scrcpy session is gone (or the settings changed): throw it
+		// away. Without this, every new session keeps talking to a dead pipeline
+		// (broken pipe) and nothing streams again until the server is restarted.
+		log.Printf("[webrtc] rebuilding agent for device %s (alive=%v configChanged=%v)",
+			deviceIdentifier, broadcaster.Agent.Alive(), broadcaster.AgentConfigKey != configKey)
+		broadcaster.Agent.Close()
+		broadcaster.Agent = nil
+	}
+
 	if broadcaster.Agent == nil {
 		agent := sagent.New(agentConfig, broadcaster.VideoTrack, broadcaster.AudioTrack)
 
@@ -288,6 +345,7 @@ func (manager *WebRTCManager) ensureAgent(deviceIdentifier string, receiptNo uin
 		}
 
 		broadcaster.Agent = agent
+		broadcaster.AgentConfigKey = configKey
 		err = agent.InitDriver(finalCodec)
 		if err != nil {
 			log.Printf("Failed to initialize agent for device %s: %v", deviceIdentifier, err)

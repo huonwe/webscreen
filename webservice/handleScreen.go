@@ -4,13 +4,24 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"strings"
 	"time"
 	sagent "webscreen/streamAgent"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/pion/webrtc/v4"
+
+	"webscreen/webservice/android"
 )
+
+// sdpOffersH265 reports whether the browser's SDP offer contains H.265/HEVC.
+// Only browsers that advertise it in the offer can decode it (Safari does,
+// Chrome/Chromium do not).
+func sdpOffersH265(sdp string) bool {
+	lower := strings.ToLower(sdp)
+	return strings.Contains(lower, "h265") || strings.Contains(lower, "hevc")
+}
 
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
@@ -46,6 +57,21 @@ func (wm *WebMaster) handleScreenWS(c *gin.Context) {
 		return
 	}
 	log.Printf("Received connection driver config: %+v", config.DriverConfig)
+
+	// H.265 (HEVC) over WebRTC only works with a browser that offers it in its
+	// SDP. Asking for it from a browser that does not (Chrome/Chromium) leaves
+	// the media section impossible to populate ("RTPSender created with no
+	// codecs") and the whole connection fails, so use H.264 for this session
+	// instead of failing and telling the user nothing.
+	codecFallback := false
+	if strings.EqualFold(config.DriverConfig["video_codec"], "h265") && !sdpOffersH265(config.SDP) {
+		log.Printf("[webscreen] browser SDP does not offer H.265 (HEVC), using H.264 for this session")
+		if config.DriverConfig == nil {
+			config.DriverConfig = map[string]string{}
+		}
+		config.DriverConfig["video_codec"] = "h264"
+		codecFallback = true
+	}
 
 	// Create a unique ID for one abstract device
 	deviceIdentifier := config.DeviceType + "_" + config.DeviceID + "_" + config.DeviceIP + "_" + config.DevicePort
@@ -100,6 +126,12 @@ Loop:
 		conn.WriteJSON(map[string]any{"status": "error", "message": "Failed to get agent", "stage": "webrtc_metainfo"})
 		return
 	}
+	if codecFallback {
+		agent.Notify("This browser does not support H.265 (HEVC); streaming with H.264 instead. (H.265 needs a browser that offers HEVC, e.g. Safari.)")
+	}
+	// 记录投屏状态，供设备管理界面显示
+	android.GetManager().MarkStreaming(config.DeviceID, true)
+	defer android.GetManager().MarkStreaming(config.DeviceID, false)
 	capabilities := agent.Capabilities()
 	log.Printf("Driver Capabilities: %+v", capabilities)
 	media_meta := agent.GetMediaMeta()

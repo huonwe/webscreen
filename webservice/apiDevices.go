@@ -17,6 +17,7 @@ func (wm *WebMaster) handleListDevices(c *gin.Context) {
 	defer wm.devicesDiscoveredMu.RUnlock()
 
 	var devicesInfo []DeviceInfo
+
 	devices, err := android.GetDevices()
 	if err != nil {
 		log.Printf("[device-list] Android device discovery failed: %v", err)

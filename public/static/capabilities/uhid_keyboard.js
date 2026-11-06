@@ -108,11 +108,13 @@
             window.uhidKeyboardEnabled = true;
             console.log("UHID Keyboard enabled");
             if (btn) btn.classList.add('active');
+            showVirtualKeyboard();
         } else {
             destroyUHIDKeyboard();
             window.uhidKeyboardEnabled = false;
             console.log("UHID Keyboard disabled");
             if (btn) btn.classList.remove('active');
+            hideVirtualKeyboard();
         }
     }
 
@@ -268,4 +270,236 @@
         view.setUint16(1, UHID_KEYBOARD_ID);
         return buffer;
     }
+    // ==================== 屏幕虚拟键盘面板 ====================
+    // 与 uhid_gamepad.js 保持一致的做法：自注入样式 + createElement 构建面板，
+    // 点侧边栏的 UHID Keyboard 按钮显示/隐藏。按键直接注入 UHID 键盘的同一套状态
+    // (pressedKeys / currentModifiers) 并复用 sendKeyboardReport()，不新增任何协议。
+
+    const VK_KEY = {
+        ESC: 0x29, BACKSPACE: 0x2A, TAB: 0x2B, ENTER: 0x28, SPACE: 0x2C,
+        UP: 0x52, DOWN: 0x51, LEFT: 0x50, RIGHT: 0x4F, DEL: 0x4C,
+        '1': 0x1E, '2': 0x1F, '3': 0x20, '4': 0x21, '5': 0x22, '6': 0x23,
+        '7': 0x24, '8': 0x25, '9': 0x26, '0': 0x27,
+        '-': 0x2D, '=': 0x2E, '[': 0x2F, ']': 0x30, '\\': 0x31,
+        ';': 0x33, "'": 0x34, '`': 0x35, ',': 0x36, '.': 0x37, '/': 0x38,
+        a: 0x04, b: 0x05, c: 0x06, d: 0x07, e: 0x08, f: 0x09, g: 0x0A, h: 0x0B,
+        i: 0x0C, j: 0x0D, k: 0x0E, l: 0x0F, m: 0x10, n: 0x11, o: 0x12, p: 0x13,
+        q: 0x14, r: 0x15, s: 0x16, t: 0x17, u: 0x18, v: 0x19, w: 0x1A, x: 0x1B,
+        y: 0x1C, z: 0x1D
+    };
+    // HID modifier 位（与 MODIFIER_MAP 的取值一致）
+    const VK_MOD = { CTRL: 0x01, SHIFT: 0x02, ALT: 0x04, GUI: 0x08 };
+
+    // 布局：{ t: 显示文字, k: 键值, m: modifier 位, w: 宽度倍数 }
+    const VK_ROWS = [
+        [{ t: 'Esc', k: 'ESC', w: 1.2 }, { t: '1', k: '1' }, { t: '2', k: '2' }, { t: '3', k: '3' },
+         { t: '4', k: '4' }, { t: '5', k: '5' }, { t: '6', k: '6' }, { t: '7', k: '7' },
+         { t: '8', k: '8' }, { t: '9', k: '9' }, { t: '0', k: '0' }, { t: '-', k: '-' },
+         { t: '⌫', k: 'BACKSPACE', w: 1.4 }],
+        [{ t: 'Tab', k: 'TAB', w: 1.2 }, { t: 'q', k: 'q' }, { t: 'w', k: 'w' }, { t: 'e', k: 'e' },
+         { t: 'r', k: 'r' }, { t: 't', k: 't' }, { t: 'y', k: 'y' }, { t: 'u', k: 'u' },
+         { t: 'i', k: 'i' }, { t: 'o', k: 'o' }, { t: 'p', k: 'p' }, { t: '[', k: '[' },
+         { t: ']', k: ']' }, { t: '\\', k: '\\' }],
+        [{ t: 'Ctrl', k: 'CTRL', m: VK_MOD.CTRL, w: 1.3, tone: 'mod' }, { t: 'a', k: 'a' }, { t: 's', k: 's' },
+         { t: 'd', k: 'd' }, { t: 'f', k: 'f' }, { t: 'g', k: 'g' }, { t: 'h', k: 'h' },
+         { t: 'j', k: 'j' }, { t: 'k', k: 'k' }, { t: 'l', k: 'l' }, { t: ';', k: ';' },
+         { t: "'", k: "'" }, { t: 'Enter', k: 'ENTER', w: 1.6, tone: 'accent' }],
+        [{ t: 'Shift', k: 'SHIFT', m: VK_MOD.SHIFT, w: 1.6, tone: 'mod' }, { t: 'z', k: 'z' }, { t: 'x', k: 'x' },
+         { t: 'c', k: 'c' }, { t: 'v', k: 'v' }, { t: 'b', k: 'b' }, { t: 'n', k: 'n' },
+         { t: 'm', k: 'm' }, { t: ',', k: ',' }, { t: '.', k: '.' }, { t: '/', k: '/' },
+         { t: '↑', k: 'UP', w: 1.1 }, { t: '⇧', k: 'SHIFT', m: VK_MOD.SHIFT, w: 1.1, tone: 'mod' }],
+        [{ t: 'Alt', k: 'ALT', m: VK_MOD.ALT, w: 1.2, tone: 'mod' }, { t: '‹', k: 'LEFT', w: 1.1 },
+         { t: '↓', k: 'DOWN', w: 1.1 }, { t: '›', k: 'RIGHT', w: 1.1 },
+         { t: '空格', k: 'SPACE', w: 5.4 }, { t: 'Del', k: 'DEL', w: 1.2 }]
+    ];
+
+    let vkRoot = null;
+    let vkStylesInjected = false;
+    // 触屏按住时生效的键（pointerup 时释放）；修饰键走 click 切换，不在此列
+    const vkHeldKeys = new Set();
+
+    function vkInjectStyles() {
+        if (vkStylesInjected) return;
+        vkStylesInjected = true;
+        const style = document.createElement('style');
+        style.id = 'vk-styles';
+        style.textContent = `
+            #virtual-keyboard {
+                position: fixed; left: 50%; bottom: 12px; transform: translateX(-50%);
+                z-index: 9998; display: none; flex-direction: column; gap: 4px;
+                padding: 8px 10px 10px; border-radius: 12px;
+                background: rgba(20, 22, 28, 0.82); backdrop-filter: blur(8px);
+                box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45); touch-action: none;
+                user-select: none; -webkit-user-select: none; max-width: min(96vw, 1100px);
+            }
+            #virtual-keyboard.vk-visible { display: flex; }
+            #vk-drag {
+                height: 18px; margin: -2px 0 2px; cursor: move; border-radius: 6px;
+                background: linear-gradient(180deg, rgba(255,255,255,0.16), rgba(255,255,255,0.04));
+                display: flex; align-items: center; justify-content: center;
+                font-size: 11px; letter-spacing: 2px; color: rgba(255,255,255,0.55);
+            }
+            #vk-rows { display: flex; flex-direction: column; gap: 4px; }
+            .vk-row { display: flex; gap: 4px; justify-content: center; }
+            .vk-key {
+                flex: 1 1 0; min-width: 26px; height: 40px; line-height: 1;
+                display: flex; align-items: center; justify-content: center;
+                border: none; border-radius: 7px; padding: 0 4px;
+                background: rgba(255,255,255,0.10); color: #e8eaed;
+                font-size: 14px; font-family: inherit; cursor: pointer;
+                transition: background 0.08s, transform 0.08s;
+            }
+            .vk-key.vk-wide { flex-grow: 1; }
+            .vk-key.vk-mod { background: rgba(255,255,255,0.18); font-size: 12px; }
+            .vk-key.vk-accent { background: rgba(120, 170, 255, 0.32); }
+            .vk-key.vk-down { background: rgba(140, 190, 255, 0.55); transform: translateY(1px); }
+            .vk-key.vk-locked { background: rgba(140, 190, 255, 0.62); color: #10131a; }
+            @media (max-width: 720px) {
+                .vk-key { height: 34px; font-size: 12px; min-width: 20px; }
+                #virtual-keyboard { padding: 6px 6px 8px; bottom: 6px; }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
+    function vkKeyElement(item) {
+        const el = document.createElement('button');
+        el.type = 'button';
+        el.className = 'vk-key' + (item.m ? ' vk-mod' : '') + (item.tone === 'accent' ? ' vk-accent' : '');
+        el.textContent = item.t;
+        el.dataset.vkKey = item.k;
+        if (item.m) el.dataset.vkMod = String(item.m);
+        if (item.w && item.w > 1) el.style.flexGrow = String(item.w);
+        el.addEventListener('pointerdown', (ev) => {
+            ev.preventDefault();
+            if (item.m) {
+                // 修饰键：点一下切换锁定
+                vkToggleModifier(item.m, el);
+                return;
+            }
+            el.setPointerCapture && el.setPointerCapture(ev.pointerId);
+            el.classList.add('vk-down');
+            vkHeldKeys.add(item.k);
+            vkSendKey(item.k, true);
+        });
+        const release = (ev) => {
+            if (item.m) return;
+            if (ev) ev.preventDefault();
+            if (!vkHeldKeys.has(item.k)) return;
+            vkHeldKeys.delete(item.k);
+            el.classList.remove('vk-down');
+            vkSendKey(item.k, false);
+        };
+        el.addEventListener('pointerup', release);
+        el.addEventListener('pointercancel', release);
+        el.addEventListener('pointerleave', release);
+        el.addEventListener('contextmenu', (ev) => ev.preventDefault());
+        return el;
+    }
+
+    function vkToggleModifier(bit, el) {
+        currentModifiers ^= bit;
+        if (currentModifiers & bit) el.classList.add('vk-locked');
+        else el.classList.remove('vk-locked');
+        sendKeyboardReport();
+    }
+
+    // 把某个键按下/抬起注入 UHID 键盘状态并上报
+    function vkSendKey(keyName, isDown) {
+        if (!window.uhidKeyboardEnabled) return;
+        if (keyName === 'CTRL' || keyName === 'SHIFT' || keyName === 'ALT') return;
+        const hid = VK_KEY[keyName];
+        if (hid === undefined) return;
+        if (isDown) pressedKeys.add(hid);
+        else pressedKeys.delete(hid);
+        sendKeyboardReport();
+    }
+
+    // 释放所有仍按下的虚拟键（隐藏面板时调用，避免卡键）
+    function vkReleaseAll() {
+        let changed = false;
+        vkHeldKeys.forEach((k) => {
+            const hid = VK_KEY[k];
+            if (hid !== undefined && pressedKeys.has(hid)) {
+                pressedKeys.delete(hid);
+                changed = true;
+            }
+        });
+        vkHeldKeys.clear();
+        if (currentModifiers) {
+            currentModifiers = 0;
+            changed = true;
+        }
+        document.querySelectorAll('#virtual-keyboard .vk-key.vk-locked, #virtual-keyboard .vk-key.vk-down')
+            .forEach((el) => el.classList.remove('vk-locked', 'vk-down'));
+        if (changed) sendKeyboardReport();
+    }
+
+    function buildVirtualKeyboard() {
+        vkInjectStyles();
+        vkRoot = document.createElement('div');
+        vkRoot.id = 'virtual-keyboard';
+
+        // 拖动把手：整块面板可拖到不挡画面的位置
+        const handle = document.createElement('div');
+        handle.id = 'vk-drag';
+        handle.textContent = '⋯⋯';
+        vkRoot.appendChild(handle);
+
+        const rows = document.createElement('div');
+        rows.id = 'vk-rows';
+        VK_ROWS.forEach((row) => {
+            const rowEl = document.createElement('div');
+            rowEl.className = 'vk-row';
+            row.forEach((item) => rowEl.appendChild(vkKeyElement(item)));
+            rows.appendChild(rowEl);
+        });
+        vkRoot.appendChild(rows);
+
+        (document.body || document.documentElement).appendChild(vkRoot);
+        vkSetupDrag(handle);
+    }
+
+    function vkSetupDrag(handle) {
+        let dragging = false, startX = 0, startY = 0, startLeft = 0, startTop = 0;
+        handle.addEventListener('pointerdown', (ev) => {
+            dragging = true;
+            const rect = vkRoot.getBoundingClientRect();
+            startX = ev.clientX; startY = ev.clientY;
+            startLeft = rect.left; startTop = rect.top;
+            // 拖动后改用 left/top 定位，脱离底部居中
+            vkRoot.style.transform = 'none';
+            vkRoot.style.left = rect.left + 'px';
+            vkRoot.style.top = rect.top + 'px';
+            vkRoot.style.bottom = 'auto';
+            handle.setPointerCapture && handle.setPointerCapture(ev.pointerId);
+        });
+        handle.addEventListener('pointermove', (ev) => {
+            if (!dragging) return;
+            const w = vkRoot.offsetWidth, h = vkRoot.offsetHeight;
+            let left = startLeft + (ev.clientX - startX);
+            let top = startTop + (ev.clientY - startY);
+            left = Math.max(4, Math.min(window.innerWidth - w - 4, left));
+            top = Math.max(4, Math.min(window.innerHeight - h - 4, top));
+            vkRoot.style.left = left + 'px';
+            vkRoot.style.top = top + 'px';
+        });
+        const stop = () => { dragging = false; };
+        handle.addEventListener('pointerup', stop);
+        handle.addEventListener('pointercancel', stop);
+    }
+
+    function showVirtualKeyboard() {
+        if (!vkRoot) buildVirtualKeyboard();
+        if (vkRoot) vkRoot.classList.add('vk-visible');
+    }
+
+    function hideVirtualKeyboard() {
+        if (vkRoot) vkRoot.classList.remove('vk-visible');
+        vkReleaseAll();
+    }
+
+    // 供其它模块调用（例如切到别的输入方式时强制收起）
+    window.showVirtualKeyboard = showVirtualKeyboard;
+    window.hideVirtualKeyboard = hideVirtualKeyboard;
 })();

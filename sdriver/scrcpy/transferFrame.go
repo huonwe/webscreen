@@ -19,6 +19,7 @@ func (da *ScrcpyDriver) convertVideoFrame() {
 		// read frame header
 		if _, err := io.ReadFull(da.videoConn, headerBuf[:]); err != nil {
 			log.Println("Failed to read scrcpy frame header:", err)
+			da.markDead("视频流中断")
 			return
 		}
 
@@ -46,6 +47,7 @@ func (da *ScrcpyDriver) convertVideoFrame() {
 
 		if _, err := io.ReadFull(da.videoConn, payloadBuf); err != nil {
 			log.Println("Failed to read video frame payload:", err)
+			da.markDead("视频流中断")
 			return
 		}
 
@@ -110,7 +112,8 @@ func (da *ScrcpyDriver) convertAudioFrame() {
 	for {
 		// read frame header
 		if _, err := io.ReadFull(da.audioConn, headerBuf[:]); err != nil {
-			log.Println("Failed to read scrcpy frame header:", err)
+			log.Println("Failed to read scrcpy audio frame header:", err)
+			da.markDead("音频流中断")
 			return
 		}
 		if err := readScrcpyFrameHeader(headerBuf[:], &header); err != nil {
@@ -142,6 +145,7 @@ func (da *ScrcpyDriver) transferControlMsg() {
 		_, err := io.ReadFull(da.controlConn, header)
 		if err != nil {
 			log.Println("Control connection read error:", err)
+			da.markDead("控制通道中断")
 			return
 		}
 

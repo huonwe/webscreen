@@ -49,6 +49,9 @@ func New(config AgentConfig, videoTrack *webrtc.TrackLocalStaticRTP, audioTrack 
 	return sa
 }
 
+// driverInitAttempts 是 scrcpy 会话启动的最大尝试次数（首次 + 重试）。
+const driverInitAttempts = 3
+
 func (sa *Agent) InitDriver(finalCodec webrtc.RTPCodecParameters) error {
 	sa.config.DriverConfig["webrtc_codec_level"] = fmt.Sprintf("%d||%s||%s", finalCodec.PayloadType, finalCodec.MimeType, finalCodec.SDPFmtpLine)
 	switch sa.config.DeviceType {
@@ -61,14 +64,32 @@ func (sa *Agent) InitDriver(finalCodec webrtc.RTPCodecParameters) error {
 	// 	}
 	// 	sa.driver = dummyDriver
 	case DEVICE_TYPE_ANDROID:
-		// 初始化 Android Driver
+		// 初始化 Android Driver（失败有限重试）
+		//
+		// scrcpy 会话启动是一次性握手：设备端 scrcpy-server 起得慢、上一会话的
+		// socket/端口尚未释放等，都会让读取设备元数据时直接拿到 EOF，用户看到的
+		// 就是“服务器错误: failed to ensure agent: EOF”。这类失败多为瞬时且可恢复，
+		// 而 scrcpy.New 的失败路径会释放 listener/隧道/连接，因此重试是安全的。
 		sa.config.DriverConfig["deviceID"] = sa.config.DeviceID
-		androidDriver, err := scrcpy.New(sa.config.DriverConfig)
-		if err != nil {
-			log.Printf("Failed to initialize Android driver: %v", err)
-			return err
+		var lastErr error
+		for attempt := 1; attempt <= driverInitAttempts; attempt++ {
+			androidDriver, err := scrcpy.New(sa.config.DriverConfig)
+			if err == nil {
+				sa.driver = androidDriver
+				if attempt > 1 {
+					log.Printf("Android driver initialized on attempt %d/%d", attempt, driverInitAttempts)
+				}
+				break
+			}
+			lastErr = err
+			log.Printf("Failed to initialize Android driver (attempt %d/%d): %v", attempt, driverInitAttempts, err)
+			if attempt < driverInitAttempts {
+				time.Sleep(time.Duration(attempt) * 500 * time.Millisecond)
+			}
 		}
-		sa.driver = androidDriver
+		if sa.driver == nil {
+			return lastErr
+		}
 	case DEVICE_TYPE_LINUX, "xvfb":
 		// 初始化 Linux Driver
 		driver, err := linuxDriver.New(sa.config.DriverConfig)
@@ -102,9 +123,38 @@ func (sa *Agent) Close() {
 	}
 }
 
+// Alive reports whether the underlying driver session is still usable. It is
+// used to drop a dead pipeline (crashed scrcpy server, broken socket) instead
+// of reusing it for the next session.
+func (sa *Agent) Alive() bool {
+	if sa.driver == nil {
+		return false
+	}
+	if a, ok := sa.driver.(interface{ Alive() bool }); ok {
+		return a.Alive()
+	}
+	return true
+}
+
 func (sa *Agent) GetCodecInfo() (string, string) {
 	m := sa.driver.MediaMeta()
 	return m.VideoCodec, m.AudioCodec
+}
+
+// Notify asks the browser(s) to display a message (toast). It is used for
+// situations that are handled automatically, e.g. falling back to another
+// video codec, so the user is not left wondering why the stream differs from
+// what was configured.
+func (sa *Agent) Notify(msg string) {
+	if sa.controlCh == nil {
+		log.Printf("[agent] no control channel, cannot notify: %s", msg)
+		return
+	}
+	select {
+	case sa.controlCh <- sdriver.TextMsgEvent{Msg: msg}:
+	default:
+		log.Printf("[agent] dropped notification: %s", msg)
+	}
 }
 
 func (sa *Agent) GetMediaMeta() sdriver.MediaMeta {

@@ -15,9 +15,10 @@ type WSSubscriber struct {
 }
 
 type WSDeviceBroadcaster struct {
-	Agent       *sagent.Agent
-	Subscribers map[uint32]*WSSubscriber
-	Lock        sync.RWMutex
+	Agent          *sagent.Agent
+	AgentConfigKey string
+	Subscribers    map[uint32]*WSSubscriber
+	Lock           sync.RWMutex
 }
 
 type WebSocketManager struct {
@@ -79,6 +80,14 @@ func (manager *WebSocketManager) ensureAgent(deviceIdentifier string, receiptNo 
 		return fmt.Errorf("broadcaster should exist at this point")
 	}
 
+	configKey := agentConfigKey(agentConfig)
+	if broadcaster.Agent != nil && (!broadcaster.Agent.Alive() || broadcaster.AgentConfigKey != configKey) {
+		log.Printf("[websocket] rebuilding agent for device %s (alive=%v configChanged=%v)",
+			deviceIdentifier, broadcaster.Agent.Alive(), broadcaster.AgentConfigKey != configKey)
+		broadcaster.Agent.Close()
+		broadcaster.Agent = nil
+	}
+
 	if broadcaster.Agent == nil {
 		// Pass nil to videoTrack and audioTrack as they are not used for pure websocket streaming.
 		// Note: ensure streamAgent does not crash if these are nil, or handles it appropriately.
@@ -109,6 +118,7 @@ func (manager *WebSocketManager) ensureAgent(deviceIdentifier string, receiptNo 
 		}
 
 		broadcaster.Agent = agent
+		broadcaster.AgentConfigKey = configKey
 		go agent.Start()
 
 		go func() {

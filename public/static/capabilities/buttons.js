@@ -16,6 +16,9 @@
     }
 
     function volumeUpButton() {
+        // 优先走内核 UHID 虚拟音量键（Consumer Control）——对系统而言等同真实
+        // 外接键盘，系统级界面也接受；不可用时回退到 scrcpy 按键注入。
+        if (window.uhidVolumePress && window.uhidVolumePress('up')) return;
         const KEYCODE_VOLUME_UP = 24;
         let p = createKeyPacket(TYPE_KEY_ACTION_DOWN, KEYCODE_VOLUME_UP);
         sendButtonEvent(p);
@@ -24,6 +27,7 @@
     }
 
     function volumeDownButton() {
+        if (window.uhidVolumePress && window.uhidVolumePress('down')) return;
         const KEYCODE_VOLUME_DOWN = 25;
         let p = createKeyPacket(TYPE_KEY_ACTION_DOWN, KEYCODE_VOLUME_DOWN);
         sendButtonEvent(p);
