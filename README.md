@@ -43,7 +43,7 @@ Webscreen can run on **Android Termux**, **Linux**, **Windows**, and **MacOS** (
 - *Note: Audio is not supported yet.*
 
 
-> **Note**: For Android apk (rooted) and FnOS, you might see [youyoudezhuzhu/webscreen](https://github.com/youyoudezhuzhu/webscreen).
+> **Note**: For Android apk (rooted) and FnOS fpk, you might see [youyoudezhuzhu/webscreen](https://github.com/youyoudezhuzhu/webscreen).
 
 ---
 
@@ -68,6 +68,7 @@ apt install xvfb ffmpeg xfce4 sway wf-recorder
 * A vendor kernel with HDMI RX support (`rk3588-hdmirx` enabled).
 * An FFmpeg build with RKMPP support (e.g., `/usr/lib/jellyfin-ffmpeg/ffmpeg`).
 * Correct read/write permissions for MPP service: `sudo chmod 666 /dev/mpp_service`.
+* System package 'v4l-utils'.
 
 ---
 
