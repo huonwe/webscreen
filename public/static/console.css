@@ -36,6 +36,24 @@ html {
     transform: scale(0.98);
 }
 
+.device-card-header {
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.device-card-identity {
+    flex: 1 1 12rem;
+    min-width: 0;
+}
+
+.device-card-actions {
+    flex: 0 1 auto;
+    min-width: 0;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    max-width: 100%;
+}
+
 /* Inputs */
 .md-input {
     background-color: var(--md-sys-color-surface-container-high);

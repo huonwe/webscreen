@@ -278,8 +278,8 @@ function renderDeviceList() {
 
         card.innerHTML = `
                     <div>
-                        <div class="flex justify-between items-start mb-4">
-                            <div class="flex items-center gap-3">
+                        <div class="device-card-header flex justify-between items-start mb-4">
+                            <div class="device-card-identity flex items-center gap-3">
                                 <div class="w-10 h-10 rounded-full bg-[var(--md-sys-color-secondary-container)] flex items-center justify-center text-[var(--md-sys-color-on-secondary-container)]">
                                     <span class="material-symbols-rounded">smartphone</span>
                                 </div>
@@ -292,7 +292,7 @@ function renderDeviceList() {
                                     ${subLine ? `<div class="text-[11px] text-gray-500 mt-1 truncate max-w-[150px] md:max-w-[190px]" title="${serial}">${subLine}</div>` : ''}
                                 </div>
                             </div>
-                            <div class="flex items-center">
+                            <div class="device-card-actions flex items-center">
                                 ${adbActionsHtml}
                                 ${ignoreBtnHtml}
                                 <button onclick="showConfigModal('${serial}')" class="p-2 rounded-full hover:bg-white/10 text-gray-400 transition-colors" title="Settings">

@@ -381,7 +381,7 @@ func (m *Manager) updateDevice(d ADBDevice, fallback *ADBDevice) {
 
 	prev := m.lastResult[d.Serial]
 	if prev == "" {
-		m.addEventLocked("info", fmt.Sprintf("检测到 Android 设备：%s（%s，serial %s）", d.Serial, d.Transport, d.Serial))
+		m.addEventLocked("info", fmt.Sprintf("Detected Android Device：%s（%s，serial %s）", d.Serial, d.Transport, d.Serial))
 	}
 
 	dev.Transport = d.Transport
@@ -405,18 +405,18 @@ func (m *Manager) updateDevice(d ADBDevice, fallback *ADBDevice) {
 	case "device":
 		dev.Status = StatusOnline
 		if prev != "" && prev != StatusOnline {
-			m.addEventLocked("info", fmt.Sprintf("ADB 设备已连接：%s（%s）", dev.DisplayName(), d.Transport))
+			m.addEventLocked("info", fmt.Sprintf("ADB Device Connected: %s(%s)", dev.DisplayName(), d.Transport))
 		}
 		m.resolveAutoNameLocked(d.Serial, d)
 	case "unauthorized":
 		dev.Status = StatusUnauthorized
 		if prev != StatusUnauthorized {
-			m.addEventLocked("warn", fmt.Sprintf("设备等待 USB 调试授权：%s，请在手机屏幕上点击“允许 USB 调试”", d.Serial))
+			m.addEventLocked("warn", fmt.Sprintf("Wait for USB Debugging Authorization:%s,please click \"Allow USB Debugging\" on your phone screen", d.Serial))
 		}
 	case "offline":
 		dev.Status = StatusOffline
 		if prev != StatusOffline {
-			m.addEventLocked("warn", fmt.Sprintf("设备离线：%s（可能是 USB 拔出或连接不稳定）", d.Serial))
+			m.addEventLocked("warn", fmt.Sprintf("Device Offline: %s", d.Serial))
 		}
 	default:
 		dev.Status = StatusError
@@ -502,11 +502,11 @@ func (m *Manager) SetName(serial, name string) error {
 	defer m.mu.Unlock()
 	dev, ok := m.devices[serial]
 	if !ok {
-		return fmt.Errorf("未知设备：%s", serial)
+		return fmt.Errorf("Unknown device: %s", serial)
 	}
 	dev.Name = strings.TrimSpace(name)
 	m.save()
-	m.addEventLocked("info", fmt.Sprintf("设备名称已更新：%s -> %s", serial, dev.DisplayName()))
+	m.addEventLocked("info", fmt.Sprintf("Device Name Updated:%s -> %s", serial, dev.DisplayName()))
 	return nil
 }
 
@@ -514,19 +514,19 @@ func (m *Manager) SetName(serial, name string) error {
 func (m *Manager) AddWiFi(address string) error {
 	address = strings.TrimSpace(address)
 	if address == "" {
-		return fmt.Errorf("地址不能为空")
+		return fmt.Errorf("ADB Wi-Fi address cannot be empty")
 	}
 	if !strings.Contains(address, ":") {
 		address += ":5555"
 	}
 	m.mu.Lock()
-	m.addEventLocked("info", fmt.Sprintf("正在连接无线设备 %s ...", address))
+	m.addEventLocked("info", fmt.Sprintf("Connecting to Wi-Fi device %s ...", address))
 	m.mu.Unlock()
 
 	out, err := runADB("connect", address)
 	if err != nil {
 		m.mu.Lock()
-		m.addEventLocked("error", fmt.Sprintf("无线连接失败：%s（%s）", address, strings.TrimSpace(out)))
+		m.addEventLocked("error", fmt.Sprintf("Wireless connection failed: %s（%s）", address, strings.TrimSpace(out)))
 		m.mu.Unlock()
 		return fmt.Errorf("adb connect %s 失败：%s", address, strings.TrimSpace(out))
 	}
@@ -540,7 +540,7 @@ func (m *Manager) AddWiFi(address string) error {
 	}
 	dev.WiFiAddr = address
 	m.save()
-	m.addEventLocked("info", fmt.Sprintf("无线设备已连接：%s", address))
+	m.addEventLocked("info", fmt.Sprintf("Wireless device connected: %s", address))
 	// 注意：poll() 自己会加锁，必须在释放锁之后调用，否则死锁（请求挂住并且轮询线程也停摆）
 	go m.poll()
 	return nil
@@ -552,7 +552,7 @@ func (m *Manager) RemoveDevice(serial string) error {
 	dev, ok := m.devices[serial]
 	if !ok {
 		m.mu.Unlock()
-		return fmt.Errorf("未知设备：%s", serial)
+		return fmt.Errorf("Unknown device: %s", serial)
 	}
 	addr := dev.WiFiAddr
 	name := dev.DisplayName()
@@ -562,7 +562,7 @@ func (m *Manager) RemoveDevice(serial string) error {
 		delete(m.wifiTargets, addr)
 	}
 	m.save()
-	m.addEventLocked("info", fmt.Sprintf("设备已移除：%s", name))
+	m.addEventLocked("info", fmt.Sprintf("Device removed: %s", name))
 	m.mu.Unlock()
 	if addr != "" {
 		_, _ = runADB("disconnect", addr)
@@ -576,12 +576,12 @@ func (m *Manager) Disconnect(serial string) error {
 	dev, ok := m.devices[serial]
 	if !ok {
 		m.mu.Unlock()
-		return fmt.Errorf("未知设备：%s", serial)
+		return fmt.Errorf("Unknown device: %s", serial)
 	}
 	transport, addr := dev.Transport, dev.WiFiAddr
 	m.mu.Unlock()
 	if transport == TransportUSB {
-		return fmt.Errorf("USB 连接的设备无法从软件断开，请直接拔掉数据线")
+		return fmt.Errorf("USB connected devices cannot be disconnected from software, please unplug the data cable directly")
 	}
 	if addr == "" {
 		addr = serial
@@ -589,7 +589,7 @@ func (m *Manager) Disconnect(serial string) error {
 	_, err := runADB("disconnect", addr)
 	m.mu.Lock()
 	if err == nil {
-		m.addEventLocked("info", fmt.Sprintf("已断开无线设备：%s", addr))
+		m.addEventLocked("info", fmt.Sprintf("Wireless device disconnected: %s", addr))
 	}
 	m.mu.Unlock()
 	return err
@@ -601,7 +601,7 @@ func (m *Manager) Reconnect(serial string) error {
 	dev, ok := m.devices[serial]
 	if !ok {
 		m.mu.Unlock()
-		return fmt.Errorf("未知设备：%s", serial)
+		return fmt.Errorf("Unknown device: %s", serial)
 	}
 	addr := dev.WiFiAddr
 	if addr == "" {
@@ -613,7 +613,7 @@ func (m *Manager) Reconnect(serial string) error {
 	if transport == TransportUSB || addr == "" {
 		// USB：重新枚举一次，真正恢复靠插回数据线
 		m.mu.Lock()
-		m.addEventLocked("info", fmt.Sprintf("等待 USB 设备重新插入：%s", serial))
+		m.addEventLocked("info", fmt.Sprintf("Waiting for USB device to be reinserted: %s", serial))
 		m.mu.Unlock()
 		m.mu.Lock()
 		m.hwCache = map[string]string{}
@@ -623,9 +623,9 @@ func (m *Manager) Reconnect(serial string) error {
 	_, err := runADB("connect", addr)
 	m.mu.Lock()
 	if err == nil {
-		m.addEventLocked("info", fmt.Sprintf("正在重连无线设备：%s", addr))
+		m.addEventLocked("info", fmt.Sprintf("Reconnecting to wireless device: %s", addr))
 	} else {
-		m.addEventLocked("error", fmt.Sprintf("无线重连失败：%s", addr))
+		m.addEventLocked("error", fmt.Sprintf("Wireless reconnection failed: %s", addr))
 	}
 	m.mu.Unlock()
 	return err
@@ -642,24 +642,24 @@ func (m *Manager) RescanUSB() error {
 	// 温和路径：让已连接/离线设备重新握手
 	if _, err := runADB("reconnect", "device"); err != nil {
 		m.mu.Lock()
-		m.addEventLocked("warn", fmt.Sprintf("adb reconnect device 未生效：%v，改为重启 adb server", err))
+		m.addEventLocked("warn", fmt.Sprintf("adb reconnect device 未生效：%v,改为重启 adb server", err))
 		m.mu.Unlock()
 	}
 	// 彻底路径：重启 adb server（USB 设备会被重新枚举并重新握手）
 	if _, err := runADB("kill-server"); err != nil {
 		m.mu.Lock()
-		m.addEventLocked("warn", fmt.Sprintf("adb kill-server 失败：%v", err))
+		m.addEventLocked("warn", fmt.Sprintf("adb kill-server failed:%v", err))
 		m.mu.Unlock()
 	}
 	if _, err := runADB("start-server"); err != nil {
 		m.mu.Lock()
-		m.addEventLocked("error", fmt.Sprintf("adb start-server 失败：%v", err))
+		m.addEventLocked("error", fmt.Sprintf("adb start-server failed:%v", err))
 		m.mu.Unlock()
 		return err
 	}
 	m.poll()
 	m.mu.Lock()
-	m.addEventLocked("info", "USB 设备已重新枚举，未授权设备请在手机屏幕上点击“允许 USB 调试”")
+	m.addEventLocked("info", "USB devices have been re-enumerated, unauthorized devices please click \"Allow USB Debugging\" on the phone screen")
 	m.mu.Unlock()
 	return nil
 }
