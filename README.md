@@ -37,11 +37,26 @@ Linux supports (Xvfb/Xorg/Sway):
 - H.264/H.265
 - GPU (Xorg/Sway)
 
+rk3588 supports:
+- HDMI-in video streaming
+- H.264/H.265 with RKMPP hardware encoding
+- Audio is not supported yet
+
+Note: only OrangePi 5 Plus is tested
+
 ## Prerequisites
 
 For device side, please refer to [scrcpy](https://github.com/Genymobile/scrcpy/blob/master/README.md#prerequisites)
 
 For server side, you'd better have `adb` and `xvfb, ffmpeg, xfce4, sway, wf-recorder (if need this feature, optional)` in your PATH first.
+
+For rk3588 HDMI-in, all of the following are required:
+
+- A vendor kernel with HDMI RX support (rk3588-hdmirx enabled)
+- An FFmpeg build with RKMPP support, such as `/usr/lib/jellyfin-ffmpeg/ffmpeg`
+- Correct read/write permissions for `/dev/mpp_service`
+
+The HDMI-in adapter currently supports video only. Audio capture is not supported.
 
 ```bash
 # Build by yourself:

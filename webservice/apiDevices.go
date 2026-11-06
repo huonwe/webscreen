@@ -1,7 +1,9 @@
 package webservice
 
 import (
+	"log"
 	linuxDriver "webscreen/sdriver/linux"
+	rockchipDriver "webscreen/sdriver/rockchip-hdmirx"
 	"webscreen/sdriver/scrcpy"
 	sagent "webscreen/streamAgent"
 	"webscreen/webservice/android"
@@ -16,28 +18,48 @@ func (wm *WebMaster) handleListDevices(c *gin.Context) {
 
 	var devicesInfo []DeviceInfo
 	devices, err := android.GetDevices()
-	for _, d := range devices {
-		devicesInfo = append(devicesInfo, DeviceInfo{
-			Type:     d.GetType(),
-			DeviceID: d.GetDeviceID(),
-			IP:       d.GetIP(),
-			Port:     d.GetPort(),
-			Status:   d.GetStatus(),
-		})
-	}
-	linuxDevices, err := linux.GetDevices()
-	for _, d := range linuxDevices {
-		devicesInfo = append(devicesInfo, DeviceInfo{
-			Type:     d.GetType(),
-			DeviceID: d.GetDeviceID(),
-			IP:       d.GetIP(),
-			Port:     d.GetPort(),
-			Status:   d.GetStatus(),
-		})
-	}
 	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
-		return
+		log.Printf("[device-list] Android device discovery failed: %v", err)
+	} else {
+		for _, d := range devices {
+			devicesInfo = append(devicesInfo, DeviceInfo{
+				Type:     d.GetType(),
+				DeviceID: d.GetDeviceID(),
+				IP:       d.GetIP(),
+				Port:     d.GetPort(),
+				Status:   d.GetStatus(),
+			})
+		}
+	}
+
+	linuxDevices, err := linux.GetDevices()
+	if err != nil {
+		log.Printf("[device-list] Linux device discovery failed: %v", err)
+	} else {
+		for _, d := range linuxDevices {
+			devicesInfo = append(devicesInfo, DeviceInfo{
+				Type:     d.GetType(),
+				DeviceID: d.GetDeviceID(),
+				IP:       d.GetIP(),
+				Port:     d.GetPort(),
+				Status:   d.GetStatus(),
+			})
+		}
+	}
+
+	rockchipDevices, err := rockchipDriver.GetDevices()
+	if err != nil {
+		log.Printf("[device-list] Rockchip HDMI RX discovery failed: %v", err)
+	} else {
+		for _, d := range rockchipDevices {
+			devicesInfo = append(devicesInfo, DeviceInfo{
+				Type:     d.GetType(),
+				DeviceID: d.GetDeviceID(),
+				IP:       d.GetIP(),
+				Port:     d.GetPort(),
+				Status:   d.GetStatus(),
+			})
+		}
 	}
 
 	c.JSON(200, gin.H{"devices": devicesInfo})
@@ -120,6 +142,9 @@ func (wm *WebMaster) handleDeviceConfigDescription(c *gin.Context) {
 		c.JSON(200, desc)
 	case sagent.DEVICE_TYPE_LINUX:
 		desc := linuxDriver.ConfigDescription()
+		c.JSON(200, desc)
+	case sagent.DEVICE_TYPE_ROCKCHIP_HDMIRX:
+		desc := rockchipDriver.ConfigDescription()
 		c.JSON(200, desc)
 	case "universal":
 		desc := sagent.ConfigDescription()

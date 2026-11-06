@@ -6,6 +6,7 @@ import (
 	"time"
 	"webscreen/sdriver"
 	linuxDriver "webscreen/sdriver/linux"
+	rockchipDriver "webscreen/sdriver/rockchip-hdmirx"
 	"webscreen/sdriver/scrcpy"
 	"webscreen/sdriver/sunshine"
 
@@ -73,6 +74,13 @@ func (sa *Agent) InitDriver(finalCodec webrtc.RTPCodecParameters) error {
 		driver, err := linuxDriver.New(sa.config.DriverConfig)
 		if err != nil {
 			log.Printf("Failed to initialize Linux driver: %v", err)
+			return err
+		}
+		sa.driver = driver
+	case DEVICE_TYPE_ROCKCHIP_HDMIRX:
+		driver, err := rockchipDriver.New(sa.config.DriverConfig)
+		if err != nil {
+			log.Printf("Failed to initialize Rockchip HDMI RX driver: %v", err)
 			return err
 		}
 		sa.driver = driver
