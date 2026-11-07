@@ -13,7 +13,9 @@ A self-hosted screen streaming web application for Android and Linux devices, ba
 
 <br/>
 
-**[▶️ Watch Demo Video](https://youtu.be/6WtbwaIk2aY)**
+**[▶️ Watch Demo Video (Android)](https://youtu.be/6WtbwaIk2aY)**
+**[▶️ Watch Demo Video (Orangepi5Plus HDMI-in)](https://youtu.be/XMpHG3clOMU)**
+
 
 </div>
 
