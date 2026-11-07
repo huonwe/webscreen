@@ -71,7 +71,7 @@ func ConfigDescription(opt string) []sdriver.ConfigParamDescription {
 			Required:    false,
 			Badge:       true,
 			Options:     encoderList,
-			Description: "video encoder to use, e.g. 'omx' for hardware encoding on Raspberry Pi",
+			Description: "video encoder to use",
 		},
 		{
 			Name:        "video_bit_rate",
@@ -79,7 +79,7 @@ func ConfigDescription(opt string) []sdriver.ConfigParamDescription {
 			Required:    true,
 			Default:     "8M",
 			Badge:       true,
-			Description: "video bit rate in bits per second, e.g. 20M for 20,000,000 bps",
+			Description: "video bit rate",
 		},
 		{
 			Name:        "video_codec_options",
