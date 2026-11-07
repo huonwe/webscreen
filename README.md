@@ -57,18 +57,26 @@ For Android devices, please refer to the [scrcpy prerequisites](https://github.c
 
 For Linux, you need `adb`, `xvfb`, `ffmpeg`, `xfce4`, `sway`, and optionally `wf-recorder` in your `PATH`:
 ```bash
-apt install adb
+sudo apt install adb
 
 # If you want to stream the Linux display:
-apt install xvfb ffmpeg xfce4 sway wf-recorder
+sudo apt install xvfb ffmpeg xfce4 sway wf-recorder seatd
 ```
+
+> **Note**: If you want to use Xorg, you might need to run this program as root.
+
+> **Note**: If you want to use Sway, `wf-recorder` is also needed.
+
+> **Note**: All of them need `uinput` and `seatd` and correct permissions if you want to have keyboard and mouse passthrough.
+
+
 
 #### rk3588 HDMI-in Requirements
 
 * A vendor kernel with HDMI RX support (`rk3588-hdmirx` enabled).
 * An FFmpeg build with RKMPP support (e.g., `/usr/lib/jellyfin-ffmpeg/ffmpeg`).
 * Correct read/write permissions for MPP service: `sudo chmod 666 /dev/mpp_service`.
-* System package 'v4l-utils'.
+* System package `v4l-utils`.
 
 ---
 
