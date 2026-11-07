@@ -90,7 +90,7 @@ func New(config map[string]string) (*Driver, error) {
 		"-fflags", "nobuffer", "-flags", "low_delay",
 		"-f", "v4l2", "-input_format", "nv12",
 		"-i", device, "-an",
-		"-fps_mode", "passthrough", "-c:v", encoder, "-b:v", bitRate, "-maxrate", bitRate, "-bufsize", bitRate, "-rc_mode", "3",
+		"-fps_mode", "passthrough", "-c:v", encoder, "-b:v", bitRate, "-maxrate", bitRate, "-bufsize", bitRate, "-rc_mode", "1",
 		"-pix_fmt", "nv12",
 		"-g", strconv.Itoa(fps * 2), "-bf", "0", "-f", outputFormat, "pipe:1",
 	}
