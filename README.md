@@ -57,7 +57,7 @@ You need a modern web browser that supports WebRTC (H.264 High Profile, or H.265
 ### Server / Device Side
 For Android devices, please refer to the [scrcpy prerequisites](https://github.com/Genymobile/scrcpy/blob/master/README.md#prerequisites). 
 
-For Linux, you need `adb`, `xvfb`, `ffmpeg`, `xfce4`, `sway`, and optionally `wf-recorder` in your `PATH`:
+For Windows, Linux, MacOS, and Termux, you need `adb` (or `android-tools` in some distributions, which provides `adb`) in your PATH at least to stream Android devices. If the program didn't found `adb`, it will try to download it. Optionally, if you want to use Linux headless virtual desktop, make sure `ffmpeg` `xvfb`, `xfce4`, `sway`, and `wf-recorder` are in your `PATH`:
 ```bash
 sudo apt install adb
 
@@ -67,7 +67,7 @@ sudo apt install xvfb ffmpeg xfce4 sway wf-recorder seatd
 
 > **Note**: If you want to use Xorg, you might need to run this program as root.
 
-> **Note**: If you want to use Sway, `wf-recorder` is also needed.
+> **Note**: If you want to use Sway, `wf-recorder` is used.
 
 > **Note**: All of them need `uinput` and `seatd` and correct permissions if you want to have keyboard and mouse passthrough.
 
