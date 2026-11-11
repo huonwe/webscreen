@@ -179,7 +179,7 @@ You might need to pair your Android device via [Wireless Debugging](https://deve
 
 ## 🤝 Acknowledgements
 
-* Huge thanks to [@Enterpr1se0](https://github.com/Enterpr1se0) and [@rogniceguy-max](https://github.com/Enterpr1se0) for fixing code bugs!
+* Huge thanks to [@Enterpr1se0](https://github.com/Enterpr1se0) and [@rogniceguy-max](https://github.com/rogniceguy-max) for fixing code bugs!
 
 * Huge thanks to [youyoudezhuzhu/webscreen](https://github.com/youyoudezhuzhu/webscreen) for fixing bugs and adding new features!
 
