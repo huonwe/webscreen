@@ -80,6 +80,12 @@ async function start() {
             audioEl.autoplay = true;
             document.body.appendChild(audioEl);
         }
+        pc.getReceivers().forEach(receiver => {
+            if (receiver.track.kind === 'video' || receiver.track.kind === 'audio') {
+                receiver.jitterBufferTarget = jitterBufferTargetMs;
+                console.log('✓ (playoutDelayHint=', receiver.playoutDelayHint, ', jitterBufferTarget=', receiver.jitterBufferTarget, ')');
+            }
+        });
     };
 
     // 2. Add a recvonly Transceiver
@@ -209,14 +215,6 @@ async function start() {
                                     ws.send(p);
                                 }
                             }, 2000);
-                            pc.getReceivers().forEach(receiver => {
-                                if (receiver.track.kind === 'video') {
-                                    if (receiver.jitterBufferTarget !== undefined) {
-                                        receiver.jitterBufferTarget = jitterBufferTargetMs;
-                                    }
-                                    console.log('✓ (playoutDelayHint=', receiver.playoutDelayHint, ', jitterBufferTarget=', receiver.jitterBufferTarget, ')');
-                                }
-                            });
                             break;
                         default:
                             break;
