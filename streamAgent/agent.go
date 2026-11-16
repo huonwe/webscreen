@@ -52,17 +52,8 @@ func New(config AgentConfig, videoTrack *webrtc.TrackLocalStaticRTP, audioTrack 
 // driverInitAttempts 是 scrcpy 会话启动的最大尝试次数（首次 + 重试）。
 const driverInitAttempts = 3
 
-func (sa *Agent) InitDriver(finalCodec webrtc.RTPCodecParameters) error {
-	sa.config.DriverConfig["webrtc_codec_level"] = fmt.Sprintf("%d||%s||%s", finalCodec.PayloadType, finalCodec.MimeType, finalCodec.SDPFmtpLine)
+func (sa *Agent) InitDriver() error {
 	switch sa.config.DeviceType {
-	// case DEVICE_TYPE_DUMMY:
-	// 	// 初始化 Dummy Driver
-	// 	dummyDriver, err := dummy.New(sa.config.DriverConfig)
-	// 	if err != nil {
-	// 		log.Printf("Failed to initialize dummy driver: %v", err)
-	// 		return err
-	// 	}
-	// 	sa.driver = dummyDriver
 	case DEVICE_TYPE_ANDROID:
 		// 初始化 Android Driver（失败有限重试）
 		//

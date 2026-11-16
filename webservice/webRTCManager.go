@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"log"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 	sagent "webscreen/streamAgent"
+	"webscreen/utils"
 
 	"github.com/pion/interceptor"
 	"github.com/pion/rtcp"
@@ -315,7 +317,6 @@ func (manager *WebRTCManager) ensureAgent(deviceIdentifier string, receiptNo uin
 	}
 
 	if broadcaster.Agent == nil {
-		agent := sagent.New(agentConfig, broadcaster.VideoTrack, broadcaster.AudioTrack)
 
 		broadcaster.Lock.RLock()
 		sub := broadcaster.Subscribers[receiptNo]
@@ -335,6 +336,37 @@ func (manager *WebRTCManager) ensureAgent(deviceIdentifier string, receiptNo uin
 			log.Printf("Failed to get final codec parameters for device %s: %v", deviceIdentifier, err)
 			return err
 		}
+		scrcpyOptions, err := scrcpyVideoOptionsFromWebRTCCodecParameters(finalCodec)
+		if err != nil {
+			log.Printf("Failed to get scrcpy video options for device %s: %v", deviceIdentifier, err)
+			log.Println("Ignore webrtc codec level")
+		} else {
+			// log.Println(agentConfig.DriverConfig)
+			user_max_size, err := strconv.Atoi(agentConfig.DriverConfig["max_size"])
+			if err != nil {
+				log.Printf("Failed to parse user max_size: %v", err)
+			}
+			user_max_fps, err := strconv.Atoi(agentConfig.DriverConfig["max_fps"])
+			if err != nil {
+				log.Printf("Failed to parse user max_fps: %v", err)
+			}
+			user_video_bit_rate := agentConfig.DriverConfig["video_bit_rate"]
+			user_video_bit_rate_int, err := utils.ParseBitrate(user_video_bit_rate)
+			if err != nil {
+				log.Printf("Failed to parse user video_bit_rate: %v", err)
+			}
+
+			agentConfig.DriverConfig["video_codec_options_webrtc"] = scrcpyOptions["video_codec_options"].(string)
+			if scrcpyOptions["max_size"].(int) > 0 {
+				agentConfig.DriverConfig["max_size"] = fmt.Sprintf("%d", min(user_max_size, scrcpyOptions["max_size"].(int)))
+			}
+			if scrcpyOptions["max_fps"].(int) > 0 {
+				agentConfig.DriverConfig["max_fps"] = fmt.Sprintf("%d", min(user_max_fps, scrcpyOptions["max_fps"].(int)))
+			}
+			if scrcpyOptions["video_bit_rate"].(int) > 0 {
+				agentConfig.DriverConfig["video_bit_rate"] = fmt.Sprintf("%d", min(user_video_bit_rate_int, scrcpyOptions["video_bit_rate"].(int)))
+			}
+		}
 
 		// Re-lock to set Agent
 		manager.Lock()
@@ -343,10 +375,10 @@ func (manager *WebRTCManager) ensureAgent(deviceIdentifier string, receiptNo uin
 			manager.Unlock()
 			return nil
 		}
-
+		agent := sagent.New(agentConfig, broadcaster.VideoTrack, broadcaster.AudioTrack)
 		broadcaster.Agent = agent
 		broadcaster.AgentConfigKey = configKey
-		err = agent.InitDriver(finalCodec)
+		err = agent.InitDriver()
 		if err != nil {
 			log.Printf("Failed to initialize agent for device %s: %v", deviceIdentifier, err)
 			manager.Unlock()
