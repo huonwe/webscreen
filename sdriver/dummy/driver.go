@@ -11,9 +11,6 @@ import (
 
 	"webscreen/sdriver"
 	"webscreen/sdriver/comm"
-
-	"github.com/pion/webrtc/v4/pkg/media/h264reader"
-	"github.com/pion/webrtc/v4/pkg/media/h265reader"
 )
 
 // DummyDriver implements sdriver.SDriver by reading from a local H.264 Annex B file.
@@ -158,30 +155,10 @@ func (d *DummyDriver) loop() {
 			return
 		}
 
-		var nalReader interface {
-			NextNAL() ([]byte, error)
-		}
-
-		if d.mediaMeta.VideoCodec == "h265" {
-			h265, err := h265reader.NewReader(f)
-			if err != nil {
-				log.Printf("Failed to create H.265 reader: %v", err)
-				f.Close()
-				return
-			}
-			nalReader = &h265ReaderWrapper{h265}
-		} else {
-			h264, err := h264reader.NewReader(f)
-			if err != nil {
-				f.Close()
-				return
-			}
-			nalReader = &h264ReaderWrapper{h264}
-		}
+		nalReader := newAnnexBReader(f)
 
 		// 3. 读取 NAL 循环
 		for {
-			// 这一步会自动处理 Annex-B 的分割
 			nalData, err := nalReader.NextNAL()
 			if err == io.EOF {
 				break // 文件读完了，跳出内层循环，重新开始外层循环（Loop）
@@ -196,6 +173,10 @@ func (d *DummyDriver) loop() {
 				f.Close()
 				return
 			default:
+			}
+
+			if len(nalData) == 0 {
+				continue
 			}
 
 			var isIDR, isConfig, isVCL bool
@@ -270,28 +251,62 @@ func (d *DummyDriver) loop() {
 	}
 }
 
-type h264ReaderWrapper struct {
-	*h264reader.H264Reader
+type annexBReader struct {
+	reader io.Reader
+	buffer []byte
+	eof    bool
 }
 
-func (r *h264ReaderWrapper) NextNAL() ([]byte, error) {
-	nal, err := r.H264Reader.NextNAL()
-	if err != nil {
-		return nil, err
+func newAnnexBReader(reader io.Reader) *annexBReader {
+	return &annexBReader{reader: reader}
+}
+
+func (r *annexBReader) NextNAL() ([]byte, error) {
+	for {
+		start, startCodeLen := findStartCode(r.buffer, 0)
+		if start >= 0 {
+			if start > 0 {
+				r.buffer = r.buffer[start:]
+			}
+
+			next, _ := findStartCode(r.buffer, startCodeLen)
+			if next >= 0 {
+				nal := trimTrailingZeros(r.buffer[startCodeLen:next])
+				r.buffer = r.buffer[next:]
+				if len(nal) == 0 {
+					continue
+				}
+				return nal, nil
+			}
+
+			if r.eof {
+				nal := trimTrailingZeros(r.buffer[startCodeLen:])
+				r.buffer = nil
+				if len(nal) == 0 {
+					return nil, io.EOF
+				}
+				return nal, nil
+			}
+		} else if r.eof {
+			return nil, io.EOF
+		}
+
+		chunk := make([]byte, 32*1024)
+		n, err := r.reader.Read(chunk)
+		if n > 0 {
+			r.buffer = append(r.buffer, chunk[:n]...)
+		}
+		if err != nil {
+			if err == io.EOF {
+				r.eof = true
+				continue
+			}
+			return nil, err
+		}
+		if n == 0 {
+			return nil, io.ErrNoProgress
+		}
 	}
-	return nal.Data, nil
-}
-
-type h265ReaderWrapper struct {
-	*h265reader.H265Reader
-}
-
-func (r *h265ReaderWrapper) NextNAL() ([]byte, error) {
-	nal, err := r.H265Reader.NextNAL()
-	if err != nil {
-		return nil, err
-	}
-	return nal.Data, nil
 }
 
 func (d *DummyDriver) fetchMediaMeta() {
@@ -353,7 +368,7 @@ func splitAnnexB(b []byte) [][]byte {
 
 func findStartCode(b []byte, from int) (int, int) {
 	n := len(b)
-	for i := from; i+3 < n; i++ {
+	for i := from; i+2 < n; i++ {
 		// 4-byte start code 0x00000001
 		if i+3 < n && b[i] == 0x00 && b[i+1] == 0x00 && b[i+2] == 0x00 && b[i+3] == 0x01 {
 			return i, 4
