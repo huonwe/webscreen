@@ -336,6 +336,10 @@ async function updateUIBasedOnCapabilities(caps) {
                 await loadScript('/static/capabilities/touch.js');
                 await loadScript('/static/capabilities/scroll.js');
                 await loadScript('/static/capabilities/buttons.js');
+
+                await loadScript('/static/capabilities/keep_screen_on.js');
+                await loadScript('/static/capabilities/backlight.js');
+
                 show('.feature-android-buttons');
                 show('.feature-control');
             }
@@ -367,10 +371,6 @@ async function updateUIBasedOnCapabilities(caps) {
                 console.error("Failed to load UHID scripts", e);
             }
         }
-
-        await loadScript('/static/capabilities/keep_screen_on.js');
-        // 受控端黑屏（隐私保护）——与设备能力无关，始终加载
-        await loadScript('/static/capabilities/backlight.js');
 
     }
 
