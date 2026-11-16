@@ -10,7 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
-	"github.com/pion/webrtc/v4"
+	"github.com/pion/webrtc/v5"
 
 	"webscreen/webservice/android"
 )

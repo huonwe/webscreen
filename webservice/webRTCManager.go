@@ -12,7 +12,7 @@ import (
 	"github.com/pion/interceptor"
 	"github.com/pion/rtcp"
 	pionSDP "github.com/pion/sdp/v3"
-	"github.com/pion/webrtc/v4"
+	"github.com/pion/webrtc/v5"
 )
 
 const (

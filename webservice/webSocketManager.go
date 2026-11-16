@@ -7,7 +7,7 @@ import (
 	sagent "webscreen/streamAgent"
 
 	"github.com/gorilla/websocket"
-	"github.com/pion/webrtc/v4"
+	"github.com/pion/webrtc/v5"
 )
 
 type WSSubscriber struct {
