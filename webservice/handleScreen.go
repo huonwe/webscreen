@@ -63,14 +63,16 @@ func (wm *WebMaster) handleScreenWS(c *gin.Context) {
 	// the media section impossible to populate ("RTPSender created with no
 	// codecs") and the whole connection fails, so use H.264 for this session
 	// instead of failing and telling the user nothing.
-	codecFallback := false
+	// codecFallback := false
 	if strings.EqualFold(config.DriverConfig["video_codec"], "h265") && !sdpOffersH265(config.SDP) {
 		log.Printf("[webscreen] browser SDP does not offer H.265 (HEVC), using H.264 for this session")
 		if config.DriverConfig == nil {
 			config.DriverConfig = map[string]string{}
 		}
 		config.DriverConfig["video_codec"] = "h264"
-		codecFallback = true
+		// codecFallback = true
+		conn.WriteJSON(map[string]any{"status": "error", "message": "This browser does not support H.265 (HEVC); streaming with H.264 instead.", "stage": "webrtc_init"})
+
 	}
 
 	// Create a unique ID for one abstract device
@@ -126,9 +128,7 @@ Loop:
 		conn.WriteJSON(map[string]any{"status": "error", "message": "Failed to get agent", "stage": "webrtc_metainfo"})
 		return
 	}
-	if codecFallback {
-		agent.Notify("This browser does not support H.265 (HEVC); streaming with H.264 instead. (H.265 needs a browser that offers HEVC, e.g. Safari.)")
-	}
+
 	// 记录投屏状态，供设备管理界面显示
 	android.GetManager().MarkStreaming(config.DeviceID, true)
 	defer android.GetManager().MarkStreaming(config.DeviceID, false)
