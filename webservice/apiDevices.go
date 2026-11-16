@@ -7,7 +7,6 @@ import (
 	"webscreen/sdriver/scrcpy"
 	sagent "webscreen/streamAgent"
 	"webscreen/webservice/android"
-	"webscreen/webservice/linux"
 
 	"github.com/gin-gonic/gin"
 )
@@ -33,7 +32,7 @@ func (wm *WebMaster) handleListDevices(c *gin.Context) {
 		}
 	}
 
-	linuxDevices, err := linux.GetDevices()
+	linuxDevices, err := linuxDriver.GetDevices()
 	if err != nil {
 		log.Printf("[device-list] Linux device discovery failed: %v", err)
 	} else {

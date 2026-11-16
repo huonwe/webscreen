@@ -1,4 +1,4 @@
-package linux
+package linuxDriver
 
 import "os/exec"
 

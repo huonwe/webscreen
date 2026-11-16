@@ -1,6 +1,4 @@
-package linux
-
-import sagent "webscreen/streamAgent"
+package linuxDriver
 
 type LinuxDevice struct {
 	DeviceID string `json:"device_id"`
@@ -10,7 +8,7 @@ type LinuxDevice struct {
 }
 
 func (d LinuxDevice) GetType() string {
-	return sagent.DEVICE_TYPE_LINUX
+	return "linux"
 }
 
 func (d LinuxDevice) GetDeviceID() string {
