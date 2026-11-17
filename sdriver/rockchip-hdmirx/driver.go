@@ -165,6 +165,7 @@ func (d *Driver) Stop() {
 		_ = d.stdout.Close()
 		if d.cmd.Process != nil {
 			_ = d.cmd.Process.Kill()
+			log.Printf("[rockchip-hdmirx] ffmpeg process killed")
 		}
 	})
 }
