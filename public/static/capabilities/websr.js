@@ -113,15 +113,15 @@ async function enableUpscaling(button) {
     }
 
     (async () => {
-  console.log("navigator.gpu:", navigator.gpu);
-  const adapter = await navigator.gpu?.requestAdapter();
-  console.log("adapter:", adapter);
-  if (adapter) {
-    console.log("features:", [...adapter.features]);
-    const device = await adapter.requestDevice();
-    console.log("device:", device);
-  }
-})();
+        console.log("navigator.gpu:", navigator.gpu);
+        const adapter = await navigator.gpu?.requestAdapter();
+        console.log("adapter:", adapter);
+        if (adapter) {
+            console.log("features:", [...adapter.features]);
+            const device = await adapter.requestDevice();
+            console.log("device:", device);
+        }
+    })();
 
     createOutputCanvas();
     const gpu = await WebSR.initWebGPU();
@@ -129,7 +129,7 @@ async function enableUpscaling(button) {
     if (gpu === undefined) {
         throw new Error("This feature requires HTTPS");
     }
-    if (!gpu) throw new Error("Browser/device doesn't support WebGPU");
+    if (!gpu) throw new Error("Browser/device doesn't support WebGPU. This feature also requires HTTPS.");
 
     // const weight_url = "../static/websr/cnn-xs.bin"
     // const buffer = await (await fetch(weight_url)).arrayBuffer();
