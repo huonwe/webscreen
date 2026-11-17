@@ -14,7 +14,7 @@ function loadIgnoredDevices() {
     try {
         const stored = localStorage.getItem(IGNORED_STORAGE_KEY);
         return stored ? JSON.parse(stored) : [];
-    } catch(e) { return []; }
+    } catch (e) { return []; }
 }
 
 function saveIgnoredDevices() {
@@ -181,7 +181,7 @@ function renderDeviceList() {
         let tagsHtml = '';
         let dtype = config.device_type === 'xvfb' ? 'linux' : config.device_type;
         const cacheKey = `${dtype}_${serial}`;
-        
+
         const generateBadges = (schema, currentValues) => {
             if (!schema) return '';
             let html = '';
@@ -191,7 +191,7 @@ function renderDeviceList() {
                     const key = param.name;
                     let currentValue = currentValues[key];
                     if (currentValue === undefined) currentValue = param.default;
-                    
+
                     if (param.type === 'boolean') {
                         const isTrue = currentValue === true || currentValue === 'true';
                         let localizedLabel = i18n.t(key);
@@ -206,7 +206,7 @@ function renderDeviceList() {
                         if (key === 'video_bit_rate') displayVal = formatBitrate(displayVal);
                         if (key === 'max_fps' || key === 'frameRate') displayVal += 'FPS';
                         if (key === 'video_codec') displayVal = String(displayVal).toUpperCase();
-                        
+
                         html += `<span class="px-2 py-0.5 rounded-md bg-[#333] text-xs text-gray-300 font-mono">${displayVal}</span>`;
                     }
                 }
@@ -268,7 +268,7 @@ function renderDeviceList() {
         const card = document.createElement('div');
         card.className = `card ${isIgnored ? 'opacity-40 grayscale' : ''} rounded-[24px] p-5 flex flex-col justify-between h-full border border-transparent hover:border-[#444] group transition-all`;
 
-        let ignoreBtnHtml = isIgnored ? 
+        let ignoreBtnHtml = isIgnored ?
             `<button onclick="unignoreDevice('${serial}')" class="p-2 rounded-full hover:bg-white/10 text-orange-400 transition-colors" title="Unignore">
                 <span class="material-symbols-rounded">visibility</span>
             </button>` :
@@ -387,9 +387,9 @@ async function fetchDevices() {
         if (!schemaCache['universal']) {
             schemaPromises.push(
                 fetch('/api/device/configDescription?device_type=universal')
-                .then(r => r.json())
-                .then(s => schemaCache['universal'] = s)
-                .catch(e => console.error(e))
+                    .then(r => r.json())
+                    .then(s => schemaCache['universal'] = s)
+                    .catch(e => console.error(e))
             );
         }
         for (const device of devices) {
@@ -400,9 +400,9 @@ async function fetchDevices() {
             if (!schemaCache[cacheKey]) {
                 schemaPromises.push(
                     fetch(`/api/device/configDescription?device_type=${dtype}&device_id=${encodeURIComponent(activeConfigSerial)}`)
-                    .then(r => r.json())
-                    .then(s => schemaCache[cacheKey] = s)
-                    .catch(e => console.error(e))
+                        .then(r => r.json())
+                        .then(s => schemaCache[cacheKey] = s)
+                        .catch(e => console.error(e))
                 );
             }
         }
@@ -413,7 +413,7 @@ async function fetchDevices() {
         devices.forEach(d => ensureDeviceConfig(d));
 
         renderDeviceList();
-        showToast(i18n.t('refreshed_found', {n: devices.length}));
+        showToast(i18n.t('refreshed_found', { n: devices.length }));
 
     } catch (error) {
         console.warn('Using mock data because fetch failed:', error);
@@ -509,19 +509,34 @@ function startStream(serial) {
         use_local_timestamp: config.use_local_timestamp || false,
         driver_config: drv
     };
-    
+
     if (config.device_type == 'android') {
-    finalConfig.driver_config.deviceID = config.device_ip || '';
+        finalConfig.driver_config.deviceID = config.device_ip || '';
     }
     console.log('Starting stream with config:', finalConfig);
     sessionStorage.setItem('webscreen_device_configs_now', JSON.stringify(finalConfig));
     showToast(i18n.t('starting_stream'));
 
     const id = `${finalConfig.device_type}_${finalConfig.device_id}_${finalConfig.device_ip}_${finalConfig.device_port}`;
-    
+
     setTimeout(() => {
         window.location.href = `/screen/${id}`;
     }, 500);
+    // const popup = window.open(
+    //     'about:blank',
+    //     '_blank',
+    //     'popup=yes,width=1280,height=800,resizable=yes,scrollbars=yes'
+    // );
+
+    // if (!popup) {
+    //     showToast('Please allow popups for this site.', 'error');
+    //     return;
+    // }
+
+    // setTimeout(() => {
+    //     popup.location.href = `/screen/${id}`;
+    //     popup.focus();
+    // }, 500);
 }
 
 // --- Modal Logic ---
@@ -555,8 +570,8 @@ async function showConfigModal(serial) {
     const device = knownDevices.find(d => d.device_id === serial) || { device_id: serial };
     const config = ensureDeviceConfig(device);
 
-    document.getElementById('configModalTitle').textContent = i18n.t('config_device_title', {serial: serial});
-    
+    document.getElementById('configModalTitle').textContent = i18n.t('config_device_title', { serial: serial });
+
     const dynamicContainer = document.getElementById('dynamicSettings');
     const universalContainer = document.getElementById('universalSettings');
     dynamicContainer.innerHTML = `<div class="flex justify-center py-8"><div class="spinner"></div></div>`;
@@ -567,13 +582,13 @@ async function showConfigModal(serial) {
     if (config.device_type === 'xvfb') {
         config.device_type = 'linux';
     }
-    
+
     try {
         const [resDyn, resUni] = await Promise.all([
             fetch(`/api/device/configDescription?device_type=${config.device_type}&device_id=${encodeURIComponent(device.device_id)}`),
             fetch(`/api/device/configDescription?device_type=universal`)
         ]);
-        
+
         if (!resDyn.ok) throw new Error('Failed to fetch dynamic config description');
         const schemaDyn = await resDyn.json();
         currentConfigSchema = schemaDyn;
@@ -626,7 +641,7 @@ function renderDynamicConfigForm(schema, currentValues, containerId = 'dynamicSe
         if (param.type === 'boolean') {
             const wrap = document.createElement('div');
             wrap.className = 'flex items-center justify-between py-1';
-            
+
             const checkLabel = document.createElement('label');
             checkLabel.className = 'text-sm font-medium text-gray-300 cursor-pointer select-none ml-1';
             checkLabel.textContent = localizedLabel;
@@ -637,14 +652,14 @@ function renderDynamicConfigForm(schema, currentValues, containerId = 'dynamicSe
             input.className = 'md-switch';
             input.id = `${prefix}${key}`;
             checkLabel.setAttribute('for', input.id);
-            
+
             // Allow string 'true' or boolean true
             input.checked = currentValue === true || currentValue === 'true';
 
             wrap.appendChild(checkLabel);
             wrap.appendChild(input);
             fieldDiv.appendChild(wrap);
-            
+
             if (param.description) {
                 const desc = document.createElement('p');
                 desc.className = 'text-[10px] text-gray-500 ml-1';
@@ -674,7 +689,7 @@ function renderDynamicConfigForm(schema, currentValues, containerId = 'dynamicSe
 
             fieldDiv.appendChild(label);
             fieldDiv.appendChild(input);
-            
+
             if (param.description) {
                 const desc = document.createElement('p');
                 desc.className = 'text-[10px] text-gray-500 ml-1';
@@ -693,7 +708,7 @@ function renderDynamicConfigForm(schema, currentValues, containerId = 'dynamicSe
 
             fieldDiv.appendChild(label);
             fieldDiv.appendChild(input);
-            
+
             if (param.description) {
                 const desc = document.createElement('p');
                 desc.className = 'text-[10px] text-gray-500 ml-1 mt-1';
@@ -727,7 +742,7 @@ function saveDeviceConfig() {
         if (!input) continue;
 
         if (param.type === 'boolean') {
-            drv[key] = input.checked ? 'true' : 'false'; 
+            drv[key] = input.checked ? 'true' : 'false';
         } else {
             const val = input.value.trim();
             if (val) {
@@ -791,21 +806,21 @@ function showToast(message, type = 'success') {
 // ---------------------------------------------------------------------------
 
 const ADB_STATUS_STYLE = {
-    ONLINE:       { chip: 'bg-emerald-500/15 text-emerald-300', dot: 'bg-emerald-400' },
-    UNAUTHORIZED: { chip: 'bg-amber-500/15 text-amber-300',     dot: 'bg-amber-400' },
-    CONNECTING:   { chip: 'bg-sky-500/15 text-sky-300',         dot: 'bg-sky-400' },
-    OFFLINE:      { chip: 'bg-gray-500/15 text-gray-300',       dot: 'bg-gray-400' },
-    DISCONNECTED: { chip: 'bg-gray-500/15 text-gray-400',       dot: 'bg-gray-500' },
-    ERROR:        { chip: 'bg-red-500/15 text-red-300',         dot: 'bg-red-400' },
+    ONLINE: { chip: 'bg-emerald-500/15 text-emerald-300', dot: 'bg-emerald-400' },
+    UNAUTHORIZED: { chip: 'bg-amber-500/15 text-amber-300', dot: 'bg-amber-400' },
+    CONNECTING: { chip: 'bg-sky-500/15 text-sky-300', dot: 'bg-sky-400' },
+    OFFLINE: { chip: 'bg-gray-500/15 text-gray-300', dot: 'bg-gray-400' },
+    DISCONNECTED: { chip: 'bg-gray-500/15 text-gray-400', dot: 'bg-gray-500' },
+    ERROR: { chip: 'bg-red-500/15 text-red-300', dot: 'bg-red-400' },
 };
 
 const ADB_STATUS_TEXT = {
-    ONLINE:       { zh: '在线', en: 'Online' },
+    ONLINE: { zh: '在线', en: 'Online' },
     UNAUTHORIZED: { zh: '等待授权', en: 'Unauthorized' },
-    CONNECTING:   { zh: '连接中', en: 'Connecting' },
-    OFFLINE:      { zh: '离线', en: 'Offline' },
+    CONNECTING: { zh: '连接中', en: 'Connecting' },
+    OFFLINE: { zh: '离线', en: 'Offline' },
     DISCONNECTED: { zh: '已断开', en: 'Disconnected' },
-    ERROR:        { zh: '错误', en: 'Error' },
+    ERROR: { zh: '错误', en: 'Error' },
 };
 
 function adbStatusText(state) {
