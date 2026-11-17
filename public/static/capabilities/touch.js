@@ -1,4 +1,3 @@
-(function() {
 const TYPE_TOUCH = 0x02; // touch event
 // All Big Endian
 // Touch Packet Structure:
@@ -246,4 +245,3 @@ function praseTouchEvent(packet) {
         buttons
     };
 }
-})();

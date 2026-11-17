@@ -305,6 +305,7 @@ function loadScript(src) {
         }
         const script = document.createElement('script');
         script.src = src;
+        script.type = 'module';
         script.onload = resolve;
         script.onerror = reject;
         document.head.appendChild(script);
@@ -314,10 +315,7 @@ function loadScript(src) {
 async function updateUIBasedOnCapabilities(caps) {
     if (!caps) return;
 
-    // Helper to show elements
-    const show = (selector) => {
-        document.querySelectorAll(selector).forEach(el => el.style.display = ''); // Remove inline display:none to revert to CSS
-    };
+    await loadScript('/static/capabilities/websr.js');
 
     // Handle Control
     if (caps.can_control) {
@@ -327,7 +325,6 @@ async function updateUIBasedOnCapabilities(caps) {
                 await loadScript('/static/capabilities/linux_mouse.js');
                 await loadScript('/static/capabilities/keyboard.js');
                 await loadScript('/static/capabilities/touch.js');
-                // show('.feature-linux-mouse');
             }
             if (caps.is_android) {
                 await loadScript('/static/capabilities/keyboard.js');
@@ -338,8 +335,6 @@ async function updateUIBasedOnCapabilities(caps) {
                 await loadScript('/static/capabilities/keep_screen_on.js');
                 await loadScript('/static/capabilities/backlight.js');
 
-                show('.feature-android-buttons');
-                show('.feature-control');
             }
 
             console.log("Control scripts loaded");
@@ -352,7 +347,6 @@ async function updateUIBasedOnCapabilities(caps) {
             try {
                 // Add timestamp to force cache busting
                 await loadScript('/static/capabilities/clipboard.js');
-                show('.feature-clipboard');
             } catch (e) {
                 console.error("Failed to load clipboard script", e);
             }
@@ -363,7 +357,6 @@ async function updateUIBasedOnCapabilities(caps) {
                 await loadScript('/static/capabilities/uhid_mouse.js');
                 await loadScript('/static/capabilities/uhid_keyboard.js');
                 await loadScript('/static/capabilities/uhid_gamepad.js');
-                show('.feature-uhid');
                 console.log("UHID scripts loaded");
             } catch (e) {
                 console.error("Failed to load UHID scripts", e);

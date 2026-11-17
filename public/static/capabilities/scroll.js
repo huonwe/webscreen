@@ -1,4 +1,3 @@
-(function() {
 const TYPE_SCROLL = 0x03; // scroll event
 const SCROLL_SCALE = 30; // 调整此值以改变滚动灵敏度
 
@@ -10,17 +9,17 @@ let lastScrollCoords = null;
 function sendPendingScroll() {
     if (pendingScroll.hScroll !== 0 || pendingScroll.vScroll !== 0) {
         const packet = createScrollPacket(
-            pendingScroll.x, 
-            pendingScroll.y, 
-            pendingScroll.hScroll, 
+            pendingScroll.x,
+            pendingScroll.y,
+            pendingScroll.hScroll,
             pendingScroll.vScroll
         );
-        
+
         // if (window.ws && window.ws.readyState === WebSocket.OPEN) {
         //     window.ws.send(packet);
         // }
         sendDataChannelMessage(window.dataChannelUnordered, packet);
-        
+
         // 重置累积的滚动量
         pendingScroll.hScroll = 0;
         pendingScroll.vScroll = 0;
@@ -62,7 +61,7 @@ const handleWheel = (event) => {
 
     // 缓存坐标位置，用于后续批量发送
     lastScrollCoords = coords;
-    
+
     // 增加滚动敏感度
 
     // 累积滚动量
@@ -103,4 +102,3 @@ function createScrollPacket(x, y, hScroll, vScroll) {
     // console.log("Created Scroll Packet:", {x, y, hScroll, vScroll});
     return buffer;
 }
-})();
