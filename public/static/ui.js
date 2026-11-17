@@ -4,6 +4,7 @@
  * @param {number} duration 持续时间(ms)
  */
 function showToast(message, duration = 1000) {
+    console.log(message)
     let toast = document.getElementById('webscreen-toast');
     
     if (!toast) {
