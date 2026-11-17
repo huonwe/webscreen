@@ -28,10 +28,13 @@ Webscreen can run on **Android Termux**, **Linux**, **Windows**, and **MacOS** (
 ### 📱 Android (via [scrcpy](https://github.com/Genymobile/scrcpy))
 - Video, Audio, Control
 - UHID Devices (Mouse, Keyboard, Gamepad)
-- Clipboard Sync
+- Clipboard Sync (HTTPS required)
 - Touch (Multi-finger, pressure)
 - H.264 / H.265 Hardware Encoding
 - Multi-Connection
+
+> **Note**: For Android apk (rooted) and FnOS fpk, you might see [youyoudezhuzhu/webscreen](https://github.com/youyoudezhuzhu/webscreen).
+
 
 ### 🐧 Linux (Xvfb / Xorg / Sway)
 - Video, Control
@@ -44,8 +47,8 @@ Webscreen can run on **Android Termux**, **Linux**, **Windows**, and **MacOS** (
 - H.264 / H.265 with RKMPP hardware encoding
 - *Note: Audio is not supported yet.*
 
-
-> **Note**: For Android apk (rooted) and FnOS fpk, you might see [youyoudezhuzhu/webscreen](https://github.com/youyoudezhuzhu/webscreen).
+### Universal
+- Super Resolution (HTTPS required)
 
 ---
 
