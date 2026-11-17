@@ -42,7 +42,7 @@ Webscreen can run on **Android Termux**, **Linux**, **Windows**, and **MacOS** (
 - H.264 / H.265
 - GPU support (Xorg/Sway)
 
-### 🛹 rk3588-hdmirx (OrangePi 5 Plus tested)
+### 🛹 rk3588-hdmirx (OrangePi 5 Plus Armbian vendor kernel tested)
 - HDMI-in video streaming
 - H.264 / H.265 with RKMPP hardware encoding
 - *Note: Audio is not supported yet.*
