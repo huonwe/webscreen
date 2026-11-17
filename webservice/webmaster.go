@@ -7,10 +7,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gin-gonic/gin"
-
+	"webscreen/nexus"
 	"webscreen/utils"
 	"webscreen/webservice/android"
+
+	"github.com/gin-gonic/gin"
 )
 
 type WebMasterConfig struct {
@@ -20,6 +21,7 @@ type WebMasterConfig struct {
 type WebMaster struct {
 	// WSConns []*websocket.Conn
 
+	Nexus         *nexus.Nexus
 	WebRTCManager *WebRTCManager
 	// ScreenSessions map[string]ScreenSession
 

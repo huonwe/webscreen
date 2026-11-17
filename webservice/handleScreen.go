@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"webscreen/nexus"
 	sagent "webscreen/streamAgent"
 
 	"github.com/gin-gonic/gin"
@@ -36,6 +37,30 @@ func randomString(length int) string {
 		b[i] = charset[rand.Intn(len(charset))]
 	}
 	return string(b)
+}
+
+func (wm *WebMaster) handleScreenWSN(c *gin.Context) {
+	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+	if err != nil {
+		log.Println("Failed to upgrade to websocket:", err)
+		return
+	}
+	defer conn.Close()
+	connectionConfig := nexus.ConnectionConfig{}
+	err = conn.ReadJSON(&connectionConfig)
+	if err != nil {
+		log.Println("Failed to read connection options:", err)
+		conn.WriteJSON(map[string]any{"status": "error", "message": err.Error(), "stage": "connection_nexus"})
+		return
+	}
+	log.Printf("Received connection config: %+v", connectionConfig)
+	viewer := wm.Nexus.NewViewer()
+	err = viewer.ConnectToNexus(wm.Nexus, connectionConfig)
+	if err != nil {
+		log.Println("Failed to connect viewer to Nexus:", err)
+		conn.WriteJSON(map[string]any{"status": "error", "message": err.Error(), "stage": "connection_nexus"})
+		return
+	}
 }
 
 // /:id/ws

@@ -2,16 +2,35 @@ package nexus
 
 // type deviceType string
 
-type AgentConfig struct {
-	DeviceType        string            `json:"device_type"`
-	DeviceID          string            `json:"device_id"`
-	DeviceIP          string            `json:"device_ip"`
-	DevicePort        string            `json:"device_port"`
-	SDP               string            `json:"sdp"`
-	AVSync            bool              `json:"av_sync"`
-	UseLocalTimestamp bool              `json:"use_local_timestamp"`
-	DriverConfig      map[string]string `json:"driver_config"`
+// const (
+// 	CONNECTION_PROTOCOL_WEBRTC = iota
+// 	CONNECTION_PROTOCOL_WEBTRANSPORT
+// 	CONNECTION_PROTOCOL_WEBSOCKET
+// )
+
+type ConnectionConfig struct {
+	Protocol   string `json:"protocol"`
+	RemoteType string `json:"remote_type"`
+	RemoteID   string `json:"remote_id"`
+
+	// if use webrtc, sdp should be stored here
+	Extra map[string]string `json:"extra,omitempty"`
+	// AVSync            bool `json:"av_sync"`
+	// UseLocalTimestamp bool `json:"use_local_timestamp"`
 }
+
+type RemoteConfig map[string]string
+
+// type AgentConfig struct {
+// 	DeviceType        string            `json:"device_type"`
+// 	DeviceID          string            `json:"device_id"`
+// 	DeviceIP          string            `json:"device_ip"`
+// 	DevicePort        string            `json:"device_port"`
+// 	SDP               string            `json:"sdp"`
+// 	AVSync            bool              `json:"av_sync"`
+// 	UseLocalTimestamp bool              `json:"use_local_timestamp"`
+// 	DriverConfig      map[string]string `json:"driver_config"`
+// }
 
 type ConfigParamDescription struct {
 	Name     string   `json:"name"`

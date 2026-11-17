@@ -22,6 +22,7 @@ require (
 	github.com/bytedance/sonic/loader v0.5.3 // indirect
 	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
 	github.com/cloudwego/base64x v0.1.7 // indirect
+	github.com/dunglas/httpsfv v1.1.1 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.16 // indirect
 	github.com/gin-contrib/sse v1.2.1 // indirect
 	github.com/go-playground/locales v0.14.2 // indirect
@@ -51,6 +52,7 @@ require (
 	github.com/pion/turn/v6 v6.0.0-rc.1 // indirect
 	github.com/quic-go/qpack v0.6.0 // indirect
 	github.com/quic-go/quic-go v0.65.0 // indirect
+	github.com/quic-go/webtransport-go v0.13.0 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.3.2 // indirect
 	github.com/wlynxg/anet v0.0.5 // indirect
