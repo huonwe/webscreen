@@ -1,8 +1,5 @@
 import WebSR from '@websr/websr';
 
-const WEB_SR_WEIGHTS_URL =
-    'https://cdn.jsdelivr.net/gh/sb2702/websr@v0.1.0/weights/anime4k/cnn-2x-s-an.json';
-
 let websr = null;
 let outputCanvas = null;
 let renderGeneration = 0;
@@ -50,15 +47,17 @@ function createOutputCanvas() {
         position: 'absolute',
         zIndex: '0',
         pointerEvents: 'none',
-        display: 'block'
+        display: 'block',
+        objectFit: 'contain',
+        objectPosition: 'center'
     });
 
     videoStyle = {
         opacity: video.style.opacity,
         position: video.style.position,
-        zIndex: video.style.zIndex
+        zIndex: video.style.zIndex,
+        transition: video.style.transition
     };
-    video.style.opacity = '0';
     video.style.position = 'relative';
     video.style.zIndex = '1';
 
@@ -81,18 +80,25 @@ function removeOutputCanvas() {
         video.style.opacity = videoStyle.opacity;
         video.style.position = videoStyle.position;
         video.style.zIndex = videoStyle.zIndex;
+        video.style.transition = videoStyle.transition;
     }
     if (outputCanvas) outputCanvas.remove();
     outputCanvas = null;
     videoStyle = null;
 }
 
-async function renderFrame(generation) {
+async function renderFrame(generation, onFirstFrame) {
     if (!websr || !outputCanvas || generation !== renderGeneration) return;
 
     try {
         await websr.render(getVideo());
         if (generation !== renderGeneration || !outputCanvas) return;
+        if (onFirstFrame) {
+            if (!outputCanvas.width || !outputCanvas.height) {
+                throw new Error('WebSR output canvas is empty after rendering');
+            }
+            onFirstFrame();
+        }
         getVideo().requestVideoFrameCallback(() => renderFrame(generation));
     } catch (error) {
         console.error('WebSR rendering failed', error);
@@ -125,7 +131,13 @@ async function enableUpscaling(button) {
     }
     if (!gpu) throw new Error("Browser/device doesn't support WebGPU");
 
-    const response = await fetch(WEB_SR_WEIGHTS_URL);
+    // const weight_url = "../static/websr/cnn-xs.bin"
+    // const buffer = await (await fetch(weight_url)).arrayBuffer();
+    // if (!buffer) {
+    //     throw new Error(`Failed to load WebSR weights from ${weight_url}`);
+    // }
+    const weight_url = "../static/websr/cnn-2x-s-an.json"
+    const response = await fetch(weight_url);
     if (!response.ok) {
         throw new Error(`Failed to load WebSR weights (${response.status})`);
     }
@@ -133,6 +145,8 @@ async function enableUpscaling(button) {
     websr = new WebSR({
         network_name: 'anime4k/cnn-2x-s',
         weights: await response.json(),
+        // network_name: 'websr/cnn-xs',
+        // weights: WebSR.parseBinaryWeights(buffer),
         gpu,
         canvas: outputCanvas
     });
@@ -140,7 +154,15 @@ async function enableUpscaling(button) {
     const generation = ++renderGeneration;
     button.classList.add('active');
     button.setAttribute('aria-pressed', 'true');
-    renderFrame(generation);
+    renderFrame(generation, () => {
+        const renderedVideo = getVideo();
+        renderedVideo.style.transition = 'opacity 240ms ease';
+        requestAnimationFrame(() => {
+            if (generation === renderGeneration && outputCanvas) {
+                renderedVideo.style.opacity = '0';
+            }
+        });
+    });
 }
 
 function disableUpscaling() {
