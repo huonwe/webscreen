@@ -8,8 +8,28 @@ package nexus
 // 	CONNECTION_PROTOCOL_WEBSOCKET
 // )
 
+const (
+	UDP_PORT_START = 51200
+	UDP_PORT_END   = 51299
+)
+
+const (
+	PAYLOAD_TYPE_AV1_PROFILE_MAIN_5_1            = 100 // 2560x1440 @ 60fps
+	PAYLOAD_TYPE_H265_PROFILE_MAIN_TIER_MAIN_5_1 = 102 // 2560x1440 @ 60fps 40Mbps Max
+	PAYLOAD_TYPE_H265_PROFILE_MAIN_TIER_MAIN_4_1 = 103 // 1920x1080 @ 60fps 20Mbps Max
+	PAYLOAD_TYPE_H264_PROFILE_HIGH_5_1           = 104 // 2560x1440 @ 60fps
+	PAYLOAD_TYPE_H264_PROFILE_HIGH_5_1_0C        = 105 // 2560x1440 @ 60fps for iphone safari
+	PAYLOAD_TYPE_H264_PROFILE_BASELINE_3_1       = 106 // 720p @ 30fps
+	PAYLOAD_TYPE_H264_PROFILE_BASELINE_3_1_0C    = 107 // 720p @ 30fps for iphone safari
+)
+
 type ConnectionConfig struct {
-	Protocol   string `json:"protocol"`
+	Protocol string `json:"protocol"`
+	// Video codec should be the same as how remote connect to the nexus
+	VideoCodec string `json:"video_codec"`
+	// Audio codec must be opus
+	AudioCodec string `json:"audio_codec"`
+
 	RemoteType string `json:"remote_type"`
 	RemoteID   string `json:"remote_id"`
 
