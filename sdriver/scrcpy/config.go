@@ -82,10 +82,17 @@ func ConfigDescription(opt string) []sdriver.ConfigParamDescription {
 			Description: "video bit rate",
 		},
 		{
+			Name:        "intra_refresh",
+			Type:        "boolean",
+			Required:    true,
+			Default:     true,
+			Description: "enable intra refresh for the video stream",
+		},
+		{
 			Name:        "video_codec_options",
 			Type:        "string",
 			Required:    false,
-			Description: "additional options for the video codec, e.g. 'profile=1' for h264",
+			Description: "overwrite video codec options, e.g. profile=1;level=4.1;bitrate=8000000",
 		},
 		{
 			Name:        "max_size",

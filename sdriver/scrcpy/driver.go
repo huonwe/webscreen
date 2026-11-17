@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -227,6 +228,13 @@ func New(config map[string]string) (*ScrcpyDriver, error) {
 	if video_codec_options_user != "" {
 		video_codec_options_webrtc = video_codec_options_user
 		log.Printf("Using user-provided video codec options: %s", video_codec_options_user)
+	}
+	if config["intra_refresh"] == "true" {
+		if strings.HasSuffix(video_codec_options_webrtc, ",") {
+			video_codec_options_webrtc = strings.TrimSuffix(video_codec_options_webrtc, ",")
+		}
+		video_codec_options_webrtc += ",intra-refresh-period=60,i-frame-interval=-1"
+		log.Printf("Enabling intra refresh for the video stream: %s", video_codec_options_webrtc)
 	}
 
 	options := map[string]string{
