@@ -31,8 +31,6 @@ func ConfigDescription(opt string) []sdriver.ConfigParamDescription {
 		adbClient := NewADBClient(deviceID, "", context.Background())
 		encoderList = adbClient.SupportedVideoEncoderList()
 		// appList = adbClient.AppList("3")
-		// encoderListStr = strings.Join(encoderList, ",")
-		// appListStr = strings.Join(appList, ",")
 		adbClient.Stop()
 	} else {
 		encoderList = []string{}
@@ -118,7 +116,7 @@ func ConfigDescription(opt string) []sdriver.ConfigParamDescription {
 			Name:        "resolution",
 			Type:        "string",
 			Required:    false,
-			Description: "new display resolution, e.g. 1920x1080",
+			Description: "new display resolution WidthxHeight/DPI, e.g. 1920x1080/192",
 		},
 		// {
 		// 	Name:        "start_app",
