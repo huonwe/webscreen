@@ -113,6 +113,7 @@ func (wm *WebMaster) setRouter() {
 			ctx.FileFromFS("screen.html", http.FS(wm.staticFS))
 		})
 		screen.GET("/ws", wm.handleScreenWS)
+		screen.GET("/wsn", wm.handleScreenWSN)
 	}
 
 	r.GET("/console", func(c *gin.Context) {

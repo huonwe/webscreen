@@ -48,28 +48,57 @@ func (wm *WebMaster) handleScreenWSN(c *gin.Context) {
 	defer conn.Close()
 	userID, exists := c.Get("userid")
 	if !exists {
-		conn.WriteJSON(map[string]any{"status": "error", "message": "Unauthorized", "stage": "connection_nexus"})
+		conn.WriteJSON(map[string]any{"status": "error", "message": "Unauthorized", "stage": "connection_view_session"})
 		return
 	}
 	connectionConfig := nexus.ConnectionConfig{}
 	err = conn.ReadJSON(&connectionConfig)
 	if err != nil {
 		log.Println("Failed to read connection options:", err)
-		conn.WriteJSON(map[string]any{"status": "error", "message": err.Error(), "stage": "connection_nexus"})
+		conn.WriteJSON(map[string]any{"status": "error", "message": err.Error(), "stage": "connection_view_session"})
 		return
 	}
 	log.Printf("Received connection config: %+v", connectionConfig)
-
+	remoteUUID := connectionConfig.RemoteUUID
+	if remoteUUID == "" {
+		conn.WriteJSON(map[string]any{"status": "error", "message": "Remote UUID is required", "stage": "connection_view_session"})
+		return
+	}
 	viewSession, err := wm.Nexus.NewViewSession(userID.(string), connectionConfig)
 	if err != nil {
 		log.Println("Failed to create view session:", err)
-		conn.WriteJSON(map[string]any{"status": "error", "message": err.Error(), "stage": "connection_nexus"})
+		conn.WriteJSON(map[string]any{"status": "error", "message": err.Error(), "stage": "connection_view_session"})
 		return
 	}
-	conn.WriteJSON(map[string]any{"status": "ok", "viewer_id": viewSession.SessionID, "stage": "connection_nexus"})
-	// deviceID := ""
-	// conn.ReadJSON(&connectionConfig)
-	// viewSession.ConnectToRemote()
+	conn.WriteJSON(map[string]any{"status": "ok", "view_session_id": viewSession.SessionID, "stage": "connection_view_session"})
+	finalSDP := viewSession.FinalSDP2Nexus
+	if finalSDP == "" {
+		log.Println("Failed to create view session: Final SDP is empty")
+		conn.WriteJSON(map[string]any{"status": "error", "message": "Failed to create view session: Final SDP is empty", "stage": "connection_view_session"})
+		return
+	}
+	conn.WriteJSON(map[string]any{"status": "ok", "sdp": finalSDP, "stage": "connection_view_session"})
+	remoteConfig := nexus.RemoteConfig{}
+	err = conn.ReadJSON(&remoteConfig)
+	if err != nil {
+		log.Println("Failed to read remote config:", err)
+		conn.WriteJSON(map[string]any{"status": "error", "message": err.Error(), "stage": "connection_view_session"})
+		return
+	}
+	log.Printf("Received remote config: %+v", remoteConfig)
+	// Connect to the remote device using the provided remote UUID
+	err = wm.Nexus.ConnectToRemote(remoteUUID, remoteConfig)
+	if err != nil {
+		log.Println("Failed to connect to remote device:", err)
+		conn.WriteJSON(map[string]any{"status": "error", "message": err.Error(), "stage": "connection_remote"})
+		return
+	}
+	err = wm.Nexus.BindViewSessionToRemote(viewSession, remoteUUID)
+	if err != nil {
+		log.Println("Failed to bind view session to remote:", err)
+		conn.WriteJSON(map[string]any{"status": "error", "message": err.Error(), "stage": "connection_remote"})
+		return
+	}
 }
 
 // /:id/ws

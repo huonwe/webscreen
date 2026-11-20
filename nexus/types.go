@@ -35,7 +35,7 @@ type ConnectionConfig struct {
 	// UseLocalTimestamp bool `json:"use_local_timestamp"`
 
 	// RemoteType string `json:"remote_type"`
-	RemoteID string `json:"remote_id"`
+	RemoteUUID string `json:"remote_uuid"`
 }
 
 type RemoteConfig map[string]string

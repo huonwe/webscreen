@@ -8,8 +8,10 @@ import (
 	"strings"
 	"sync"
 	"uuid"
+	"webscreen/consts"
 	"webscreen/db"
 	"webscreen/sdriver"
+	"webscreen/sdriver/scrcpy"
 
 	"github.com/pion/interceptor"
 	pionSDP "github.com/pion/sdp/v3"
@@ -18,19 +20,19 @@ import (
 
 type Nexus struct {
 	sync.RWMutex
-	viewSessions map[string]ViewSession
-	remotes      map[string]Remote
-	remoteStatus map[string]bool
+	viewSessions map[string]*ViewSession
+	remotes      map[string]*Remote
 
 	db *sql.DB
 }
 
 type Remote struct {
-	RemoteID string
+	sync.RWMutex
+	RemoteUUID string
 	// Opened   bool
 	sdriver sdriver.SDriver
 
-	viewSession   []ViewSession
+	viewSession   []*ViewSession
 	masterSession *ViewSession
 }
 
@@ -40,44 +42,43 @@ type ViewSession struct {
 	ConnectionConfig ConnectionConfig
 	NexusConnected   bool
 
-	RemoteID   string
+	RemoteUUID string
 	CanControl bool
 	IsMaster   bool
 
 	// Only used for WebRTC connections, to store the final SDP answer after negotiation.
-	finalSDP2Nexus string
+	FinalSDP2Nexus string
 	videoTrack     *webrtc.TrackLocalStaticRTP
 	audioTrack     *webrtc.TrackLocalStaticRTP
 	rtpSenderVideo *webrtc.RTPSender
 	rtpSenderAudio *webrtc.RTPSender
 	peerConnection *webrtc.PeerConnection
 
-	remote Remote
+	remote *Remote
 }
 
 func NewNexus(db *sql.DB) Nexus {
 	return Nexus{
-		viewSessions: make(map[string]ViewSession),
-		remotes:      make(map[string]Remote),
-		remoteStatus: make(map[string]bool),
+		viewSessions: make(map[string]*ViewSession),
+		remotes:      make(map[string]*Remote),
 		db:           db,
 	}
 }
 
-func (n *Nexus) NewViewSession(user string, cfg ConnectionConfig) (ViewSession, error) {
+func (n *Nexus) NewViewSession(user string, cfg ConnectionConfig) (*ViewSession, error) {
 	viewSession := ViewSession{
 		SessionID:  uuid.New().String(), // Generate a unique ID for the view session
 		UserID:     user,
 		CanControl: true,
-		RemoteID:   cfg.RemoteID,
+		RemoteUUID: cfg.RemoteUUID,
 	}
 
 	err := viewSession.connectToNexus(n, cfg)
 	if err != nil {
-		return ViewSession{}, fmt.Errorf("failed to connect view session to Nexus: %v", err)
+		return nil, fmt.Errorf("failed to connect view session to Nexus: %v", err)
 	}
-	n.viewSessions[viewSession.SessionID] = viewSession
-	return viewSession, nil
+	n.viewSessions[viewSession.SessionID] = &viewSession
+	return &viewSession, nil
 }
 
 // Implement the logic to connect to the Nexus using the provided configuration.
@@ -183,7 +184,7 @@ func (v *ViewSession) connectToNexus(n *Nexus, cfg ConnectionConfig) error {
 
 		// 阻塞等待 ICE 收集完成 (通常几百毫秒)
 		<-gatherComplete
-		v.finalSDP2Nexus = peerConnection.LocalDescription().SDP
+		v.FinalSDP2Nexus = peerConnection.LocalDescription().SDP
 		v.NexusConnected = true
 		v.ConnectionConfig = cfg
 		v.audioTrack = audioTrack
@@ -201,19 +202,111 @@ func (v *ViewSession) connectToNexus(n *Nexus, cfg ConnectionConfig) error {
 	return nil
 }
 
-func (n *Nexus) StartDummyVideo() {}
+func (n *Nexus) BindViewSessionToRemote(v *ViewSession, remoteUUID string) error {
+	if _, exists := n.remotes[remoteUUID]; !exists {
+		return fmt.Errorf("remote with UUID %s is not connected to the nexus yet", remoteUUID)
+	}
+	v.remote = n.remotes[remoteUUID]
+	if v.remote.masterSession == nil {
+		v.remote.masterSession = v
+		v.IsMaster = true
+	}
+	v.remote.viewSession = append(v.remote.viewSession, v)
+	return nil
+}
 
-func (n *Nexus) setupRemote(remoteID string, config RemoteConfig) error {
-	// Implement the logic to set up a remote device using the provided remoteID
-	deviceType, err := db.DeviceTypeByUUID(n.db, remoteID)
+func (n *Nexus) ConnectToRemote(remoteUUID string, config RemoteConfig) error {
+	if _, exists := n.remotes[remoteUUID]; exists {
+		log.Printf("[webscreen] Remote with UUID %s is already connected", remoteUUID)
+		return nil
+	}
+	driver, err := n.setupRemote(remoteUUID, config)
 	if err != nil {
-		return fmt.Errorf("failed to get device type for remoteID %s: %v", remoteID, err)
+		return fmt.Errorf("failed to set up remote: %v", err)
+	}
+	err = driver.Start()
+	if err != nil {
+		return fmt.Errorf("failed to start driver for remoteUUID %s: %v", remoteUUID, err)
+	}
+	n.remotes[remoteUUID] = &Remote{
+		RemoteUUID: remoteUUID,
+		sdriver:    driver,
+	}
+	return nil
+}
+
+func (n *Nexus) setupRemote(remoteUUID string, config RemoteConfig) (sdriver.SDriver, error) {
+	// Implement the logic to set up a remote device using the provided remoteID
+	deviceType, err := db.DeviceTypeByUUID(n.db, remoteUUID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get device type for remoteID %s: %v", remoteUUID, err)
+	}
+	var driver sdriver.SDriver
+	switch deviceType {
+	case consts.DeviceTypeAndroid:
+		driver, err = scrcpy.New(config)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create scrcpy driver for remoteUUID %s: %v", remoteUUID, err)
+		}
+		// Do something with the created driver, e.g., store it or use it for further processing
+	default:
+		return nil, fmt.Errorf("unsupported device type: %s", deviceType)
 	}
 	// Do something with the retrieved device type, e.g., store it or use it for further processing
+	return driver, nil
+}
+
+func (n *Nexus) closeRemote(remoteUUID string) error {
+	// Implement the logic to close the connection to a remote device using the provided remoteID
+	n.Lock()
+	defer n.Unlock()
+	remote, exists := n.remotes[remoteUUID]
+	if !exists {
+		return fmt.Errorf("remote with UUID %s does not exist", remoteUUID)
+	}
+	if remote.sdriver != nil {
+		remote.sdriver.Stop()
+	}
+	for _, v := range remote.viewSession {
+		n.closeViewSession(v.SessionID)
+	}
+
+	delete(n.remotes, remoteUUID)
 	return nil
 }
 
-func (n *Nexus) closeRemote(remoteID string) error {
-	// Implement the logic to close the connection to a remote device using the provided remoteID
+func (n *Nexus) closeViewSession(sessionID string) error {
+	n.Lock()
+	defer n.Unlock()
+	viewSession, exists := n.viewSessions[sessionID]
+	if !exists {
+		return fmt.Errorf("view session with ID %s does not exist", sessionID)
+	}
+	// viewSession.Close(n)
+	if !viewSession.NexusConnected {
+		return nil
+	}
+	switch viewSession.ConnectionConfig.Protocol {
+	case "webrtc":
+		if viewSession.peerConnection != nil {
+			viewSession.peerConnection.Close()
+		}
+	case "webtransport":
+		// Implement WebTransport disconnection logic here
+	case "websocket":
+		// Implement WebSocket disconnection logic here
+	default:
+		log.Printf("[webscreen] Closing Unknown protocol: %s", viewSession.ConnectionConfig.Protocol)
+	}
+	n.viewSessions[viewSession.SessionID] = nil
+
+	if viewSession.IsMaster {
+		n.closeRemote(viewSession.RemoteUUID)
+	}
+	delete(n.viewSessions, sessionID)
 	return nil
 }
+
+// func (v *ViewSession) Close(n *Nexus) {
+
+// }
