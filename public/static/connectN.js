@@ -8,7 +8,7 @@ var CONFIG = (function () {
     if (urlParams.has('debug')) {
         console.log("Using debug config from URL parameter");
         return {
-            device_type: "sunshine",
+            type: "sunshine",
             device_id: "127.0.0.1:5555",
             device_ip: "127.0.0.1",
             device_port: "5555",
@@ -43,7 +43,7 @@ var CONFIG = (function () {
 
     // Fallback to hardcoded defaults for testing
     return {
-        device_type: "none",
+        type: "none",
         device_id: "emulator-5554",
         device_ip: "0",
         device_port: "0",
@@ -58,7 +58,8 @@ var CONFIG = (function () {
 })();
 
 async function start() {
-    if (CONFIG.device_type === "none") {
+    console.log("CONFIG:", CONFIG);
+    if (!CONFIG.remote_uuid) {
         console.error("No device configuration found. Please set up the device configuration in the console.");
         showToast(i18n.t('error_no_device_config'), 3000);
         return;
@@ -146,88 +147,60 @@ async function start() {
 
     // 5. Establish WebSocket connection
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    // Construct URL matching the hardcoded config to satisfy backend check
-    const wsUrl = `${protocol}//${window.location.host}/screen/ws`;
+    const wsUrl = `${protocol}//${window.location.host}/screen/wsn`;
 
     window.ws = new WebSocket(wsUrl);
     window.ws.binaryType = "arraybuffer";
 
     window.ws.onopen = () => {
         console.log('WebSocket connected');
-        // 发送 Config 和 SDP
-        console.log("config:", CONFIG);
         const config = {
-            ...CONFIG,
-            sdp: pc.localDescription.sdp
+            protocol: "webrtc",
+            video_codec: CONFIG.driver_config?.video_codec || "h264",
+            audio_codec: CONFIG.driver_config?.audio_codec || "opus",
+            remote_uuid: CONFIG.remote_uuid,
+            extra: {
+                sdp: pc.localDescription.sdp,
+                av_sync: String(CONFIG.av_sync === true)
+            }
         };
-        console.log(CONFIG.driver_config)
+        console.log("connection config:", config);
         window.ws.send(JSON.stringify(config));
     };
+    let remoteConfigSent = false;
     window.ws.onmessage = async (event) => {
-        // if (typeof event.data === 'string') {
-            const message = JSON.parse(event.data);
-            console.log("Received message status:", message.status);
-            switch (message.status) {
-                case 'ok':
-                    switch (message.stage) {
-                        case 'webrtc_init':
-                            let answerSdp = message.sdp;
-                            console.log("Received SDP Answer");
-                            if (!answerSdp.length) {
-                                console.error("Empty SDP Answer received");
-                                showToast(i18n.t('error_empty_sdp_answer'), 2000);
-                                console.error("WebRTC connection cannot be established without a valid SDP answer. This may be the browser not supporting the required codecs (H264/H265).");
-                                return;
-                            }
+        const message = JSON.parse(event.data);
+        console.log("Received message:", message);
+        if (message.status === 'error') {
+            console.error("Error from server:", message);
+            showToast(i18n.t('error_from_server', { msg: message.message }), 2000);
+            return;
+        }
+        if (message.status !== 'ok' || message.stage !== 'connection_view_session' || !message.sdp) {
+            return;
+        }
 
-                            // for edge browser compatibility, format the SDP properly
-                            let formattedSdp = answerSdp
-                                .split(/\r\n|\r|\n/)
-                                .map(line => line.trim())
-                                .filter(line => line.length > 0)
-                                .join('\r\n');
-                            // formattedSdp += '\r\n';
-                            if (!formattedSdp.endsWith('\r\n')) {
-                                formattedSdp += '\r\n';
-                            }
-                            // 设置 Answer
-                            await pc.setRemoteDescription(new RTCSessionDescription({
-                                type: 'answer',
-                                sdp: formattedSdp
-                            }));
-                            console.log("WebRTC connection established");
-                            break;
-                        case 'webrtc_metainfo':
-                            const capabilities = message.capabilities;
-                            const media_meta = message.media_meta;
-                            console.log("Driver Capabilities:", capabilities);
-                            console.log("Media Meta:", media_meta);
-                            // Update UI based on capabilities
-                            await updateUIBasedOnCapabilities(capabilities);
-                            setInterval(() => force_sync(pc), 1000);
-                            setTimeout(() => {
-                                let rect = remoteVideo.getBoundingClientRect();
-                                // console.log("Initial video size:", rect.width, "x", rect.height);
-                                // updateVideoCache();
-                                // console.log(rect.width / rect.height, media_meta.width / media_meta.height);
-                                if (rect.width / rect.height != media_meta.width / media_meta.height) {
-                                    let p = createRequestKeyFramePacket();
-                                    ws.send(p);
-                                }
-                            }, 2000);
-                            break;
-                        default:
-                            break;
-                    }
-                    break;
-                case 'error':
-                    console.error("Error from server:", message);
-                    showToast(i18n.t('error_from_server', { msg: message.message }), 2000);
-                    break;
-                default:
-                    console.warn("Unknown message status:", message.status);
+        const answerSdp = message.sdp;
+        if (!answerSdp.length) {
+            showToast(i18n.t('error_empty_sdp_answer'), 2000);
+            return;
+        }
+        const formattedSdp = answerSdp
+            .split(/\r\n|\r|\n/)
+            .map(line => line.trim())
+            .filter(line => line.length > 0)
+            .join('\r\n') + '\r\n';
+        await pc.setRemoteDescription({ type: 'answer', sdp: formattedSdp });
+        console.log("WebRTC connection established with Nexus");
+
+        if (!remoteConfigSent) {
+            remoteConfigSent = true;
+            const remoteConfig = { ...(CONFIG.driver_config || {}) };
+            if (CONFIG.type === 'android') {
+                remoteConfig.deviceID = CONFIG.device_ip || CONFIG.device_id || '';
             }
-
+            window.ws.send(JSON.stringify(remoteConfig));
+        }
     };
 }
 

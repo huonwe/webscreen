@@ -10,6 +10,7 @@ import (
 
 	"webscreen/auth"
 	appauth "webscreen/auth"
+	"webscreen/db"
 	"webscreen/nexus"
 	"webscreen/utils"
 	"webscreen/webservice/android"
@@ -41,8 +42,8 @@ type WebMaster struct {
 
 	config              WebMasterConfig
 	router              *gin.Engine
-	devicesConnected    map[string]Device
-	devicesDiscovered   map[string]Device
+	devicesConnected    map[string]db.DeviceInfo
+	devicesDiscovered   map[string]db.DeviceInfo
 	devicesDiscoveredMu sync.RWMutex
 	pauseDiscovery      bool
 	staticFS            fs.FS
@@ -52,7 +53,7 @@ func New(config WebMasterConfig, staticFS fs.FS, database *sql.DB) *WebMaster {
 	wm := &WebMaster{
 		// ScreenSessions:       make(map[string]ScreenSession),
 		config:               config,
-		devicesDiscovered:    make(map[string]Device),
+		devicesDiscovered:    make(map[string]db.DeviceInfo),
 		staticFS:             staticFS,
 		UnlockAttemptRecords: make(map[string]UnlockAttemptRecord),
 		WebRTCManager:        NewWebRTCManager(),

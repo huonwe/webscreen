@@ -231,9 +231,12 @@ func New(config map[string]string) (*ScrcpyDriver, error) {
 	}
 	if config["intra_refresh"] == "true" {
 		if strings.HasSuffix(video_codec_options_webrtc, ",") {
-			video_codec_options_webrtc = strings.TrimSuffix(video_codec_options_webrtc, ",")
+			video_codec_options_webrtc += "intra-refresh-period=60,i-frame-interval=-1"
 		}
 		video_codec_options_webrtc += ",intra-refresh-period=60,i-frame-interval=-1"
+		if strings.HasPrefix(video_codec_options_webrtc, ",") {
+			video_codec_options_webrtc = strings.TrimPrefix(video_codec_options_webrtc, ",")
+		}
 		log.Printf("Enabling intra refresh for the video stream: %s", video_codec_options_webrtc)
 	}
 

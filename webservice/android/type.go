@@ -3,6 +3,7 @@ package android
 import sagent "webscreen/streamAgent"
 
 type AndroidDevice struct {
+	UUID     string `json:"uuid"`
 	DeviceID string `json:"device_id"`
 	IP       string `json:"ip"`
 	Port     int    `json:"port"`
@@ -11,6 +12,7 @@ type AndroidDevice struct {
 	// 显示授权状态与用户自定义名称；老前端只读上面几个字段，保持兼容。
 	Connection string `json:"connection,omitempty"` // USB / WiFi
 	Name       string `json:"name,omitempty"`       // 用户自定义名称或自动名称
+	IDAdb      string `json:"id_adb,omitempty"`     // ADB 设备 ID
 	Model      string `json:"model,omitempty"`      // 自动识别的厂商 + 型号
 	State      string `json:"state,omitempty"`      // ONLINE / UNAUTHORIZED / OFFLINE / ...
 	Streaming  bool   `json:"streaming,omitempty"`  // 是否正在投屏

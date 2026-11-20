@@ -394,7 +394,7 @@ async function fetchDevices() {
         }
         for (const device of devices) {
             let activeConfigSerial = typeof device === 'string' ? device : device.device_id;
-            let dtype = device.device_type;
+            let dtype = device.type;
             if (dtype === 'xvfb') dtype = 'linux';
             const cacheKey = `${dtype}_${activeConfigSerial}`;
             if (!schemaCache[cacheKey]) {

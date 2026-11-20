@@ -2,6 +2,8 @@ package webservice
 
 import (
 	"log"
+	"uuid"
+	"webscreen/db"
 	linuxDriver "webscreen/sdriver/linux"
 	rockchipDriver "webscreen/sdriver/rockchip-hdmirx"
 	"webscreen/sdriver/scrcpy"
@@ -15,20 +17,29 @@ func (wm *WebMaster) handleListDevices(c *gin.Context) {
 	wm.devicesDiscoveredMu.RLock()
 	defer wm.devicesDiscoveredMu.RUnlock()
 
-	var devicesInfo []DeviceInfo
+	// var devicesInfo []db.DeviceInfo
 
 	devices, err := android.GetDevices()
 	if err != nil {
 		log.Printf("[device-list] Android device discovery failed: %v", err)
 	} else {
 		for _, d := range devices {
-			devicesInfo = append(devicesInfo, DeviceInfo{
+			// devicesInfo = append(devicesInfo, DeviceInfo{
+			// 	Type:     d.GetType(),
+			// 	DeviceID: d.GetDeviceID(),
+			// 	IP:       d.GetIP(),
+			// 	Port:     d.GetPort(),
+			// 	Status:   d.GetStatus(),
+			// })
+			wm.registerDevice(db.DeviceInfo{
 				Type:     d.GetType(),
 				DeviceID: d.GetDeviceID(),
+				UUID:     d.UUID,
 				IP:       d.GetIP(),
 				Port:     d.GetPort(),
 				Status:   d.GetStatus(),
 			})
+
 		}
 	}
 
@@ -37,7 +48,14 @@ func (wm *WebMaster) handleListDevices(c *gin.Context) {
 		log.Printf("[device-list] Linux device discovery failed: %v", err)
 	} else {
 		for _, d := range linuxDevices {
-			devicesInfo = append(devicesInfo, DeviceInfo{
+			// devicesInfo = append(devicesInfo, DeviceInfo{
+			// 	Type:     d.GetType(),
+			// 	DeviceID: d.GetDeviceID(),
+			// 	IP:       d.GetIP(),
+			// 	Port:     d.GetPort(),
+			// 	Status:   d.GetStatus(),
+			// })
+			wm.registerDevice(db.DeviceInfo{
 				Type:     d.GetType(),
 				DeviceID: d.GetDeviceID(),
 				IP:       d.GetIP(),
@@ -52,7 +70,14 @@ func (wm *WebMaster) handleListDevices(c *gin.Context) {
 		log.Printf("[device-list] Rockchip HDMI RX discovery failed: %v", err)
 	} else {
 		for _, d := range rockchipDevices {
-			devicesInfo = append(devicesInfo, DeviceInfo{
+			// devicesInfo = append(devicesInfo, DeviceInfo{
+			// 	Type:     d.GetType(),
+			// 	DeviceID: d.GetDeviceID(),
+			// 	IP:       d.GetIP(),
+			// 	Port:     d.GetPort(),
+			// 	Status:   d.GetStatus(),
+			// })
+			wm.registerDevice(db.DeviceInfo{
 				Type:     d.GetType(),
 				DeviceID: d.GetDeviceID(),
 				IP:       d.GetIP(),
@@ -62,20 +87,28 @@ func (wm *WebMaster) handleListDevices(c *gin.Context) {
 		}
 	}
 
-	c.JSON(200, gin.H{"devices": devicesInfo})
-}
-
-func (wm *WebMaster) handleListDevicesDiscoveried(c *gin.Context) {
-	wm.devicesDiscoveredMu.RLock()
-	defer wm.devicesDiscoveredMu.RUnlock()
-
-	var devices []Device
-	for _, v := range wm.devicesDiscovered {
-		devices = append(devices, v)
+	all_devices, err := db.QueryAllDevices(wm.DB)
+	if err != nil {
+		log.Printf("Error querying all devices: %v", err)
+		c.JSON(500, gin.H{"error": "Internal server error"})
+		return
 	}
+	log.Printf("Queried all devices: %+v", all_devices)
 
-	c.JSON(200, devices)
+	c.JSON(200, gin.H{"devices": all_devices})
 }
+
+// func (wm *WebMaster) handleListDevicesDiscoveried(c *gin.Context) {
+// 	wm.devicesDiscoveredMu.RLock()
+// 	defer wm.devicesDiscoveredMu.RUnlock()
+
+// 	var devices []Device
+// 	for _, v := range wm.devicesDiscovered {
+// 		devices = append(devices, v)
+// 	}
+
+// 	c.JSON(200, devices)
+// }
 
 // HandleConnectDevice 处理连接设备的请求
 // POST /api/device/connect
@@ -152,6 +185,24 @@ func (wm *WebMaster) handleDeviceConfigDescription(c *gin.Context) {
 	default:
 		c.JSON(400, gin.H{"error": "Unsupported device type"})
 		return
+	}
+
+}
+
+func (wm *WebMaster) registerDevice(device db.DeviceInfo) {
+	// register the device to the sqlite if not exists, otherwise update the device info
+	exists, err := db.DeviceExists(wm.DB, device.Type, device.IP, device.Port)
+	if err != nil {
+		log.Printf("Error checking device existence: %v", err)
+		return
+	}
+	if !exists {
+		// Insert the device
+		deviceUUID := device.UUID
+		if deviceUUID == "" {
+			deviceUUID = uuid.New().String()
+		}
+		db.InsertDevice(wm.DB, deviceUUID, device.Type, device.DeviceID, device.DeviceID, device.IP, device.Port, device.Status, "")
 	}
 
 }

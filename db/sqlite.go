@@ -28,7 +28,12 @@ func InitDB(dbPath string) (*sql.DB, error) {
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		uuid TEXT UNIQUE NOT NULL,
 		type TEXT NOT NULL,
+		id_adb TEXT NOT NULL,
 		display_name TEXT UNIQUE NOT NULL,
+		ip TEXT,
+		port INTEGER,
+		status_adb TEXT NOT NULL,
+		status_ui TEXT NOT NULL,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
 	CREATE TABLE IF NOT EXISTS share_links (

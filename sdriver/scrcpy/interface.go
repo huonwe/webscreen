@@ -109,4 +109,5 @@ func (sd *ScrcpyDriver) Stop() {
 	}
 	sd.cancel()
 	sd.markDead("会话已停止")
+	log.Println("ScrcpyDriver: Stop called, all connections closed and driver stopped")
 }

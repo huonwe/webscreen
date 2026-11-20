@@ -90,7 +90,7 @@ func (da *ScrcpyDriver) convertVideoFrame() {
 				}:
 					continue
 				default:
-					log.Println("Video channel is full, dropping frame")
+					// log.Println("Video channel is full, dropping frame")
 					continue
 				}
 			default:
@@ -110,7 +110,7 @@ func (da *ScrcpyDriver) convertVideoFrame() {
 		}:
 			continue
 		default:
-			log.Println("Video channel is full, dropping frame")
+			// log.Println("Video channel is full, dropping frame")
 			continue
 
 		}
@@ -148,7 +148,7 @@ func (da *ScrcpyDriver) convertAudioFrame() {
 		}:
 			continue
 		default:
-			log.Println("Audio channel is full, dropping frame")
+			// log.Println("Audio channel is full, dropping frame")
 			continue
 		}
 
