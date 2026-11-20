@@ -119,6 +119,9 @@ func (wm *WebMaster) setRouter() {
 	r.GET("/console", func(c *gin.Context) {
 		c.FileFromFS("console.html", http.FS(wm.staticFS))
 	})
+	r.GET("/consoleN", func(c *gin.Context) {
+		c.FileFromFS("consoleN.html", http.FS(wm.staticFS))
+	})
 	api := r.Group("/api")
 	{
 		api.GET("/auth/status", wm.handleAuthStatus)
