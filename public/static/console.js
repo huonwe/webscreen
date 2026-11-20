@@ -1109,6 +1109,17 @@ async function initDeviceManager() {
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
+    fetch('/api/auth/status')
+        .then(response => {
+            if (!response.ok) throw new Error('无法获取登录状态');
+            return response.json();
+        })
+        .then(status => {
+            showToast(`用户: ${status.username}  |  角色: ${status.role}`);
+        })
+        .catch(error => {
+            showToast(error.message, 'error');
+        });
     fetchDevices();
     initDeviceManager();
 });

@@ -46,6 +46,11 @@ func (wm *WebMaster) handleScreenWSN(c *gin.Context) {
 		return
 	}
 	defer conn.Close()
+	userID, exists := c.Get("userid")
+	if !exists {
+		conn.WriteJSON(map[string]any{"status": "error", "message": "Unauthorized", "stage": "connection_nexus"})
+		return
+	}
 	connectionConfig := nexus.ConnectionConfig{}
 	err = conn.ReadJSON(&connectionConfig)
 	if err != nil {
@@ -54,13 +59,17 @@ func (wm *WebMaster) handleScreenWSN(c *gin.Context) {
 		return
 	}
 	log.Printf("Received connection config: %+v", connectionConfig)
-	viewer := wm.Nexus.NewViewer()
-	err = viewer.ConnectToNexus(wm.Nexus, connectionConfig)
+
+	viewSession, err := wm.Nexus.NewViewSession(userID.(string), connectionConfig)
 	if err != nil {
-		log.Println("Failed to connect viewer to Nexus:", err)
+		log.Println("Failed to create view session:", err)
 		conn.WriteJSON(map[string]any{"status": "error", "message": err.Error(), "stage": "connection_nexus"})
 		return
 	}
+	conn.WriteJSON(map[string]any{"status": "ok", "viewer_id": viewSession.SessionID, "stage": "connection_nexus"})
+	// deviceID := ""
+	// conn.ReadJSON(&connectionConfig)
+	// viewSession.ConnectToRemote()
 }
 
 // /:id/ws

@@ -1,11 +1,14 @@
 package nexus
 
 import (
+	"database/sql"
 	"errors"
 	"fmt"
 	"log"
 	"strings"
+	"sync"
 	"uuid"
+	"webscreen/db"
 	"webscreen/sdriver"
 
 	"github.com/pion/interceptor"
@@ -14,24 +17,32 @@ import (
 )
 
 type Nexus struct {
-	viewers      map[string]Viewer
+	sync.RWMutex
+	viewSessions map[string]ViewSession
 	remotes      map[string]Remote
 	remoteStatus map[string]bool
+
+	db *sql.DB
 }
 
 type Remote struct {
-	ID      string
-	Status  bool
+	RemoteID string
+	// Opened   bool
 	sdriver sdriver.SDriver
 
-	viewers []Viewer
-	master  *Viewer
+	viewSession   []ViewSession
+	masterSession *ViewSession
 }
 
-type Viewer struct {
-	ID               string
+type ViewSession struct {
+	SessionID        string
+	UserID           string
 	ConnectionConfig ConnectionConfig
 	NexusConnected   bool
+
+	RemoteID   string
+	CanControl bool
+	IsMaster   bool
 
 	// Only used for WebRTC connections, to store the final SDP answer after negotiation.
 	finalSDP2Nexus string
@@ -41,22 +52,42 @@ type Viewer struct {
 	rtpSenderAudio *webrtc.RTPSender
 	peerConnection *webrtc.PeerConnection
 
-	remotes []Remote
+	remote Remote
 }
 
-func (n *Nexus) NewViewer() Viewer {
-	viewer := Viewer{
-		ID:      uuid.New().String(),
-		remotes: make([]Remote, 0),
+func NewNexus(db *sql.DB) Nexus {
+	return Nexus{
+		viewSessions: make(map[string]ViewSession),
+		remotes:      make(map[string]Remote),
+		remoteStatus: make(map[string]bool),
+		db:           db,
 	}
-	n.viewers[viewer.ID] = viewer
-	return viewer
+}
+
+func (n *Nexus) NewViewSession(user string, cfg ConnectionConfig) (ViewSession, error) {
+	viewSession := ViewSession{
+		SessionID:  uuid.New().String(), // Generate a unique ID for the view session
+		UserID:     user,
+		CanControl: true,
+		RemoteID:   cfg.RemoteID,
+	}
+
+	err := viewSession.connectToNexus(n, cfg)
+	if err != nil {
+		return ViewSession{}, fmt.Errorf("failed to connect view session to Nexus: %v", err)
+	}
+	n.viewSessions[viewSession.SessionID] = viewSession
+	return viewSession, nil
 }
 
 // Implement the logic to connect to the Nexus using the provided configuration.
 // This might involve setting up a WebRTC connection, WebSocket, or other protocols based on cfg.Protocol.
 // This is NOT going to connect to a remote device directly.
-func (v *Viewer) ConnectToNexus(n *Nexus, cfg ConnectionConfig) error {
+func (v *ViewSession) connectToNexus(n *Nexus, cfg ConnectionConfig) error {
+	// if v.NexusConnected {
+	// 	log.Println("[webscreen] Viewer is already connected to Nexus")
+	// 	return nil
+	// }
 	switch cfg.Protocol {
 	case "webrtc":
 		if cfg.VideoCodec != "h264" && cfg.VideoCodec != "h265" {
@@ -174,6 +205,11 @@ func (n *Nexus) StartDummyVideo() {}
 
 func (n *Nexus) setupRemote(remoteID string, config RemoteConfig) error {
 	// Implement the logic to set up a remote device using the provided remoteID
+	deviceType, err := db.DeviceTypeByUUID(n.db, remoteID)
+	if err != nil {
+		return fmt.Errorf("failed to get device type for remoteID %s: %v", remoteID, err)
+	}
+	// Do something with the retrieved device type, e.g., store it or use it for further processing
 	return nil
 }
 

@@ -2,6 +2,7 @@ package webservice
 
 import (
 	"fmt"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -11,7 +12,9 @@ import (
 )
 
 type CustomClaims struct {
-	Role string `json:"role"`
+	Role        string `json:"role"`
+	LoginMethod string `json:"login_method,omitempty"`
+	Username    string `json:"username,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -20,8 +23,11 @@ func (wm *WebMaster) GenerateToken() (string, error) {
 	expirationTime := time.Now().Add(2 * time.Hour)
 
 	claims := &CustomClaims{
-		Role: "admin", // 你可以在这里存用户ID或其他信息
+		Role:        "admin",
+		Username:    "PIN",
+		LoginMethod: "pin",
 		RegisteredClaims: jwt.RegisteredClaims{
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			ExpiresAt: jwt.NewNumericDate(expirationTime),
 			Issuer:    "webscreen",
 		},
@@ -33,11 +39,32 @@ func (wm *WebMaster) GenerateToken() (string, error) {
 	return tokenString, err
 }
 
+func (wm *WebMaster) parseToken(tokenString string) (*CustomClaims, error) {
+	claims := &CustomClaims{}
+	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+		if token.Method != jwt.SigningMethodHS256 {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return wm.jwtSecret, nil
+	}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}), jwt.WithIssuer("webscreen"))
+
+	if err != nil || !token.Valid {
+		return nil, fmt.Errorf("invalid token: %v", err)
+	}
+
+	return claims, nil
+}
+
 // ---------------------------------------------------------
 // 中间件：JWT 认证拦截器
 // ---------------------------------------------------------
 func (wm *WebMaster) HybridAuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		if wm.isPublicAuthPath(c.Request.URL.Path) {
+			c.Next()
+			return
+		}
+
 		var tokenString string
 
 		// 1. 优先尝试从 Cookie 取
@@ -52,17 +79,29 @@ func (wm *WebMaster) HybridAuthMiddleware() gin.HandlerFunc {
 		}
 
 		// 3. 都没有，或者验证失败
-		if tokenString == "" || !wm.validateToken(tokenString) { // validateToken 是你自己封装的验证逻辑
-
-			// 判断请求类型：如果是请求网页(Accept text/html)，跳转；如果是 API (Accept application/json)，返回 401
+		if tokenString == "" || !wm.validateToken(tokenString) {
 			accept := c.GetHeader("Accept")
 			if strings.Contains(accept, "text/html") {
-				c.Redirect(http.StatusFound, "/unlock")
+				if wm.pin != "" && wm.isTrustedIP(c.ClientIP()) {
+					c.Redirect(http.StatusFound, "/unlock")
+				} else {
+					c.Redirect(http.StatusFound, "/login")
+				}
 			} else {
 				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 			}
 			return
 		}
+		claims, err := wm.parseToken(tokenString)
+		if err != nil {
+			// 未授权处理
+			return
+		}
+
+		c.Set("userid", claims.ID)
+		c.Set("username", claims.Username)
+		c.Set("role", claims.Role)
+		c.Set("login_method", claims.LoginMethod)
 
 		c.Next()
 	}
@@ -70,16 +109,46 @@ func (wm *WebMaster) HybridAuthMiddleware() gin.HandlerFunc {
 func (wm *WebMaster) validateToken(tokenString string) bool {
 	claims := &CustomClaims{}
 	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+		if token.Method != jwt.SigningMethodHS256 {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
 		return wm.jwtSecret, nil
-	})
+	}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}), jwt.WithIssuer("webscreen"))
 
 	if err != nil || !token.Valid {
 		return false
 	}
 
-	return true
+	return claims.Role == "admin"
+}
 
+func (wm *WebMaster) isPublicAuthPath(path string) bool {
+	switch path {
+	case "/unlock", "/api/unlock", "/login", "/api/login", "/setup", "/api/setup":
+		return true
+	}
+	return strings.HasPrefix(path, "/static/")
+}
+
+func (wm *WebMaster) isTrustedIP(ip string) bool {
+	host := net.ParseIP(ip)
+	if host == nil {
+		return false
+	}
+	for _, source := range wm.trustedIPs {
+		source = strings.TrimSpace(source)
+		if source == "" {
+			continue
+		}
+		if _, network, err := net.ParseCIDR(source); err == nil {
+			if network.Contains(host) {
+				return true
+			}
+			continue
+		}
+		if trusted := net.ParseIP(source); trusted != nil && trusted.Equal(host) {
+			return true
+		}
+	}
+	return false
 }

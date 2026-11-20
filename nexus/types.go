@@ -29,14 +29,13 @@ type ConnectionConfig struct {
 	VideoCodec string `json:"video_codec"`
 	// Audio codec must be opus
 	AudioCodec string `json:"audio_codec"`
-
-	RemoteType string `json:"remote_type"`
-	RemoteID   string `json:"remote_id"`
-
 	// if use webrtc, sdp should be stored here
 	Extra map[string]string `json:"extra,omitempty"`
 	// AVSync            bool `json:"av_sync"`
 	// UseLocalTimestamp bool `json:"use_local_timestamp"`
+
+	// RemoteType string `json:"remote_type"`
+	RemoteID string `json:"remote_id"`
 }
 
 type RemoteConfig map[string]string

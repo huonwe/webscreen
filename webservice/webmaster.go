@@ -1,12 +1,15 @@
 package webservice
 
 import (
+	"database/sql"
 	"io/fs"
 	"log"
 	"net/http"
 	"sync"
 	"time"
 
+	"webscreen/auth"
+	appauth "webscreen/auth"
 	"webscreen/nexus"
 	"webscreen/utils"
 	"webscreen/webservice/android"
@@ -16,18 +19,25 @@ import (
 
 type WebMasterConfig struct {
 	EnableAndroidDiscover bool
+	PIN                   string   `yaml:"pin"`
+	JWTSecret             string   `yaml:"jwt_secret"`
+	TrustedIPs            []string `yaml:"trusted_ips"`
 }
 
 type WebMaster struct {
 	// WSConns []*websocket.Conn
 
-	Nexus         *nexus.Nexus
+	Nexus         nexus.Nexus
 	WebRTCManager *WebRTCManager
 	// ScreenSessions map[string]ScreenSession
 
 	pin                  string
+	trustedIPs           []string
 	UnlockAttemptRecords map[string]UnlockAttemptRecord
 	jwtSecret            []byte
+	DB                   *sql.DB
+	authService          *appauth.Service
+	authMu               sync.Mutex
 
 	config              WebMasterConfig
 	router              *gin.Engine
@@ -38,7 +48,7 @@ type WebMaster struct {
 	staticFS            fs.FS
 }
 
-func New(config WebMasterConfig, staticFS fs.FS) *WebMaster {
+func New(config WebMasterConfig, staticFS fs.FS, database *sql.DB) *WebMaster {
 	wm := &WebMaster{
 		// ScreenSessions:       make(map[string]ScreenSession),
 		config:               config,
@@ -46,17 +56,26 @@ func New(config WebMasterConfig, staticFS fs.FS) *WebMaster {
 		staticFS:             staticFS,
 		UnlockAttemptRecords: make(map[string]UnlockAttemptRecord),
 		WebRTCManager:        NewWebRTCManager(),
+		pin:                  config.PIN,
+		trustedIPs:           append([]string(nil), config.TrustedIPs...),
+		authService:          auth.NewService(database, config.JWTSecret),
+		DB:                   database,
+		Nexus:                nexus.NewNexus(database),
 	}
-	wm.jwtSecret = []byte(time.Now().String())
+	secret := config.JWTSecret
+	if secret == "" {
+		secret = time.Now().String()
+	}
+	wm.jwtSecret = []byte(secret)
 	return wm
 }
 
-func Default(staticFS fs.FS) *WebMaster {
-	wm := New(WebMasterConfig{
-		EnableAndroidDiscover: true,
-	}, staticFS)
-	return wm
-}
+// func Default(staticFS fs.FS) *WebMaster {
+// 	wm := New(WebMasterConfig{
+// 		EnableAndroidDiscover: true,
+// 	}, staticFS)
+// 	return wm
+// }
 
 func (wm *WebMaster) setRouter() {
 	// gin.SetMode(gin.ReleaseMode)
@@ -83,10 +102,11 @@ func (wm *WebMaster) setRouter() {
 	r.GET("/", func(ctx *gin.Context) {
 		ctx.Redirect(302, "/console")
 	})
-	if wm.pin != "" {
-		log.Println("Enable PIN middleware")
-		r.Use(wm.HybridAuthMiddleware())
-	}
+	r.GET("/login", wm.handleLoginUI)
+	r.POST("/api/login", wm.handleLogin)
+	r.GET("/setup", wm.handleSetupUI)
+	r.POST("/api/setup", wm.handleSetup)
+	r.Use(wm.HybridAuthMiddleware())
 	screen := r.Group("/screen")
 	{
 		screen.GET("/:id", func(ctx *gin.Context) {
@@ -100,6 +120,7 @@ func (wm *WebMaster) setRouter() {
 	})
 	api := r.Group("/api")
 	{
+		api.GET("/auth/status", wm.handleAuthStatus)
 		api.GET("/device/list", wm.handleListDevices)
 		api.POST("/device/connect", wm.handleConnectDevice)
 		api.POST("/device/pair", wm.handlePairDevice)
@@ -107,7 +128,6 @@ func (wm *WebMaster) setRouter() {
 		// api.GET("/generalConfigDescription", wm.handleGeneralConfigDescription)
 
 		// api.POST("/device/discovery", wm.handleListDevicesDiscoveried)
-		// api.POST("/setPIN", wm.handleSetPIN)
 
 		// 统一设备管理（USB / Wi-Fi）：设备列表、事件日志、命名与连接控制
 		api.GET("/adb/devices", wm.handleADBDevices)
@@ -121,6 +141,11 @@ func (wm *WebMaster) setRouter() {
 
 		// 受控端背光（隐私保护：屏幕黑，但不锁屏，串流照常）
 		api.POST("/screen/backlight", wm.handleBacklight)
+
+		// auth := api.Group("/auth")
+		// {
+		// 	auth.GET("/status", authSrv.HandleStatus)
+		// }
 	}
 
 	wm.router = r
@@ -150,6 +175,13 @@ func (wm *WebMaster) Serve(host, port string) {
 }
 
 func (wm *WebMaster) Close() {
+	wm.authMu.Lock()
+	defer wm.authMu.Unlock()
+	if wm.DB != nil {
+		_ = wm.DB.Close()
+		wm.DB = nil
+		wm.authService = nil
+	}
 	// for k, v := range maps.All(wm.ScreenSessions) {
 	// 	log.Printf("closing session %v", k)
 	// 	v.Close()

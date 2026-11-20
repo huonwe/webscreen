@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"webscreen/db"
 	"webscreen/webservice"
 )
 
@@ -32,16 +33,23 @@ func main() {
 		}
 	}
 
-	if *pin == "" {
-		log.Println("Warning: Since v1.3.6, the default PIN is empty, which means no PIN is required to access the web interface.")
-	}
-
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
 	pub, _ := fs.Sub(publicFS, "public")
-	webMaster := webservice.Default(pub)
-	webMaster.SetPIN(*pin)
+	config, err := webservice.LoadConfig("config.yml")
+	if err != nil {
+		log.Fatalf("Failed to load config.yml: %v", err)
+	}
+	// config.EnableAndroidDiscover = true
+	MyDataBase, err := db.InitDB("webscreen.db")
+	if err != nil {
+		log.Fatalf("Failed to initialize database: %v", err)
+	}
+	webMaster := webservice.New(config, pub, MyDataBase)
+	if *pin != "" {
+		webMaster.SetPIN(*pin)
+	}
 
 	go webMaster.Serve(*host, *port)
 

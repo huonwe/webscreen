@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>初始化系统 - 创建管理员账户</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            zinc: {
+              925: '#121215',
+            }
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="min-h-screen bg-zinc-950 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-900 via-zinc-950 to-zinc-950 text-zinc-100 flex items-center justify-center p-5 antialiased selection:bg-blue-500/30 selection:text-blue-200">
+
+  <main class="w-full max-w-md">
+    <div class="bg-zinc-925/90 backdrop-blur-xl border border-zinc-800/80 rounded-2xl p-8 shadow-2xl shadow-black/60">
+      
+      <!-- 头部图标与标题 -->
+      <header class="text-center mb-7">
+        <div class="w-12 h-12 mx-auto mb-4 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center shadow-inner">
+          <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+          </svg>
+        </div>
+        <h1 class="text-xl font-semibold tracking-tight text-white">系统初始化</h1>
+        <p class="text-sm text-zinc-400 mt-1.5">创建唯一的管理员账户以保护您的远程控制服务</p>
+      </header>
+
+      <!-- 动态提示框 -->
+      <div id="alert-box" class="hidden mb-5 px-4 py-3 rounded-lg text-sm border transition-all" role="alert"></div>
+
+      <!-- 表单区域 -->
+      <form id="setup-form" class="space-y-5" novalidate>
+        
+        <!-- 用户名 -->
+        <div>
+          <label for="username" class="block text-sm font-medium text-zinc-200 mb-1.5">管理员用户名</label>
+          <input
+            type="text"
+            id="username"
+            name="username"
+            value="admin"
+            placeholder="请输入管理员用户名"
+            autocomplete="username"
+            required
+            class="w-full px-3.5 py-2.5 text-sm text-white bg-zinc-900 border border-zinc-800 rounded-lg placeholder-zinc-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition"
+          />
+        </div>
+
+        <!-- 设置密码 -->
+        <div>
+          <div class="flex items-center justify-between mb-1.5">
+            <label for="password" class="block text-sm font-medium text-zinc-200">设置访问密码</label>
+            <button type="button" id="generate-btn" class="text-xs font-medium text-blue-400 hover:text-blue-300 hover:underline transition cursor-pointer">
+              生成强密码
+            </button>
+          </div>
+          
+          <div class="relative flex items-center">
+            <input
+              type="password"
+              id="password"
+              name="password"
+              placeholder="至少 8 位字符，建议包含字母与数字"
+              autocomplete="new-password"
+              required
+              class="w-full pl-3.5 pr-10 py-2.5 text-sm text-white bg-zinc-900 border border-zinc-800 rounded-lg placeholder-zinc-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition"
+            />
+            <button type="button" id="toggle-pwd" title="显示/隐藏密码" aria-label="显示或隐藏密码" class="absolute right-2.5 p-1 text-zinc-400 hover:text-zinc-200 transition cursor-pointer">
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+              </svg>
+            </button>
+          </div>
+
+          <!-- 密码强度进度条 -->
+          <div class="h-1 w-full bg-zinc-800 rounded-full mt-2.5 overflow-hidden">
+            <div id="strength-bar" class="h-full w-0 transition-all duration-300 rounded-full"></div>
+          </div>
+          <p id="strength-text" class="text-xs text-zinc-400 mt-1.5">请输入高强度密码以防止公网暴力破解</p>
+        </div>
+
+        <!-- 确认密码 -->
+        <div>
+          <label for="confirm-password" class="block text-sm font-medium text-zinc-200 mb-1.5">确认访问密码</label>
+          <input
+            type="password"
+            id="confirm-password"
+            name="confirm-password"
+            placeholder="再次输入密码"
+            autocomplete="new-password"
+            required
+            class="w-full px-3.5 py-2.5 text-sm text-white bg-zinc-900 border border-zinc-800 rounded-lg placeholder-zinc-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition"
+          />
+        </div>
+
+        <!-- 提交按钮 -->
+        <button
+          type="submit"
+          id="submit-btn"
+          class="w-full mt-2 py-2.5 px-4 text-sm font-medium text-white bg-blue-600 hover:bg-blue-500 active:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed rounded-lg shadow-lg shadow-blue-600/20 flex items-center justify-center gap-2 transition cursor-pointer"
+        >
+          <span class="btn-text">完成初始化并进入控制台</span>
+          <svg class="spinner hidden animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+        </button>
+      </form>
+
+      <!-- 底部提示 -->
+      <footer class="mt-6 pt-5 border-t border-zinc-800/80 text-center">
+        <p class="text-xs text-zinc-500 leading-relaxed">
+          初始化完成后注册入口将自动关闭。如需重置，请删除服务器上的数据库文件。
+        </p>
+      </footer>
+    </div>
+  </main>
+
+  <script src="/static/setup.js"></script>
+</body>
+</html>

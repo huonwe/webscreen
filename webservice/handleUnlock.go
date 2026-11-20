@@ -15,6 +15,15 @@ type UnlockAttemptRecord struct {
 
 // User need to enter correct PIN to unlock the web access
 func (wm *WebMaster) handleUnlock(c *gin.Context) {
+	if wm.pin == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"result": "error", "message": "PIN login is not enabled"})
+		return
+	}
+	if !wm.isTrustedIP(c.ClientIP()) {
+		c.JSON(http.StatusForbidden, gin.H{"result": "error", "message": "PIN login is only available from trusted IPs"})
+		return
+	}
+
 	var req struct {
 		PIN string `json:"pin"`
 	}

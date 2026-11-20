@@ -12,3 +12,7 @@ devices.json
 dist/
 
 .vscode/
+
+*.db
+*.db-shm
+*.db-wal
