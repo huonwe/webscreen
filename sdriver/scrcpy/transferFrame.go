@@ -82,12 +82,17 @@ func (da *ScrcpyDriver) convertVideoFrame() {
 				continue
 			case 7, 32: // H.264 SPS / H.265 VPS
 				go da.updateCache(payloadBuf, da.mediaMeta.VideoCodec)
-				da.VideoChan <- sdriver.AVBox{
+				select {
+				case da.VideoChan <- sdriver.AVBox{
 					Data:       payloadBuf,
 					PTS:        da.LastPTS,
 					NoDuration: true,
+				}:
+					continue
+				default:
+					log.Println("Video channel is full, dropping frame")
+					continue
 				}
-				continue
 			default:
 				continue
 			}
@@ -97,11 +102,17 @@ func (da *ScrcpyDriver) convertVideoFrame() {
 			go da.updateCache(payloadBuf, da.mediaMeta.VideoCodec)
 			continue
 		}
-
-		da.VideoChan <- sdriver.AVBox{
+		select {
+		case da.VideoChan <- sdriver.AVBox{
 			Data:       payloadBuf[4:],
 			PTS:        header.PTS,
 			NoDuration: false,
+		}:
+			continue
+		default:
+			log.Println("Video channel is full, dropping frame")
+			continue
+
 		}
 	}
 }
@@ -129,11 +140,16 @@ func (da *ScrcpyDriver) convertAudioFrame() {
 		// 	log.Println("[scrcpy driver]Received audio config frame, skipping...")
 		// 	continue
 		// }
-
-		da.AudioChan <- sdriver.AVBox{
+		select {
+		case da.AudioChan <- sdriver.AVBox{
 			Data:       payloadBuf,
 			PTS:        header.PTS,
 			NoDuration: false,
+		}:
+			continue
+		default:
+			log.Println("Audio channel is full, dropping frame")
+			continue
 		}
 
 	}
