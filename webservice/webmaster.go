@@ -28,7 +28,7 @@ type WebMasterConfig struct {
 type WebMaster struct {
 	// WSConns []*websocket.Conn
 
-	Nexus         nexus.Nexus
+	Nexus         *nexus.Nexus
 	WebRTCManager *WebRTCManager
 	// ScreenSessions map[string]ScreenSession
 
