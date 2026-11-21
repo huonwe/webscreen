@@ -47,9 +47,6 @@ func main() {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
 	webMaster := webservice.New(config, pub, MyDataBase)
-	if *pin != "" {
-		webMaster.SetPIN(*pin)
-	}
 
 	go webMaster.Serve(*host, *port)
 

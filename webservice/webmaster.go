@@ -18,13 +18,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type WebMasterConfig struct {
-	EnableAndroidDiscover bool
-	PIN                   string   `yaml:"pin"`
-	JWTSecret             string   `yaml:"jwt_secret"`
-	TrustedIPs            []string `yaml:"trusted_ips"`
-}
-
 type WebMaster struct {
 	// WSConns []*websocket.Conn
 
@@ -61,7 +54,7 @@ func New(config WebMasterConfig, staticFS fs.FS, database *sql.DB) *WebMaster {
 		trustedIPs:           append([]string(nil), config.TrustedIPs...),
 		authService:          auth.NewService(database, config.JWTSecret),
 		DB:                   database,
-		Nexus:                nexus.NewNexus(database),
+		Nexus:                nexus.NewNexus(database, config.MTU),
 	}
 	secret := config.JWTSecret
 	if secret == "" {
@@ -154,13 +147,6 @@ func (wm *WebMaster) setRouter() {
 	}
 
 	wm.router = r
-}
-
-func (wm *WebMaster) SetPIN(pin string) {
-	// Set the PIN for web access
-	// This is a placeholder implementation
-	log.Printf("PIN set to: %s", pin)
-	wm.pin = pin
 }
 
 func (wm *WebMaster) Serve(host, port string) {

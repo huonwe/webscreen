@@ -1,0 +1,441 @@
+package nexus
+
+import (
+	"database/sql"
+	"errors"
+	"fmt"
+	"log"
+	"sync"
+	"time"
+	"uuid"
+	"webscreen/consts"
+	"webscreen/db"
+	"webscreen/sdriver"
+	"webscreen/sdriver/scrcpy"
+
+	"github.com/pion/rtp"
+	"github.com/pion/rtp/codecs"
+	"github.com/pion/webrtc/v5"
+)
+
+type Nexus struct {
+	sync.RWMutex
+	bindings     map[string]*remoteBinding // remoteUUID -> 路由绑定关系
+	viewSessions map[string]*ViewSession   // sessionID -> ViewSession
+	sessionRoute map[string]string         // sessionID -> remoteUUID（反向索引，方便断线时 O(1) 查找）
+
+	db *sql.DB
+}
+
+type remoteBinding struct {
+	remote          *Remote
+	masterSessionID string
+	viewerIDs       map[string]struct{} // 该 Remote 下的所有观众 ID
+}
+
+type Remote struct {
+	RemoteUUID string
+	sdriver    sdriver.SDriver
+}
+
+type ViewSession struct {
+	SessionID        string
+	UserID           string
+	ConnectionConfig ConnectionConfig
+	videoMimeType    string
+	// audioMimeType    string
+	// NexusConnected   bool
+
+	RemoteUUID string
+	CanControl bool
+	IsMaster   bool
+
+	// Timestamp
+	timestampStartTime time.Time
+	useLocalTimestamp  bool
+
+	// Only used for WebRTC connections, to store the final SDP answer after negotiation.
+	FinalSDP2Nexus  string
+	videoTrack      *webrtc.TrackLocalStaticRTP
+	audioTrack      *webrtc.TrackLocalStaticRTP
+	rtpSenderVideo  *webrtc.RTPSender
+	rtpSenderAudio  *webrtc.RTPSender
+	peerConnection  *webrtc.PeerConnection
+	videoPacketizer rtp.Packetizer
+	audioPacketizer rtp.Packetizer
+
+	remote *Remote
+}
+
+func (v *ViewSession) SendMedia(pkt sdriver.AVBox) {
+	switch v.ConnectionConfig.Protocol {
+	case "webrtc":
+		if pkt.Type == 0 && v.videoTrack != nil {
+			var Timestamp uint32
+			if v.useLocalTimestamp {
+				Timestamp = uint32((time.Since(v.timestampStartTime).Milliseconds() * 90) / 1000)
+			} else {
+				Timestamp = uint32((pkt.PTS * 90) / 1000)
+			}
+			packets := v.videoPacketizer.Packetize(pkt.Data, 1)
+			for _, p := range packets {
+				p.Timestamp = Timestamp
+				if err := v.videoTrack.WriteRTP(p); err != nil {
+					log.Printf("Failed to write video RTP packet: %v", err)
+				}
+			}
+		} else if pkt.Type == 1 && v.audioTrack != nil {
+			elapsedUs := time.Since(v.timestampStartTime).Microseconds()
+			// 本地真实时间换算成的理论音频 RTP
+			realLocalRTP := uint32((elapsedUs * 48) / 1000)
+		}
+	case "webtransport":
+		// 写入 WebTransport Stream / Datagram
+	case "websocket":
+		// 写入 WebSocket BinaryMessage
+	}
+}
+
+func NewNexus(db *sql.DB) *Nexus {
+	return &Nexus{
+		viewSessions: make(map[string]*ViewSession),
+		bindings:     make(map[string]*remoteBinding),
+		sessionRoute: make(map[string]string),
+		db:           db,
+	}
+}
+
+func (n *Nexus) Bind(sessionID, remoteUUID string) error {
+	n.Lock()
+	defer n.Unlock()
+
+	_, vOk := n.viewSessions[sessionID]
+	b, rOk := n.bindings[remoteUUID]
+	if !vOk || !rOk {
+		return errors.New("session or remote not found")
+	}
+
+	// 第一个绑定的就是 Master
+	if b.masterSessionID == "" {
+		b.masterSessionID = sessionID
+	}
+	b.viewerIDs[sessionID] = struct{}{}
+	n.sessionRoute[sessionID] = remoteUUID
+
+	// Nexus 负责把 Remote 的输出轨道“插”到 ViewSession 的发送器上（桥接动作）
+	// _ = v.rtpSenderVideo.ReplaceTrack(b.remote.videoTrack)
+	// _ = v.rtpSenderAudio.ReplaceTrack(b.remote.audioTrack)
+	return nil
+}
+
+func (n *Nexus) NewViewSession(userID string, cfg ConnectionConfig) (*ViewSession, error) {
+	viewSession := ViewSession{
+		SessionID:          uuid.New().String(), // Generate a unique ID for the view session
+		UserID:             userID,
+		CanControl:         true,
+		RemoteUUID:         cfg.RemoteUUID,
+		useLocalTimestamp:  cfg.Extra["use_local_timestamp"] == "true",
+		timestampStartTime: time.Now(),
+	}
+	var payloader rtp.Payloader
+	switch cfg.VideoCodec {
+	case "h264", "avc":
+		payloader = &codecs.H264Payloader{}
+	case "h265", "hevc":
+		payloader = &codecs.H265Payloader{}
+	default:
+		return nil, fmt.Errorf("unsupported video codec: %s", cfg.VideoCodec)
+	}
+	viewSession.videoPacketizer = rtp.NewPacketizer(
+		1200, // MTU 大小，通常 1200 左右很安全
+		0,    // Payload Type，Pion 会自动覆盖它，填 0 即可
+		0,    // SSRC (TrackLocalStaticRTP 会自动覆盖它，填 0 即可)
+		payloader,
+		rtp.NewRandomSequencer(), // 随机序列号生成器
+		90000,                    // 视频的基准时钟频率 (WebRTC 规定视频固定为 90kHz)
+	)
+	viewSession.audioPacketizer = rtp.NewPacketizer(1200, 0, 0, &codecs.OpusPayloader{}, rtp.NewRandomSequencer(), 48000)
+
+	err := viewSession.connectToNexus(n, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect view session to Nexus: %v", err)
+	}
+	n.Lock()
+	n.viewSessions[viewSession.SessionID] = &viewSession
+	n.Unlock()
+
+	switch viewSession.ConnectionConfig.Protocol {
+	case "webrtc":
+		viewSession.peerConnection.OnConnectionStateChange(
+			func(state webrtc.PeerConnectionState) {
+				switch state {
+				case webrtc.PeerConnectionStateDisconnected, webrtc.PeerConnectionStateFailed, webrtc.PeerConnectionStateClosed:
+					log.Printf("[webscreen] ViewSession %s disconnected from Nexus (state: %s)", viewSession.SessionID, state.String())
+					n.closeViewSession(viewSession.SessionID)
+				default:
+					log.Printf("[webscreen] ViewSession %s connection state changed: %s", viewSession.SessionID, state.String())
+				}
+			},
+		)
+	}
+	return &viewSession, nil
+}
+
+// Implement the logic to connect to the Nexus using the provided configuration.
+// This might involve setting up a WebRTC connection, WebSocket, or other protocols based on cfg.Protocol.
+// This is NOT going to connect to a remote device directly.
+func (v *ViewSession) connectToNexus(n *Nexus, cfg ConnectionConfig) error {
+	// if v.NexusConnected {
+	// 	log.Println("[webscreen] Viewer is already connected to Nexus")
+	// 	return nil
+	// }
+	switch cfg.Protocol {
+	case "webrtc":
+		var err error
+		v.videoMimeType, err = getMimeTypeFromString(cfg.VideoCodec)
+		if err != nil {
+			return err
+		}
+		sdp := cfg.Extra["sdp"]
+		if sdp == "" {
+			return errors.New("SDP is required for WebRTC connection")
+		}
+
+		peerConnection, err := createPeerConnection(cfg)
+		if err != nil {
+			return fmt.Errorf("failed to create PeerConnection: %v", err)
+		}
+		var videoTrack, audioTrack *webrtc.TrackLocalStaticRTP
+		n.RLock()
+		r, exists := n.remotes[cfg.RemoteUUID]
+		n.RUnlock()
+		if !exists {
+			videoTrack, audioTrack = createAVTrack(v.videoMimeType, cfg.Extra["av_sync"] == "true")
+		} else {
+			videoTrack = r.masterSession.videoTrack
+			audioTrack = r.masterSession.audioTrack
+		}
+
+		// 2. Add SHARED tracks to PeerConnection
+		rtpSenderVideo, err := peerConnection.AddTrack(videoTrack)
+		if err != nil {
+			peerConnection.Close()
+			return fmt.Errorf("failed to add video track: %v", err)
+		}
+		rtpSenderAudio, err := peerConnection.AddTrack(audioTrack)
+		if err != nil {
+			peerConnection.Close()
+			return fmt.Errorf("failed to add audio track: %v", err)
+		}
+
+		// Set Remote Description (Offer from browser)
+		offer := webrtc.SessionDescription{
+			Type: webrtc.SDPTypeOffer,
+			SDP:  sdp,
+		}
+		if err := peerConnection.SetRemoteDescription(offer); err != nil {
+			peerConnection.Close()
+			return fmt.Errorf("failed to set remote description: %v", err)
+		}
+
+		// Create Answer
+		answer, err := peerConnection.CreateAnswer(nil)
+		if err != nil {
+			peerConnection.Close()
+			return fmt.Errorf("failed to create answer: %v", err)
+		}
+
+		// 设置 Local Description 并等待 ICE 收集完成
+		gatherComplete := webrtc.GatheringCompletePromise(peerConnection)
+
+		if err := peerConnection.SetLocalDescription(answer); err != nil {
+			peerConnection.Close()
+			return fmt.Errorf("failed to set local description: %v", err)
+		}
+
+		// 阻塞等待 ICE 收集完成 (通常几百毫秒)
+		<-gatherComplete
+		v.FinalSDP2Nexus = peerConnection.LocalDescription().SDP
+		// v.NexusConnected = true
+		v.ConnectionConfig = cfg
+		v.audioTrack = audioTrack
+		v.videoTrack = videoTrack
+		v.rtpSenderVideo = rtpSenderVideo
+		v.rtpSenderAudio = rtpSenderAudio
+		v.peerConnection = peerConnection
+	case "webtransport":
+		// Implement WebTransport connection logic here
+	case "websocket":
+		// Implement WebSocket connection logic here
+	default:
+		return errors.New("Unsupported protocol: " + cfg.Protocol)
+	}
+	return nil
+}
+
+func (n *Nexus) BindViewSessionToRemote(v *ViewSession, remoteUUID string) error {
+	n.Lock()
+	// 1. 检查在 NewViewSession 到 Bind 之间的窗口期内，Session 是否已经断线关闭
+	if _, alive := n.viewSessions[v.SessionID]; !alive {
+		n.Unlock()
+		return fmt.Errorf("view session %s already closed before binding", v.SessionID)
+	}
+	remote, exists := n.remotes[remoteUUID]
+	if !exists {
+		n.Unlock()
+		n.closeViewSession(v.SessionID)
+		return fmt.Errorf("remote with UUID %s is not connected to the nexus yet", remoteUUID)
+	}
+	// 2. 遵循锁顺序：先 n.Lock()，再 remote.Lock()
+	remote.Lock()
+	if len(remote.viewSession) == 0 {
+		remote.masterSession = v
+		v.IsMaster = true
+	}
+	remote.viewSession = append(remote.viewSession, v)
+	v.remote = remote
+	remote.Unlock()
+
+	n.viewSessions[v.SessionID] = v
+	n.Unlock()
+	// log.Println("session Info: ", v.IsMaster, v.SessionID, v.UserID, v.ConnectionConfig.Protocol, v.ConnectionConfig.VideoCodec, v.ConnectionConfig.AudioCodec)
+
+	return nil
+}
+
+func (n *Nexus) ConnectToRemote(remoteUUID string, config RemoteConfig) error {
+	n.RLock()
+	if _, exists := n.remotes[remoteUUID]; exists {
+		n.RUnlock()
+		log.Printf("[webscreen] Remote with UUID %s is already connected", remoteUUID)
+		return nil
+	}
+	n.RUnlock()
+	driver, err := n.setupRemote(remoteUUID, config)
+	if err != nil {
+		return fmt.Errorf("failed to set up remote: %v", err)
+	}
+	err = driver.Start()
+	if err != nil {
+		return fmt.Errorf("failed to start driver for remoteUUID %s: %v", remoteUUID, err)
+	}
+	n.Lock()
+	if _, exists := n.remotes[remoteUUID]; exists {
+		n.Unlock()
+		driver.Stop() // 已被其他协程抢先建立，安全释放多余的 driver
+		return nil
+	}
+	n.remotes[remoteUUID] = &Remote{
+		RemoteUUID: remoteUUID,
+		sdriver:    driver,
+	}
+	n.Unlock()
+	return nil
+}
+
+func (n *Nexus) setupRemote(remoteUUID string, config RemoteConfig) (sdriver.SDriver, error) {
+	// Implement the logic to set up a remote device using the provided remoteID
+	deviceInfo, err := db.QueryDeviceTypeByUUID(n.db, remoteUUID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get device type for remoteID %s: %v", remoteUUID, err)
+	}
+	log.Println("[nexus]remote device info:", deviceInfo)
+	// log.Println("[nexus]remote config:", config)
+	config["deviceID"] = deviceInfo.DeviceID
+	var driver sdriver.SDriver
+	switch deviceInfo.Type {
+	case consts.DeviceTypeAndroid:
+		driver, err = scrcpy.New(config)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create scrcpy driver for remoteUUID %s: %v", remoteUUID, err)
+		}
+		// Do something with the created driver, e.g., store it or use it for further processing
+	default:
+		return nil, fmt.Errorf("unsupported device type: %s", deviceInfo.Type)
+	}
+
+	// Do something with the retrieved device type, e.g., store it or use it for further processing
+	return driver, nil
+}
+
+func (n *Nexus) closeRemote(remoteUUID string) {
+	// Implement the logic to close the connection to a remote device using the provided remoteID
+	n.Lock()
+	remote, exists := n.remotes[remoteUUID]
+	log.Printf("[webscreen] Closing remote with UUID %s, exists: %v", remoteUUID, exists)
+	if !exists {
+		log.Printf("remote with UUID %s does not exist", remoteUUID)
+		n.Unlock()
+		return
+	}
+	delete(n.remotes, remoteUUID)
+
+	// 摘除该 remote 下的所有剩余 session
+	remote.Lock()
+	remainingSessions := remote.viewSession
+	remote.viewSession = nil
+	remote.masterSession = nil
+	remote.Unlock()
+	// 提前从全局 viewSessions 中移除，避免后续逐个关闭时产生冗余操作
+	for _, s := range remainingSessions {
+		delete(n.viewSessions, s.SessionID)
+	}
+	n.Unlock()
+
+	// 1. 锁外停止底层驱动
+	if remote.sdriver != nil {
+		remote.sdriver.Stop()
+	}
+
+	// 2. 锁外关闭所有残留的 Viewer 连接
+	for _, s := range remainingSessions {
+		if s.ConnectionConfig.Protocol == "webrtc" && s.peerConnection != nil {
+			_ = s.peerConnection.Close()
+		}
+	}
+}
+
+func (n *Nexus) closeViewSession(sessionID string) {
+	n.Lock()
+	v, exists := n.viewSessions[sessionID]
+	if !exists {
+		log.Printf("view session with ID %s does not exist", sessionID)
+		n.Unlock()
+		return
+	}
+	delete(n.viewSessions, sessionID)
+	remote := v.remote
+	isMaster := v.IsMaster
+	remoteUUID := v.RemoteUUID
+	// 如果不是 Master，仅将自己从 remote 的切片中摘除；如果是 Master，后续直接销毁整个 remote
+	if remote != nil && !isMaster {
+		remote.Lock()
+		for i, s := range remote.viewSession {
+			if s == v {
+				remote.viewSession = append(remote.viewSession[:i], remote.viewSession[i+1:]...)
+				break
+			}
+		}
+		remote.Unlock()
+	}
+	n.Unlock()
+
+	switch v.ConnectionConfig.Protocol {
+	case "webrtc":
+		if v.peerConnection != nil {
+			v.peerConnection.Close()
+		}
+	case "webtransport":
+		// Implement WebTransport disconnection logic here
+	case "websocket":
+		// Implement WebSocket disconnection logic here
+	default:
+		log.Printf("[webscreen] Closing Unknown protocol: %s", v.ConnectionConfig.Protocol)
+	}
+
+	if isMaster {
+		log.Printf("[webscreen] Master session %s closed, closing remote %s", sessionID, remoteUUID)
+		n.closeRemote(remoteUUID)
+	}
+
+}

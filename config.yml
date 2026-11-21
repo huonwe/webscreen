@@ -3,3 +3,5 @@ jwt_secret: "change-this-secret-before-use"
 trusted_ips:
   - "127.0.0.1"
   - "::1"
+
+mtu: 1200

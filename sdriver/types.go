@@ -15,6 +15,7 @@ type ConfigParamDescription struct {
 type AVBox struct {
 	Data       []byte // H.264/H.265/AV1/.../Opus 裸流数据
 	PTS        uint64 // 相对开始时间的 PTS (Presentation Timestamp)
+	Type       int    // 0: video, 1: audio
 	NoDuration bool   // 是否不占用时间轴（如某些特殊的配置帧）
 }
 
