@@ -12,10 +12,11 @@ import (
 
 func getMimeTypeFromString(codecName string) (string, error) {
 	var mimeType string
+
 	switch codecName {
-	case "h264":
+	case "h264", "avc":
 		mimeType = webrtc.MimeTypeH264
-	case "h265":
+	case "h265", "hevc":
 		mimeType = webrtc.MimeTypeH265
 	case "av1":
 		mimeType = webrtc.MimeTypeAV1
@@ -236,7 +237,7 @@ func WaitAndGetFinalCodecParams(pc *webrtc.PeerConnection) (webrtc.RTPCodecParam
 	}
 }
 
-func createAVTrack(videoMimeType, audioMimeType string, AVSync bool) (*webrtc.TrackLocalStaticRTP, *webrtc.TrackLocalStaticRTP) {
+func createAVTrack(videoMimeType string, AVSync bool) (*webrtc.TrackLocalStaticRTP, *webrtc.TrackLocalStaticRTP) {
 	mark := fmt.Sprintf("%d", time.Now().UnixNano())
 	trackID := fmt.Sprintf("%s-%s", "webscreen-track", randomString(8))
 	trackIDVideo := trackID + "-" + mark + "-video"
@@ -249,13 +250,13 @@ func createAVTrack(videoMimeType, audioMimeType string, AVSync bool) (*webrtc.Tr
 		streamIDAudio = streamID + "-" + mark
 	}
 
-	trackVideo, err := webrtc.NewTrackLocalStaticRTP(webrtc.RTPCodecCapability{MimeType: videoMimeType}, trackIDVideo, streamIDVideo)
+	trackVideo, err := webrtc.NewTrackLocalStaticRTP(webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeOpus}, trackIDVideo, streamIDVideo)
 	if err != nil {
 		log.Printf("Failed to create track for MIME type %s: %v", videoMimeType, err)
 	}
-	trackAudio, err := webrtc.NewTrackLocalStaticRTP(webrtc.RTPCodecCapability{MimeType: audioMimeType}, trackIDAudio, streamIDAudio)
+	trackAudio, err := webrtc.NewTrackLocalStaticRTP(webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeOpus}, trackIDAudio, streamIDAudio)
 	if err != nil {
-		log.Printf("Failed to create audio track for MIME type %s: %v", audioMimeType, err)
+		log.Printf("Failed to create audio track for MIME type %s: %v", webrtc.MimeTypeOpus, err)
 	}
 	return trackVideo, trackAudio
 }
