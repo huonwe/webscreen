@@ -23,8 +23,8 @@ type ViewSession struct {
 	ConnectionConfig ConnectionConfig
 
 	useLocalTimestamp bool
-	videoTSMapper     *rtpTimestampMapper
-	audioTSMapper     *rtpTimestampMapper
+	videoTSMapper     *videoTimestampMapper
+	audioTSMapper     *audioTimestampMapper
 
 	// 各协议私有字段（WebRTC peerConnection / Track，或 WS/WT Conn）
 	// Only used for WebRTC connections, to store the final SDP answer after negotiation.
@@ -38,8 +38,12 @@ type ViewSession struct {
 	videoPacketizer rtp.Packetizer
 
 	// 建议内部带一个带缓冲的 sendCh chan AVBox，由独立写协程消费，防止单个慢观众拖垮全局广播
-	videoCh   chan sdriver.AVBox // 例如 cap = 64
-	audioCh   chan sdriver.AVBox // 例如 cap = 32
+	cacheVideoCh chan sdriver.AVBox // 例如 cap = 64
+	cacheAudioCh chan sdriver.AVBox // 例如 cap = 32
+
+	msgCh     chan sdriver.Event
+	controlCh chan sdriver.Event
+
 	done      chan struct{}
 	closeOnce sync.Once
 	closeFn   func() // 协议专属关闭逻辑（如 peerConnection.Close()）
@@ -47,38 +51,71 @@ type ViewSession struct {
 
 // func New
 
-// PushAV 非阻塞写入：如果某个观众网络极卡导致缓冲区满，直接丢帧保护其他观众
-func (v *ViewSession) PushBox(box sdriver.AVBox, thisIsVideo bool) {
-	if v.videoCh == nil || v.audioCh == nil {
-		log.Printf("[nexus] PushPacket: videoCh or audioCh is nil, dropping packet")
+// 非阻塞写入：如果某个观众网络极卡导致缓冲区满，直接丢帧保护其他观众
+func (v *ViewSession) PushingAVBox() {
+	if v.cacheVideoCh == nil || v.cacheAudioCh == nil {
+		log.Printf("[nexus] PushPacket: videoCh or audioCh is nil, reject to pushing")
 		return
 	}
-	select {
-	case <-v.done:
-		return
-	default:
-		switch v.ConnectionConfig.Protocol {
-		case "webrtc":
 
-			// 直接写入 WebRTC TrackLocalStaticRTP
-			if thisIsVideo {
-				ts := v.videoTSMapper.NextTimestamp(box)
-				packets := v.videoPacketizer.Packetize(box.Data, 0)
-				for _, packet := range packets {
-					packet.Timestamp = ts
-					_ = v.videoTrack.WriteRTP(packet)
-				}
-			} else {
-				// Audio
-				ts := v.audioTSMapper.NextTimestamp(box)
-				packets := v.audioPacketizer.Packetize(box.Data, 0)
-				for _, packet := range packets {
-					packet.Timestamp = ts
-					_ = v.audioTrack.WriteRTP(packet)
-				}
+	// go func() {
+	for {
+		select {
+		case box := <-v.cacheVideoCh:
+			ts := v.videoTSMapper.NextTimestamp(box)
+			packets := v.videoPacketizer.Packetize(box.Data, 0)
+			for _, packet := range packets {
+				packet.Timestamp = ts
+				_ = v.videoTrack.WriteRTP(packet)
 			}
+			// nalTypeF := func(payloadBuf byte) byte { return (payloadBuf >> 1) & 0x3F }
+			// naltype := nalTypeF(box.Data[0]) // 注意：box.Data 前 4 字节是起始码
+			// log.Printf("[nexus] Pushed video frame: PTS=%d, RTP TS=%d, size=%d bytes, NAL type=%d, sessionID=%s", box.PTS, ts, len(box.Data), naltype, v.SessionID)
+		case box := <-v.cacheAudioCh:
+			// Audio
+			ts := v.audioTSMapper.NextTimestamp(box)
+			packets := v.audioPacketizer.Packetize(box.Data, 0)
+			for _, packet := range packets {
+				packet.Timestamp = ts
+				_ = v.audioTrack.WriteRTP(packet)
+			}
+		// log.Printf("[nexus] Pushed audio frame: PTS=%d, RTP TS=%d, size=%d bytes", box.PTS, ts, len(box.Data))
+		case <-v.done:
+			log.Printf("[nexus] ViewSession %s done, exiting PushingBox goroutine", v.SessionID)
+			return
 		}
 	}
+	// }()
+
+	// select {
+	// case <-v.done:
+	// 	return
+	// default:
+	// 	switch v.ConnectionConfig.Protocol {
+	// 	case "webrtc":
+	// 		// 直接写入 WebRTC TrackLocalStaticRTP
+	// 		// select
+
+	// 		if box.Type == 0 {
+	// 			ts := v.videoTSMapper.NextTimestamp(box)
+	// 			packets := v.videoPacketizer.Packetize(box.Data, 0)
+	// 			for _, packet := range packets {
+	// 				packet.Timestamp = ts
+	// 				_ = v.videoTrack.WriteRTP(packet)
+	// 			}
+	// 			naltypeH265 := box.Data[0] & 0x7E >> 1
+	// 			log.Printf("[nexus] Pushed video frame: PTS=%d, RTP TS=%d, size=%d bytes, NAL type=%d", box.PTS, ts, len(box.Data), naltypeH265)
+	// 		} else {
+	// 			// Audio
+	// 			ts := v.audioTSMapper.NextTimestamp(box)
+	// 			packets := v.audioPacketizer.Packetize(box.Data, 0)
+	// 			for _, packet := range packets {
+	// 				packet.Timestamp = ts
+	// 				_ = v.audioTrack.WriteRTP(packet)
+	// 			}
+	// 		}
+	// 	}
+	// }
 }
 
 func (v *ViewSession) Close() {

@@ -86,6 +86,7 @@ func (da *ScrcpyDriver) convertVideoFrame() {
 				case da.VideoChan <- sdriver.AVBox{
 					Data:       payloadBuf,
 					PTS:        da.LastPTS,
+					Type:       0, // 0 for video
 					NoDuration: true,
 				}:
 					continue
@@ -106,6 +107,7 @@ func (da *ScrcpyDriver) convertVideoFrame() {
 		case da.VideoChan <- sdriver.AVBox{
 			Data:       payloadBuf[4:],
 			PTS:        header.PTS,
+			Type:       0,
 			NoDuration: false,
 		}:
 			continue
@@ -144,6 +146,7 @@ func (da *ScrcpyDriver) convertAudioFrame() {
 		case da.AudioChan <- sdriver.AVBox{
 			Data:       payloadBuf,
 			PTS:        header.PTS,
+			Type:       1, // 1 for audio
 			NoDuration: false,
 		}:
 			continue

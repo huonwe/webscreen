@@ -250,7 +250,7 @@ func createAVTrack(videoMimeType string, AVSync bool) (*webrtc.TrackLocalStaticR
 		streamIDAudio = streamID + "-" + mark
 	}
 
-	trackVideo, err := webrtc.NewTrackLocalStaticRTP(webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeOpus}, trackIDVideo, streamIDVideo)
+	trackVideo, err := webrtc.NewTrackLocalStaticRTP(webrtc.RTPCodecCapability{MimeType: videoMimeType}, trackIDVideo, streamIDVideo)
 	if err != nil {
 		log.Printf("Failed to create track for MIME type %s: %v", videoMimeType, err)
 	}

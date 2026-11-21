@@ -13,6 +13,7 @@ import (
 	"webscreen/sdriver"
 	"webscreen/sdriver/scrcpy"
 
+	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
 	"github.com/pion/rtp/codecs"
 	"github.com/pion/webrtc/v5"
@@ -92,7 +93,7 @@ func (n *Nexus) ConnectToRemote(remoteUUID string, config RemoteConfig) error {
 
 // 2. 媒体泵：从 SDriver 读取 AVBox，零拷贝广播给所有观众
 func (n *Nexus) pumpRemote(remoteUUID string, b *remoteBinding) {
-	videoCh, audioCh, _ := b.remote.sdriver.GetReceivers()
+	videoCh, audioCh, _, _ := b.remote.sdriver.GetReceivers()
 	var box sdriver.AVBox
 	var ok bool
 	// var localTimestamp uint32 = 0
@@ -107,7 +108,7 @@ func (n *Nexus) pumpRemote(remoteUUID string, b *remoteBinding) {
 	// }
 	for {
 		// elapsedUs := time.Since(n.timestampStartTime).Microseconds()
-		var thisIsVideo bool
+		// var thisIsVideo bool
 		select {
 		case <-b.stopCh:
 			return
@@ -115,7 +116,6 @@ func (n *Nexus) pumpRemote(remoteUUID string, b *remoteBinding) {
 			if !ok {
 				videoCh = nil // 防止已关闭的 channel 持续触发空转
 			}
-			thisIsVideo = true
 
 		case box, ok = <-audioCh:
 			if !ok {
@@ -132,7 +132,20 @@ func (n *Nexus) pumpRemote(remoteUUID string, b *remoteBinding) {
 
 		if snap := b.viewersSnap.Load(); snap != nil {
 			for _, viewer := range *snap {
-				viewer.PushBox(box, thisIsVideo)
+				// viewer.PushBox(box, thisIsVideo)
+				if box.Type == 0 {
+					select {
+					case viewer.cacheVideoCh <- box:
+					default:
+						log.Printf("[nexus] Dropped video packet for viewer %s due to full cache", viewer.SessionID)
+					}
+				} else {
+					select {
+					case viewer.cacheAudioCh <- box:
+					default:
+						log.Printf("[nexus] Dropped audio packet for viewer %s due to full cache", viewer.SessionID)
+					}
+				}
 			}
 		}
 	}
@@ -157,6 +170,7 @@ func (n *Nexus) BindViewSessionToRemote(sessionID, remoteUUID string) error {
 	b.refreshSnapshot() // 原子更新快照
 	n.sessionToRemote[sessionID] = remoteUUID
 	driver := b.remote.sdriver
+	_, _, _, v.controlCh = driver.GetReceivers()
 	n.Unlock()
 
 	// 锁外请求关键帧：新观众中途加入时立刻能看到画面，无需等待下一个 GOP
@@ -165,22 +179,22 @@ func (n *Nexus) BindViewSessionToRemote(sessionID, remoteUUID string) error {
 }
 
 // 4. 控制指令转发（利用 SDriver.SendEvent）
-func (n *Nexus) DispatchEvent(sessionID string, ev sdriver.Event) error {
-	n.RLock()
-	v, ok := n.sessions[sessionID]
-	if !ok || !v.CanControl {
-		n.RUnlock()
-		return errors.New("unauthorized or session closed")
-	}
-	remoteUUID, bound := n.sessionToRemote[sessionID]
-	b := n.bindings[remoteUUID]
-	n.RUnlock()
+// func (n *Nexus) DispatchEvent(sessionID string, ev sdriver.Event) error {
+// 	n.RLock()
+// 	v, ok := n.sessions[sessionID]
+// 	if !ok || !v.CanControl {
+// 		n.RUnlock()
+// 		return errors.New("unauthorized or session closed")
+// 	}
+// 	remoteUUID, bound := n.sessionToRemote[sessionID]
+// 	b := n.bindings[remoteUUID]
+// 	n.RUnlock()
 
-	if !bound || b == nil {
-		return errors.New("remote not bound")
-	}
-	return b.remote.sdriver.SendEvent(ev)
-}
+// 	if !bound || b == nil {
+// 		return errors.New("remote not bound")
+// 	}
+// 	return b.remote.sdriver.SendEvent(ev)
+// }
 
 // 5. 统一关闭入口（Detach-then-Close：绝对无死锁，天然幂等）
 func (n *Nexus) CloseViewSession(sessionID string) {
@@ -236,18 +250,18 @@ func (n *Nexus) NewViewSession(userID string, config ConnectionConfig) (*ViewSes
 	var packetizer rtp.Packetizer
 	if config.VideoCodec == "h264" {
 		packetizer = rtp.NewPacketizer(
-			n.mtu, // MTU 大小，通常 1200 左右很安全
-			0,     // Payload Type，Pion 会自动覆盖它，填 0 即可
-			0,     // SSRC (TrackLocalStaticRTP 会自动覆盖它，填 0 即可)
+			1200, // MTU 大小，通常 1200 左右很安全
+			0,    // Payload Type，Pion 会自动覆盖它，填 0 即可
+			0,    // SSRC (TrackLocalStaticRTP 会自动覆盖它，填 0 即可)
 			&codecs.H264Payloader{},
 			rtp.NewRandomSequencer(), // 随机序列号生成器
 			90000,                    // 视频的基准时钟频率 (WebRTC 规定视频固定为 90kHz)
 		)
 	} else if config.VideoCodec == "h265" {
 		packetizer = rtp.NewPacketizer(
-			n.mtu, // MTU 大小，通常 1200 左右很安全
-			0,     // Payload Type，Pion 会自动覆盖它，填 0 即可
-			0,     // SSRC (TrackLocalStaticRTP 会自动覆盖它，填 0 即可)
+			1200, // MTU 大小，通常 1200 左右很安全
+			0,    // Payload Type，Pion 会自动覆盖它，填 0 即可
+			0,    // SSRC (TrackLocalStaticRTP 会自动覆盖它，填 0 即可)
 			&codecs.H265Payloader{},
 			rtp.NewRandomSequencer(), // 随机序列号生成器
 			90000,                    // 视频的基准时钟频率 (WebRTC 规定视频固定为 90kHz)
@@ -258,12 +272,12 @@ func (n *Nexus) NewViewSession(userID string, config ConnectionConfig) (*ViewSes
 		SessionID:         sessionID,
 		UserID:            userID,
 		useLocalTimestamp: config.Extra["use_local_timestamp"] == "true",
-		videoTSMapper:     newRTPTimestampMapper(90000),
-		audioTSMapper:     newRTPTimestampMapper(48000),
+		videoTSMapper:     newVideoTimestampMapper(90000),
+		audioTSMapper:     newAudioTimestampMapper(),
 		// CanControl:       config.CanControl,
 		ConnectionConfig: config,
-		videoCh:          make(chan sdriver.AVBox, 15),
-		audioCh:          make(chan sdriver.AVBox, 15),
+		cacheVideoCh:     make(chan sdriver.AVBox, 30),
+		cacheAudioCh:     make(chan sdriver.AVBox, 30),
 		done:             make(chan struct{}),
 
 		audioPacketizer: rtp.NewPacketizer(n.mtu, 0, 0, &codecs.OpusPayloader{}, rtp.NewRandomSequencer(), 48000),
@@ -278,6 +292,8 @@ func (n *Nexus) NewViewSession(userID string, config ConnectionConfig) (*ViewSes
 	n.Lock()
 	n.sessions[sessionID] = viewSession
 	n.Unlock()
+
+	go viewSession.PushingAVBox() // 启动独立协程处理视频/音频缓存队列，避免阻塞 pumpRemote
 
 	return viewSession, nil
 }
@@ -368,6 +384,9 @@ func (v *ViewSession) connectToNexus(n *Nexus, cfg ConnectionConfig) error {
 		v.peerConnection.OnConnectionStateChange(
 			func(state webrtc.PeerConnectionState) {
 				switch state {
+				case webrtc.PeerConnectionStateConnected:
+					log.Printf("[webscreen] ViewSession %s WebRTC connected, requesting IDR", v.SessionID)
+					n.RequestRemoteIDR(v.SessionID)
 				case webrtc.PeerConnectionStateDisconnected, webrtc.PeerConnectionStateFailed, webrtc.PeerConnectionStateClosed:
 					log.Printf("[webscreen] ViewSession %s disconnected from Nexus (state: %s)", v.SessionID, state.String())
 					n.CloseViewSession(v.SessionID)
@@ -376,6 +395,30 @@ func (v *ViewSession) connectToNexus(n *Nexus, cfg ConnectionConfig) error {
 				}
 			},
 		)
+		go func() {
+			for {
+				pkts, _, err := rtpSenderVideo.ReadRTCP()
+				if err != nil {
+					return // PeerConnection 关闭时自动退出
+				}
+				for _, pkt := range pkts {
+					switch pkt.(type) {
+					case *rtcp.PictureLossIndication, *rtcp.FullIntraRequest:
+						// 浏览器解码丢帧请求关键帧时，自动向设备请求 IDR
+						n.RequestRemoteIDR(v.SessionID)
+					}
+				}
+			}
+		}()
+
+		// Audio 的 RTCP 同样需要消费（防止缓冲区堆积）
+		go func() {
+			for {
+				if _, _, err := rtpSenderAudio.ReadRTCP(); err != nil {
+					return
+				}
+			}
+		}()
 	case "webtransport":
 		// Implement WebTransport connection logic here
 	case "websocket":
@@ -409,6 +452,17 @@ func (n *Nexus) setupRemote(remoteUUID string, config RemoteConfig) (sdriver.SDr
 
 	// Do something with the retrieved device type, e.g., store it or use it for further processing
 	return driver, nil
+}
+
+func (n *Nexus) RequestRemoteIDR(sessionID string) {
+	n.RLock()
+	remoteUUID, bound := n.sessionToRemote[sessionID]
+	b := n.bindings[remoteUUID]
+	n.RUnlock()
+
+	if bound && b != nil && b.remote.sdriver != nil {
+		b.remote.sdriver.RequestIDR(false)
+	}
 }
 
 // 辅助方法：在持有 n.Lock() 时刷新快照

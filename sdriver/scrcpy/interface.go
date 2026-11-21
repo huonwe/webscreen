@@ -21,6 +21,19 @@ func (sd *ScrcpyDriver) Start() error {
 	if sd.controlConn != nil {
 		go sd.transferControlMsg()
 	}
+	go func() {
+		for {
+			select {
+			case <-sd.ctx.Done():
+				return
+			default:
+				controlEvent := <-sd.ControlChan
+				if err := sd.SendEvent(controlEvent); err != nil {
+					log.Println("Failed to send control event:", err)
+				}
+			}
+		}
+	}()
 	return nil
 }
 

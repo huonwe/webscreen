@@ -82,7 +82,16 @@ async function start() {
         }
         pc.getReceivers().forEach(receiver => {
             if (receiver.track.kind === 'video' || receiver.track.kind === 'audio') {
-                receiver.jitterBufferTarget = jitterBufferTargetMs;
+                if ('contentHint' in receiver.track) {
+                    receiver.contentHint = 'motion';
+                }
+                if ('playoutDelayHint' in receiver) {
+                    receiver.playoutDelayHint = 0;
+                }
+                if ('jitterBufferTarget' in receiver) {
+                    receiver.jitterBufferTarget = 0;
+                }
+
                 console.log('✓ (playoutDelayHint=', receiver.playoutDelayHint, ', jitterBufferTarget=', receiver.jitterBufferTarget, ')');
             }
         });
