@@ -170,7 +170,7 @@ func (n *Nexus) BindViewSessionToRemote(sessionID, remoteUUID string) error {
 	b.refreshSnapshot() // 原子更新快照
 	n.sessionToRemote[sessionID] = remoteUUID
 	driver := b.remote.sdriver
-	_, _, _, v.controlCh = driver.GetReceivers()
+	v.onMessageCallback = n.generateOnMsgCallbackFunc(sessionID)
 	n.Unlock()
 
 	// 锁外请求关键帧：新观众中途加入时立刻能看到画面，无需等待下一个 GOP
@@ -178,23 +178,30 @@ func (n *Nexus) BindViewSessionToRemote(sessionID, remoteUUID string) error {
 	return nil
 }
 
-// 4. 控制指令转发（利用 SDriver.SendEvent）
-// func (n *Nexus) DispatchEvent(sessionID string, ev sdriver.Event) error {
-// 	n.RLock()
-// 	v, ok := n.sessions[sessionID]
-// 	if !ok || !v.CanControl {
-// 		n.RUnlock()
-// 		return errors.New("unauthorized or session closed")
-// 	}
-// 	remoteUUID, bound := n.sessionToRemote[sessionID]
-// 	b := n.bindings[remoteUUID]
-// 	n.RUnlock()
+func (n *Nexus) generateOnMsgCallbackFunc(sessionID string) func([]byte) error {
+	return func(msg []byte) error {
+		return n.DispatchEvent(sessionID, msg)
+	}
+}
 
-// 	if !bound || b == nil {
-// 		return errors.New("remote not bound")
-// 	}
-// 	return b.remote.sdriver.SendEvent(ev)
-// }
+// 4. 控制指令转发（利用 SDriver.SendEvent） browser -> Nexus -> Remote -> SDriver -> Device
+func (n *Nexus) DispatchEvent(sessionID string, raw_event []byte) error {
+	n.RLock()
+	v, ok := n.sessions[sessionID]
+	if !ok || !v.CanControl {
+		n.RUnlock()
+		return errors.New("unauthorized or session closed")
+	}
+	remoteUUID, bound := n.sessionToRemote[sessionID]
+	b := n.bindings[remoteUUID]
+	n.RUnlock()
+
+	if !bound || b == nil {
+		return errors.New("remote not bound")
+	}
+	err := b.remote.HandleControlEvent(raw_event)
+	return err
+}
 
 // 5. 统一关闭入口（Detach-then-Close：绝对无死锁，天然幂等）
 func (n *Nexus) CloseViewSession(sessionID string) {
@@ -274,11 +281,11 @@ func (n *Nexus) NewViewSession(userID string, config ConnectionConfig) (*ViewSes
 		useLocalTimestamp: config.Extra["use_local_timestamp"] == "true",
 		videoTSMapper:     newVideoTimestampMapper(90000),
 		audioTSMapper:     newAudioTimestampMapper(),
-		// CanControl:       config.CanControl,
-		ConnectionConfig: config,
-		cacheVideoCh:     make(chan sdriver.AVBox, 30),
-		cacheAudioCh:     make(chan sdriver.AVBox, 30),
-		done:             make(chan struct{}),
+		CanControl:        true,
+		ConnectionConfig:  config,
+		cacheVideoCh:      make(chan sdriver.AVBox, 30),
+		cacheAudioCh:      make(chan sdriver.AVBox, 30),
+		done:              make(chan struct{}),
 
 		audioPacketizer: rtp.NewPacketizer(n.mtu, 0, 0, &codecs.OpusPayloader{}, rtp.NewRandomSequencer(), 48000),
 		videoPacketizer: packetizer,
@@ -378,8 +385,8 @@ func (v *ViewSession) connectToNexus(n *Nexus, cfg ConnectionConfig) error {
 		v.ConnectionConfig = cfg
 		v.audioTrack = audioTrack
 		v.videoTrack = videoTrack
-		v.rtpSenderVideo = rtpSenderVideo
-		v.rtpSenderAudio = rtpSenderAudio
+		// rtpSenderVideo = rtpSenderVideo
+		// rtpSenderAudio = rtpSenderAudio
 		v.peerConnection = peerConnection
 		v.peerConnection.OnConnectionStateChange(
 			func(state webrtc.PeerConnectionState) {
@@ -395,6 +402,34 @@ func (v *ViewSession) connectToNexus(n *Nexus, cfg ConnectionConfig) error {
 				}
 			},
 		)
+		v.peerConnection.OnDataChannel(func(d *webrtc.DataChannel) {
+			log.Printf("Have DataChannel: Label '%s', ID: %d\n", d.Label(), d.ID())
+			switch d.Label() {
+			case "control-ordered":
+				v.dataChannelOrdered = d
+				d.OnMessage(func(msg webrtc.DataChannelMessage) {
+					if v.onMessageCallback != nil {
+						if err := v.onMessageCallback(msg.Data); err != nil {
+							log.Printf("Error handling ordered data channel message: %v", err)
+						}
+					}
+				})
+			case "control-unordered":
+				v.dataChannelUnordered = d
+				d.OnMessage(func(msg webrtc.DataChannelMessage) {
+					if v.onMessageCallback != nil {
+						if err := v.onMessageCallback(msg.Data); err != nil {
+							log.Printf("Error handling unordered data channel message: %v", err)
+						}
+					}
+				})
+			default:
+				log.Printf("Unknown DataChannel label: %s\n", d.Label())
+				d.OnMessage(func(msg webrtc.DataChannelMessage) {
+					log.Printf("DataChannel '%s'-'%d' message: %s\n", d.Label(), d.ID(), string(msg.Data))
+				})
+			}
+		})
 		go func() {
 			for {
 				pkts, _, err := rtpSenderVideo.ReadRTCP()

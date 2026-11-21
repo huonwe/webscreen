@@ -20,6 +20,21 @@ func (r *Remote) HandleControlEvent(raw []byte) error {
 	return r.sdriver.SendEvent(event)
 }
 
+// func (r *Remote) HandleControlEventStream(raw []byte) {
+// 	event, err := r.parseEvent(raw)
+// 	if err != nil {
+// 		log.Printf("[agent] Failed to parse control event: %v", err)
+// 		return
+// 	}
+// 	_, _, _, controlCh := r.sdriver.GetReceivers()
+// 	select {
+// 	case controlCh <- event:
+// 	default:
+// 		log.Printf("[agent] Failed to send control event: channel full")
+// 	}
+// 	// log.Printf("Parsed control event: %+v", event)
+// }
+
 func (r *Remote) parseEvent(raw []byte) (sdriver.Event, error) {
 	if len(raw) < 1 {
 		return nil, fmt.Errorf("empty event data")

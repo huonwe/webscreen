@@ -204,7 +204,10 @@ async function start() {
             .join('\r\n') + '\r\n';
         await pc.setRemoteDescription({ type: 'answer', sdp: formattedSdp });
         console.log("WebRTC connection established with Nexus");
-
+        await loadScript('/static/capabilities/keyboard.js');
+        await loadScript('/static/capabilities/touch.js');
+        await loadScript('/static/capabilities/scroll.js');
+        await loadScript('/static/capabilities/buttons.js');
         if (!remoteConfigSent) {
             remoteConfigSent = true;
             const remoteConfig = { ...(CONFIG.driver_config || {}) };

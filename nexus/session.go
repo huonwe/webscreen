@@ -28,14 +28,17 @@ type ViewSession struct {
 
 	// 各协议私有字段（WebRTC peerConnection / Track，或 WS/WT Conn）
 	// Only used for WebRTC connections, to store the final SDP answer after negotiation.
-	FinalSDP2Nexus  string
-	videoTrack      *webrtc.TrackLocalStaticRTP
-	audioTrack      *webrtc.TrackLocalStaticRTP
-	rtpSenderVideo  *webrtc.RTPSender
-	rtpSenderAudio  *webrtc.RTPSender
-	peerConnection  *webrtc.PeerConnection
-	audioPacketizer rtp.Packetizer
-	videoPacketizer rtp.Packetizer
+	FinalSDP2Nexus       string
+	videoTrack           *webrtc.TrackLocalStaticRTP
+	audioTrack           *webrtc.TrackLocalStaticRTP
+	peerConnection       *webrtc.PeerConnection
+	audioPacketizer      rtp.Packetizer
+	videoPacketizer      rtp.Packetizer
+	dataChannelOrdered   *webrtc.DataChannel
+	dataChannelUnordered *webrtc.DataChannel
+
+	// 所有线路公用的回调，用于处理来自前端的控制命令
+	onMessageCallback func([]byte) error
 
 	// 建议内部带一个带缓冲的 sendCh chan AVBox，由独立写协程消费，防止单个慢观众拖垮全局广播
 	cacheVideoCh chan sdriver.AVBox // 例如 cap = 64
@@ -85,37 +88,6 @@ func (v *ViewSession) PushingAVBox() {
 			return
 		}
 	}
-	// }()
-
-	// select {
-	// case <-v.done:
-	// 	return
-	// default:
-	// 	switch v.ConnectionConfig.Protocol {
-	// 	case "webrtc":
-	// 		// 直接写入 WebRTC TrackLocalStaticRTP
-	// 		// select
-
-	// 		if box.Type == 0 {
-	// 			ts := v.videoTSMapper.NextTimestamp(box)
-	// 			packets := v.videoPacketizer.Packetize(box.Data, 0)
-	// 			for _, packet := range packets {
-	// 				packet.Timestamp = ts
-	// 				_ = v.videoTrack.WriteRTP(packet)
-	// 			}
-	// 			naltypeH265 := box.Data[0] & 0x7E >> 1
-	// 			log.Printf("[nexus] Pushed video frame: PTS=%d, RTP TS=%d, size=%d bytes, NAL type=%d", box.PTS, ts, len(box.Data), naltypeH265)
-	// 		} else {
-	// 			// Audio
-	// 			ts := v.audioTSMapper.NextTimestamp(box)
-	// 			packets := v.audioPacketizer.Packetize(box.Data, 0)
-	// 			for _, packet := range packets {
-	// 				packet.Timestamp = ts
-	// 				_ = v.audioTrack.WriteRTP(packet)
-	// 			}
-	// 		}
-	// 	}
-	// }
 }
 
 func (v *ViewSession) Close() {
