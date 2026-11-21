@@ -57,18 +57,18 @@ type ViewSession struct {
 	remote *Remote
 }
 
-func NewNexus(db *sql.DB) Nexus {
-	return Nexus{
+func NewNexus(db *sql.DB) *Nexus {
+	return &Nexus{
 		viewSessions: make(map[string]*ViewSession),
 		remotes:      make(map[string]*Remote),
 		db:           db,
 	}
 }
 
-func (n *Nexus) NewViewSession(user string, cfg ConnectionConfig) (*ViewSession, error) {
+func (n *Nexus) NewViewSession(userID string, cfg ConnectionConfig) (*ViewSession, error) {
 	viewSession := ViewSession{
 		SessionID:  uuid.New().String(), // Generate a unique ID for the view session
-		UserID:     user,
+		UserID:     userID,
 		CanControl: true,
 		RemoteUUID: cfg.RemoteUUID,
 	}
@@ -77,7 +77,9 @@ func (n *Nexus) NewViewSession(user string, cfg ConnectionConfig) (*ViewSession,
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect view session to Nexus: %v", err)
 	}
+	n.Lock()
 	n.viewSessions[viewSession.SessionID] = &viewSession
+	n.Unlock()
 	return &viewSession, nil
 }
 
@@ -203,14 +205,24 @@ func (v *ViewSession) connectToNexus(n *Nexus, cfg ConnectionConfig) error {
 }
 
 func (n *Nexus) BindViewSessionToRemote(v *ViewSession, remoteUUID string) error {
-	if _, exists := n.remotes[remoteUUID]; !exists {
+	n.Lock()
+	remote, exists := n.remotes[remoteUUID]
+	if !exists {
+		n.Unlock()
 		return fmt.Errorf("remote with UUID %s is not connected to the nexus yet", remoteUUID)
 	}
-	v.remote = n.remotes[remoteUUID]
-	if v.remote.masterSession == nil {
-		v.remote.masterSession = v
+	// 遵循锁顺序：先 n.Lock()，再 remote.Lock()
+	remote.Lock()
+	if len(remote.viewSession) == 0 {
+		remote.masterSession = v
 		v.IsMaster = true
 	}
+	remote.viewSession = append(remote.viewSession, v)
+	v.remote = remote
+	remote.Unlock()
+
+	n.viewSessions[v.SessionID] = v
+	n.Unlock()
 	log.Println("session Info: ", v.IsMaster, v.SessionID, v.UserID, v.ConnectionConfig.Protocol, v.ConnectionConfig.VideoCodec, v.ConnectionConfig.AudioCodec)
 	switch v.ConnectionConfig.Protocol {
 	case "webrtc":
@@ -226,15 +238,17 @@ func (n *Nexus) BindViewSessionToRemote(v *ViewSession, remoteUUID string) error
 			},
 		)
 	}
-	v.remote.viewSession = append(v.remote.viewSession, v)
 	return nil
 }
 
 func (n *Nexus) ConnectToRemote(remoteUUID string, config RemoteConfig) error {
+	n.RLock()
 	if _, exists := n.remotes[remoteUUID]; exists {
+		n.RUnlock()
 		log.Printf("[webscreen] Remote with UUID %s is already connected", remoteUUID)
 		return nil
 	}
+	n.RUnlock()
 	driver, err := n.setupRemote(remoteUUID, config)
 	if err != nil {
 		return fmt.Errorf("failed to set up remote: %v", err)
@@ -243,10 +257,17 @@ func (n *Nexus) ConnectToRemote(remoteUUID string, config RemoteConfig) error {
 	if err != nil {
 		return fmt.Errorf("failed to start driver for remoteUUID %s: %v", remoteUUID, err)
 	}
+	n.Lock()
+	if _, exists := n.remotes[remoteUUID]; exists {
+		n.Unlock()
+		driver.Stop() // 已被其他协程抢先建立，安全释放多余的 driver
+		return nil
+	}
 	n.remotes[remoteUUID] = &Remote{
 		RemoteUUID: remoteUUID,
 		sdriver:    driver,
 	}
+	n.Unlock()
 	return nil
 }
 
@@ -285,57 +306,74 @@ func (n *Nexus) closeRemote(remoteUUID string) {
 		n.Unlock()
 		return
 	}
-	log.Println("Closing remote sdriver: ", remote.sdriver)
+	delete(n.remotes, remoteUUID)
+
+	// 摘除该 remote 下的所有剩余 session
+	remote.Lock()
+	remainingSessions := remote.viewSession
+	remote.viewSession = nil
+	remote.masterSession = nil
+	remote.Unlock()
+	// 提前从全局 viewSessions 中移除，避免后续逐个关闭时产生冗余操作
+	for _, s := range remainingSessions {
+		delete(n.viewSessions, s.SessionID)
+	}
+	n.Unlock()
+
+	// 1. 锁外停止底层驱动
 	if remote.sdriver != nil {
-		log.Printf("[webscreen] Stopping scrcpy driver for remote with UUID %s", remoteUUID)
 		remote.sdriver.Stop()
 	}
-	delete(n.remotes, remoteUUID)
-	log.Printf("[webscreen] Remote with UUID %s has been closed and removed from Nexus", remoteUUID)
-	n.Unlock()
-	for _, v := range remote.viewSession {
-		n.closeViewSession(v.SessionID)
+
+	// 2. 锁外关闭所有残留的 Viewer 连接
+	for _, s := range remainingSessions {
+		if s.ConnectionConfig.Protocol == "webrtc" && s.peerConnection != nil {
+			_ = s.peerConnection.Close()
+		}
 	}
 }
 
 func (n *Nexus) closeViewSession(sessionID string) {
 	n.Lock()
-	_, exists := n.viewSessions[sessionID]
+	v, exists := n.viewSessions[sessionID]
 	if !exists {
 		log.Printf("view session with ID %s does not exist", sessionID)
 		n.Unlock()
 		return
 	}
-	// viewSession.Close(n)
-	// if !viewSession.NexusConnected {
-	// 	return nil
-	// }
-	log.Println("Closing view session:", n.viewSessions[sessionID].SessionID, n.viewSessions[sessionID].UserID, n.viewSessions[sessionID].ConnectionConfig.Protocol)
-	switch n.viewSessions[sessionID].ConnectionConfig.Protocol {
+	delete(n.viewSessions, sessionID)
+	remote := v.remote
+	isMaster := v.IsMaster
+	remoteUUID := v.RemoteUUID
+	// 如果不是 Master，仅将自己从 remote 的切片中摘除；如果是 Master，后续直接销毁整个 remote
+	if remote != nil && !isMaster {
+		remote.Lock()
+		for i, s := range remote.viewSession {
+			if s == v {
+				remote.viewSession = append(remote.viewSession[:i], remote.viewSession[i+1:]...)
+				break
+			}
+		}
+		remote.Unlock()
+	}
+	n.Unlock()
+
+	switch v.ConnectionConfig.Protocol {
 	case "webrtc":
-		if n.viewSessions[sessionID].peerConnection != nil {
-			n.viewSessions[sessionID].peerConnection.Close()
+		if v.peerConnection != nil {
+			v.peerConnection.Close()
 		}
 	case "webtransport":
 		// Implement WebTransport disconnection logic here
 	case "websocket":
 		// Implement WebSocket disconnection logic here
 	default:
-		log.Printf("[webscreen] Closing Unknown protocol: %s", n.viewSessions[sessionID].ConnectionConfig.Protocol)
+		log.Printf("[webscreen] Closing Unknown protocol: %s", v.ConnectionConfig.Protocol)
 	}
-	// n.viewSessions[viewSession.SessionID] = nil
-	isMaster := n.viewSessions[sessionID].IsMaster
-	remoteUUID := n.viewSessions[sessionID].RemoteUUID
-	delete(n.viewSessions, sessionID)
-	n.Unlock()
 
 	if isMaster {
-		log.Printf("[webscreen] Master view session %s is closing, closing remote %s", sessionID, remoteUUID)
+		log.Printf("[webscreen] Master session %s closed, closing remote %s", sessionID, remoteUUID)
 		n.closeRemote(remoteUUID)
 	}
 
 }
-
-// func (v *ViewSession) Close(n *Nexus) {
-
-// }
