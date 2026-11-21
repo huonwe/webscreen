@@ -80,6 +80,21 @@ func (n *Nexus) NewViewSession(userID string, cfg ConnectionConfig) (*ViewSessio
 	n.Lock()
 	n.viewSessions[viewSession.SessionID] = &viewSession
 	n.Unlock()
+
+	switch viewSession.ConnectionConfig.Protocol {
+	case "webrtc":
+		viewSession.peerConnection.OnConnectionStateChange(
+			func(state webrtc.PeerConnectionState) {
+				switch state {
+				case webrtc.PeerConnectionStateDisconnected, webrtc.PeerConnectionStateFailed, webrtc.PeerConnectionStateClosed:
+					log.Printf("[webscreen] ViewSession %s disconnected from Nexus (state: %s)", viewSession.SessionID, state.String())
+					n.closeViewSession(viewSession.SessionID)
+				default:
+					log.Printf("[webscreen] ViewSession %s connection state changed: %s", viewSession.SessionID, state.String())
+				}
+			},
+		)
+	}
 	return &viewSession, nil
 }
 
@@ -155,10 +170,12 @@ func (v *ViewSession) connectToNexus(n *Nexus, cfg ConnectionConfig) error {
 		// 2. Add SHARED tracks to PeerConnection
 		rtpSenderVideo, err := peerConnection.AddTrack(videoTrack)
 		if err != nil {
+			peerConnection.Close()
 			return fmt.Errorf("failed to add video track: %v", err)
 		}
 		rtpSenderAudio, err := peerConnection.AddTrack(audioTrack)
 		if err != nil {
+			peerConnection.Close()
 			return fmt.Errorf("failed to add audio track: %v", err)
 		}
 
@@ -168,12 +185,14 @@ func (v *ViewSession) connectToNexus(n *Nexus, cfg ConnectionConfig) error {
 			SDP:  sdp,
 		}
 		if err := peerConnection.SetRemoteDescription(offer); err != nil {
+			peerConnection.Close()
 			return fmt.Errorf("failed to set remote description: %v", err)
 		}
 
 		// Create Answer
 		answer, err := peerConnection.CreateAnswer(nil)
 		if err != nil {
+			peerConnection.Close()
 			return fmt.Errorf("failed to create answer: %v", err)
 		}
 
@@ -181,6 +200,7 @@ func (v *ViewSession) connectToNexus(n *Nexus, cfg ConnectionConfig) error {
 		gatherComplete := webrtc.GatheringCompletePromise(peerConnection)
 
 		if err := peerConnection.SetLocalDescription(answer); err != nil {
+			peerConnection.Close()
 			return fmt.Errorf("failed to set local description: %v", err)
 		}
 
@@ -206,12 +226,18 @@ func (v *ViewSession) connectToNexus(n *Nexus, cfg ConnectionConfig) error {
 
 func (n *Nexus) BindViewSessionToRemote(v *ViewSession, remoteUUID string) error {
 	n.Lock()
+	// 1. 检查在 NewViewSession 到 Bind 之间的窗口期内，Session 是否已经断线关闭
+	if _, alive := n.viewSessions[v.SessionID]; !alive {
+		n.Unlock()
+		return fmt.Errorf("view session %s already closed before binding", v.SessionID)
+	}
 	remote, exists := n.remotes[remoteUUID]
 	if !exists {
 		n.Unlock()
+		n.closeViewSession(v.SessionID)
 		return fmt.Errorf("remote with UUID %s is not connected to the nexus yet", remoteUUID)
 	}
-	// 遵循锁顺序：先 n.Lock()，再 remote.Lock()
+	// 2. 遵循锁顺序：先 n.Lock()，再 remote.Lock()
 	remote.Lock()
 	if len(remote.viewSession) == 0 {
 		remote.masterSession = v
@@ -223,21 +249,8 @@ func (n *Nexus) BindViewSessionToRemote(v *ViewSession, remoteUUID string) error
 
 	n.viewSessions[v.SessionID] = v
 	n.Unlock()
-	log.Println("session Info: ", v.IsMaster, v.SessionID, v.UserID, v.ConnectionConfig.Protocol, v.ConnectionConfig.VideoCodec, v.ConnectionConfig.AudioCodec)
-	switch v.ConnectionConfig.Protocol {
-	case "webrtc":
-		v.peerConnection.OnConnectionStateChange(
-			func(state webrtc.PeerConnectionState) {
-				switch state {
-				case webrtc.PeerConnectionStateDisconnected, webrtc.PeerConnectionStateFailed, webrtc.PeerConnectionStateClosed:
-					log.Printf("[webscreen] ViewSession %s disconnected from Nexus (state: %s)", v.SessionID, state.String())
-					n.closeViewSession(v.SessionID)
-				default:
-					log.Printf("[webscreen] ViewSession %s connection state changed: %s", v.SessionID, state.String())
-				}
-			},
-		)
-	}
+	// log.Println("session Info: ", v.IsMaster, v.SessionID, v.UserID, v.ConnectionConfig.Protocol, v.ConnectionConfig.VideoCodec, v.ConnectionConfig.AudioCodec)
+
 	return nil
 }
 
