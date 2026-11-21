@@ -20,6 +20,7 @@ type Agent struct {
 	// chan
 	videoCh   <-chan sdriver.AVBox
 	audioCh   <-chan sdriver.AVBox
+	msgCh     chan sdriver.Event
 	controlCh chan sdriver.Event
 
 	// WebRTC 相关
@@ -103,7 +104,7 @@ func (sa *Agent) InitDriver() error {
 		return fmt.Errorf("unsupported device type: %s", sa.config.DeviceType)
 	}
 	sa.driverCaps = sa.driver.Capabilities()
-	sa.videoCh, sa.audioCh, sa.controlCh = sa.driver.GetReceivers()
+	sa.videoCh, sa.audioCh, sa.msgCh, sa.controlCh = sa.driver.GetReceivers()
 	return nil
 }
 
@@ -137,12 +138,12 @@ func (sa *Agent) GetCodecInfo() (string, string) {
 // video codec, so the user is not left wondering why the stream differs from
 // what was configured.
 func (sa *Agent) Notify(msg string) {
-	if sa.controlCh == nil {
+	if sa.msgCh == nil {
 		log.Printf("[agent] no control channel, cannot notify: %s", msg)
 		return
 	}
 	select {
-	case sa.controlCh <- sdriver.TextMsgEvent{Msg: msg}:
+	case sa.msgCh <- sdriver.TextMsgEvent{Msg: msg}:
 	default:
 		log.Printf("[agent] dropped notification: %s", msg)
 	}

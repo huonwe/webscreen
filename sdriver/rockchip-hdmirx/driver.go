@@ -21,6 +21,7 @@ const defaultFFmpeg = "/usr/lib/jellyfin-ffmpeg/ffmpeg"
 type Driver struct {
 	videoChan   chan sdriver.AVBox
 	audioChan   chan sdriver.AVBox
+	msgChan     chan sdriver.Event
 	controlChan chan sdriver.Event
 
 	cmd       *exec.Cmd
@@ -109,6 +110,7 @@ func New(config map[string]string) (*Driver, error) {
 	return &Driver{
 		videoChan:   make(chan sdriver.AVBox, 32),
 		audioChan:   make(chan sdriver.AVBox),
+		msgChan:     make(chan sdriver.Event, 10),
 		controlChan: make(chan sdriver.Event, 1),
 		cmd:         cmd,
 		stdout:      stdout,
@@ -122,8 +124,8 @@ func New(config map[string]string) (*Driver, error) {
 	}, nil
 }
 
-func (d *Driver) GetReceivers() (<-chan sdriver.AVBox, <-chan sdriver.AVBox, chan sdriver.Event) {
-	return d.videoChan, d.audioChan, d.controlChan
+func (d *Driver) GetReceivers() (<-chan sdriver.AVBox, <-chan sdriver.AVBox, chan sdriver.Event, chan sdriver.Event) {
+	return d.videoChan, d.audioChan, d.msgChan, d.controlChan
 }
 
 func (d *Driver) Start() error {

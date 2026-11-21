@@ -285,8 +285,8 @@ func (d *LinuxDriver) handleConnection() {
 // ... 其他方法保持不变
 
 // 实现 sdriver.SDriver 接口的其他方法
-func (d *LinuxDriver) GetReceivers() (<-chan sdriver.AVBox, <-chan sdriver.AVBox, chan sdriver.Event) {
-	return d.videoChan, nil, nil
+func (d *LinuxDriver) GetReceivers() (<-chan sdriver.AVBox, <-chan sdriver.AVBox, chan sdriver.Event, chan sdriver.Event) {
+	return d.videoChan, nil, nil, nil
 }
 
 func (d *LinuxDriver) Pause() {}

@@ -61,8 +61,8 @@ func New(c map[string]string) (*DummyDriver, error) {
 }
 
 // GetReceiver returns the channels for video, audio, and control events.
-func (d *DummyDriver) GetReceivers() (<-chan sdriver.AVBox, <-chan sdriver.AVBox, chan sdriver.Event) {
-	return d.videoCh, d.audioCh, d.controlCh
+func (d *DummyDriver) GetReceivers() (<-chan sdriver.AVBox, <-chan sdriver.AVBox, chan sdriver.Event, chan sdriver.Event) {
+	return d.videoCh, d.audioCh, nil, nil
 }
 
 func (d *DummyDriver) UpdateDriverConfig(config map[string]string) error {

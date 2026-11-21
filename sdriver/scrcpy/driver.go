@@ -21,8 +21,11 @@ import (
 )
 
 type ScrcpyDriver struct {
-	VideoChan   chan sdriver.AVBox
-	AudioChan   chan sdriver.AVBox
+	VideoChan chan sdriver.AVBox
+	AudioChan chan sdriver.AVBox
+	// Device -> Browser 的消息通道,主要用于传递剪贴板内容,以及文本消息(浏览器Toast显示). 下游依然可以使用MsgChan来发送消息(非只读)
+	MsgChan chan sdriver.Event
+	// Browser-> Device 的消息通道,主要用于传递控制事件(触摸、按键、滚动、旋转、剪贴板等)
 	ControlChan chan sdriver.Event
 
 	// LinearBuffer 管理器
@@ -71,8 +74,8 @@ func New(config map[string]string) (*ScrcpyDriver, error) {
 	da := &ScrcpyDriver{
 		VideoChan:   make(chan sdriver.AVBox, 10),
 		AudioChan:   make(chan sdriver.AVBox, 10),
+		MsgChan:     make(chan sdriver.Event, 10),
 		ControlChan: make(chan sdriver.Event, 10),
-
 		videoBuffer: comm.NewLinearBuffer(0),
 		audioBuffer: comm.NewLinearBuffer(4 * 1024 * 1024), // 4MB 音频缓冲区
 
@@ -151,7 +154,7 @@ func New(config map[string]string) (*ScrcpyDriver, error) {
 	if !da.supportOpusAudio() {
 		config["audio"] = "false"
 		log.Println("[scrcpy] Device does not support Opus audio encoding, disabling audio.")
-		da.ControlChan <- sdriver.TextMsgEvent{Msg: "[scrcpy] Device does not support Opus audio encoding, disabling audio."}
+		da.MsgChan <- sdriver.TextMsgEvent{Msg: "[scrcpy] Device does not support Opus audio encoding, disabling audio."}
 	}
 
 	var listener net.Listener
@@ -384,7 +387,7 @@ func (da *ScrcpyDriver) markDead(reason string) {
 		log.Printf("[scrcpy] session is dead: %s", reason)
 		// Non blocking: tell the connected browsers why the stream stopped.
 		select {
-		case da.ControlChan <- sdriver.TextMsgEvent{Msg: "[scrcpy] " + reason + "，请重新连接"}:
+		case da.MsgChan <- sdriver.TextMsgEvent{Msg: "[scrcpy] " + reason + "，请重新连接"}:
 		default:
 		}
 	}

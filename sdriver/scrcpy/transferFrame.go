@@ -176,7 +176,7 @@ func (da *ScrcpyDriver) transferControlMsg() {
 				log.Println("Control connection read content error:", err)
 				return
 			}
-			da.ControlChan <- sdriver.ReceiveClipboardEvent{
+			da.MsgChan <- sdriver.ReceiveClipboardEvent{
 				Content: content,
 			}
 		default:

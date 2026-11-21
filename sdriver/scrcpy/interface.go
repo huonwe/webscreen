@@ -6,8 +6,8 @@ import (
 	"webscreen/sdriver"
 )
 
-func (sd *ScrcpyDriver) GetReceivers() (<-chan sdriver.AVBox, <-chan sdriver.AVBox, chan sdriver.Event) {
-	return sd.VideoChan, sd.AudioChan, sd.ControlChan
+func (sd *ScrcpyDriver) GetReceivers() (<-chan sdriver.AVBox, <-chan sdriver.AVBox, chan sdriver.Event, chan sdriver.Event) {
+	return sd.VideoChan, sd.AudioChan, sd.MsgChan, sd.ControlChan
 }
 
 func (sd *ScrcpyDriver) Start() error {
@@ -85,6 +85,10 @@ func (sd *ScrcpyDriver) RequestIDR(firstFrame bool) {
 
 func (sd *ScrcpyDriver) Capabilities() sdriver.DriverCaps {
 	return sd.capabilities
+}
+
+func (sd *ScrcpyDriver) CanControl() bool {
+	return sd.capabilities.CanControl
 }
 
 func (sd *ScrcpyDriver) MediaMeta() sdriver.MediaMeta {
