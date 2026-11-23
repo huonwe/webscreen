@@ -500,6 +500,28 @@ func (n *Nexus) RequestRemoteIDR(sessionID string) {
 	}
 }
 
+func (n *Nexus) GetRemoteCapabilities(remoteUUID string) sdriver.DriverCaps {
+	n.RLock()
+	b, exists := n.bindings[remoteUUID]
+	n.RUnlock()
+
+	if !exists || b == nil || b.remote.sdriver == nil {
+		return sdriver.DriverCaps{}
+	}
+	return b.remote.sdriver.Capabilities()
+}
+
+func (n *Nexus) GetRemoteMediaMeta(remoteUUID string) sdriver.MediaMeta {
+	n.RLock()
+	b, exists := n.bindings[remoteUUID]
+	n.RUnlock()
+
+	if !exists || b == nil || b.remote.sdriver == nil {
+		return sdriver.MediaMeta{}
+	}
+	return b.remote.sdriver.MediaMeta()
+}
+
 // 辅助方法：在持有 n.Lock() 时刷新快照
 func (b *remoteBinding) refreshSnapshot() {
 	snap := make([]*ViewSession, 0, len(b.viewers))

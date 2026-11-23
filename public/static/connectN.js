@@ -186,6 +186,16 @@ async function start() {
             showToast(i18n.t('error_from_server', { msg: message.message }), 2000);
             return;
         }
+        
+        if (message.stage === 'metainfo_remote' && message.capabilities) {
+            console.log("Received capabilities from Nexus:", message.capabilities);
+            await updateUIBasedOnCapabilities(message.capabilities);
+            return;
+        }
+        if (message.stage === 'metainfo_remote' && message.media_meta) {
+            console.log("Received media meta from Nexus:", message.media_meta);
+            return;
+        }
         if (message.status !== 'ok' || message.stage !== 'connection_view_session' || !message.sdp) {
 
             return;
@@ -204,10 +214,10 @@ async function start() {
             .join('\r\n') + '\r\n';
         await pc.setRemoteDescription({ type: 'answer', sdp: formattedSdp });
         console.log("WebRTC connection established with Nexus");
-        await loadScript('/static/capabilities/keyboard.js');
-        await loadScript('/static/capabilities/touch.js');
-        await loadScript('/static/capabilities/scroll.js');
-        await loadScript('/static/capabilities/buttons.js');
+        // await loadScript('/static/capabilities/keyboard.js');
+        // await loadScript('/static/capabilities/touch.js');
+        // await loadScript('/static/capabilities/scroll.js');
+        // await loadScript('/static/capabilities/buttons.js');
         if (!remoteConfigSent) {
             remoteConfigSent = true;
             const remoteConfig = { ...(CONFIG.driver_config || {}) };

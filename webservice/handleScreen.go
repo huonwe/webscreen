@@ -58,7 +58,7 @@ func (wm *WebMaster) handleScreenWSN(c *gin.Context) {
 		conn.WriteJSON(map[string]any{"status": "error", "message": err.Error(), "stage": "connection_view_session"})
 		return
 	}
-	log.Printf("Received connection config: %+v", connectionConfig.Protocol, connectionConfig.RemoteUUID, connectionConfig.VideoCodec, connectionConfig.AudioCodec)
+	log.Println("Received connection config: ", connectionConfig.Protocol, connectionConfig.RemoteUUID, connectionConfig.VideoCodec, connectionConfig.AudioCodec)
 	remoteUUID := connectionConfig.RemoteUUID
 	if remoteUUID == "" {
 		conn.WriteJSON(map[string]any{"status": "error", "message": "Remote UUID is required", "stage": "connection_view_session"})
@@ -93,6 +93,11 @@ func (wm *WebMaster) handleScreenWSN(c *gin.Context) {
 		conn.WriteJSON(map[string]any{"status": "error", "message": err.Error(), "stage": "connection_remote"})
 		return
 	}
+	capabilities := wm.Nexus.GetRemoteCapabilities(remoteUUID)
+	media_meta := wm.Nexus.GetRemoteMediaMeta(remoteUUID)
+	log.Printf("Remote Capabilities: %+v", capabilities)
+	log.Printf("Remote Media Meta: %+v", media_meta)
+	conn.WriteJSON(map[string]any{"status": "ok", "capabilities": capabilities, "media_meta": media_meta, "stage": "metainfo_remote"})
 	err = wm.Nexus.BindViewSessionToRemote(viewSession.SessionID, remoteUUID)
 	if err != nil {
 		log.Println("Failed to bind view session to remote:", err)
