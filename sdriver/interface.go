@@ -10,7 +10,7 @@ type SDriver interface {
 	Start() error
 	Pause()
 
-	RequestIDR(firstFrame bool)
+	RequestIDR(force bool)
 	Capabilities() DriverCaps
 	// CanControl() bool
 	// CodecInfo() (videoCodec string, audioCodec string)
