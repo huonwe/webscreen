@@ -364,6 +364,20 @@ function renderDeviceList() {
 
 // --- Actions ---
 
+async function clearLocalStorage() {
+    const confirmed = await dmConfirm(i18n.t('clear_local_storage'), i18n.t('confirm_clear_local_storage'));
+    if (!confirmed) return;
+
+    try {
+        localStorage.clear();
+    } catch (error) {
+        console.error('Failed to clear local storage', error);
+        showToast(i18n.t('clear_local_storage_failed'), 'error');
+        return;
+    }
+    window.location.reload();
+}
+
 async function fetchDevices() {
     const grid = document.getElementById('deviceGrid');
     // Show loading

@@ -39,10 +39,17 @@
                         data-lang="ja" onclick="i18n.setLang('ja')">JP</button>
                 </div>
             </div>
-            <button onclick="fetchDevices()" class="p-2 rounded-full hover:bg-white/10 transition-colors"
-                data-i18n-title="refresh" title="Refresh">
-                <span class="material-symbols-rounded text-[#e3e3e3]">refresh</span>
-            </button>
+            <div class="flex items-center">
+                <button onclick="clearLocalStorage()" class="p-2 rounded-full hover:bg-white/10 transition-colors"
+                    data-i18n-title="clear_local_storage" title="Clear local storage">
+                    <span class="material-symbols-rounded text-[#e3e3e3]" aria-hidden="true">delete_sweep</span>
+                    <span class="sr-only" data-i18n="clear_local_storage">清空本地存储</span>
+                </button>
+                <button onclick="fetchDevices()" class="p-2 rounded-full hover:bg-white/10 transition-colors"
+                    data-i18n-title="refresh" title="Refresh">
+                    <span class="material-symbols-rounded text-[#e3e3e3]">refresh</span>
+                </button>
+            </div>
         </div>
     </header>
 
