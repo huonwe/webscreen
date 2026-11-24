@@ -1,12 +1,13 @@
-import WebSR from '@websr/websr';
-
-let websr = null;
+let worker = null;
 let outputCanvas = null;
 let renderGeneration = 0;
-let videoStyle = null;
+let sourceStyle = null;
 let resizeObserver = null;
+let isProcessing = false;
+let isReady = false;
+let isShowingOutput = false;
 
-function getVideo() {
+function getSourceCanvas() {
     return document.getElementById('remoteVideo');
 }
 
@@ -15,25 +16,25 @@ function getVideoContainer() {
 }
 
 function updateCanvasBounds() {
-    const video = getVideo();
+    const source = getSourceCanvas();
     const container = getVideoContainer();
-    if (!video || !container || !outputCanvas) return;
+    if (!source || !container || !outputCanvas) return;
 
-    const videoRect = video.getBoundingClientRect();
+    const sourceRect = source.getBoundingClientRect();
     const containerRect = container.getBoundingClientRect();
     Object.assign(outputCanvas.style, {
-        left: `${videoRect.left - containerRect.left}px`,
-        top: `${videoRect.top - containerRect.top}px`,
-        width: `${videoRect.width}px`,
-        height: `${videoRect.height}px`
+        left: `${sourceRect.left - containerRect.left}px`,
+        top: `${sourceRect.top - containerRect.top}px`,
+        width: `${sourceRect.width}px`,
+        height: `${sourceRect.height}px`
     });
 }
 
 function createOutputCanvas() {
-    const video = getVideo();
+    const source = getSourceCanvas();
     const container = getVideoContainer();
-    if (!video || !container) {
-        throw new Error('WebSR requires the remote video and its container');
+    if (!source || !container) {
+        throw new Error('WebSR requires the remote canvas and its container');
     }
 
     if (getComputedStyle(container).position === 'static') {
@@ -52,132 +53,151 @@ function createOutputCanvas() {
         objectPosition: 'center'
     });
 
-    videoStyle = {
-        opacity: video.style.opacity,
-        position: video.style.position,
-        zIndex: video.style.zIndex,
-        transition: video.style.transition
+    sourceStyle = {
+        opacity: source.style.opacity,
+        position: source.style.position,
+        zIndex: source.style.zIndex,
+        transition: source.style.transition
     };
-    video.style.position = 'relative';
-    video.style.zIndex = '1';
+    source.style.position = 'relative';
+    source.style.zIndex = '1';
 
-    container.insertBefore(outputCanvas, video);
+    container.insertBefore(outputCanvas, source);
     updateCanvasBounds();
     resizeObserver = new ResizeObserver(updateCanvasBounds);
-    resizeObserver.observe(video);
+    resizeObserver.observe(source);
     window.addEventListener('resize', updateCanvasBounds);
 }
 
 function removeOutputCanvas() {
-    const video = getVideo();
+    const source = getSourceCanvas();
     if (resizeObserver) {
         resizeObserver.disconnect();
         resizeObserver = null;
     }
     window.removeEventListener('resize', updateCanvasBounds);
 
-    if (video && videoStyle) {
-        video.style.opacity = videoStyle.opacity;
-        video.style.position = videoStyle.position;
-        video.style.zIndex = videoStyle.zIndex;
-        video.style.transition = videoStyle.transition;
+    if (source && sourceStyle) {
+        source.style.opacity = sourceStyle.opacity;
+        source.style.position = sourceStyle.position;
+        source.style.zIndex = sourceStyle.zIndex;
+        source.style.transition = sourceStyle.transition;
     }
     if (outputCanvas) outputCanvas.remove();
     outputCanvas = null;
-    videoStyle = null;
+    sourceStyle = null;
 }
 
-async function renderFrame(generation, onFirstFrame) {
-    if (!websr || !outputCanvas || generation !== renderGeneration) return;
+function failUpscaling(error) {
+    console.error('WebSR rendering failed', error);
+    disableUpscaling();
+    if (typeof showToast === 'function') {
+        showToast(`超分辨率失败: ${error.message || error}`, 3000);
+    }
+}
 
+async function sendFrame(generation) {
+    if (!worker || !outputCanvas || generation !== renderGeneration || isProcessing) return;
+    isProcessing = true;
+
+    let bitmap;
     try {
-        await websr.render(getVideo());
-        if (generation !== renderGeneration || !outputCanvas) return;
-        if (onFirstFrame) {
-            if (!outputCanvas.width || !outputCanvas.height) {
-                throw new Error('WebSR output canvas is empty after rendering');
-            }
-            onFirstFrame();
+        bitmap = await createImageBitmap(getSourceCanvas());
+        if (generation !== renderGeneration || !worker) {
+            bitmap.close();
+            isProcessing = false;
+            return;
         }
-        const video = getVideo();
-        if (video instanceof HTMLVideoElement) {
-            video.requestVideoFrameCallback(() => renderFrame(generation));
-        }
+        worker.postMessage({ type: 'frame', frame: bitmap }, [bitmap]);
     } catch (error) {
-        console.error('WebSR rendering failed', error);
-        disableUpscaling();
+        if (bitmap) bitmap.close();
+        isProcessing = false;
+        if (generation === renderGeneration) failUpscaling(error);
     }
 }
 
-async function enableUpscaling(button) {
-    const video = getVideo();
-    if (!video) {
-        throw new Error('WebSR cannot start before the video metadata is available');
+function enableUpscaling(button) {
+    const source = getSourceCanvas();
+    if (!(source instanceof HTMLCanvasElement)) {
+        throw new Error('WebSR requires remoteVideo to be a canvas');
     }
-    if (video instanceof HTMLCanvasElement) {
-        throw new Error('WebSR does not support WebCodecs Canvas output');
+    if (!source.width || !source.height) {
+        throw new Error('WebSR cannot start before the canvas has a frame');
     }
-    if (!video.videoWidth || !video.videoHeight) {
-        throw new Error('WebSR cannot start before the video metadata is available');
+    if (!('transferControlToOffscreen' in HTMLCanvasElement.prototype)) {
+        throw new Error('This browser does not support OffscreenCanvas');
     }
-
-    (async () => {
-        console.log("navigator.gpu:", navigator.gpu);
-        const adapter = await navigator.gpu?.requestAdapter();
-        console.log("adapter:", adapter);
-        if (adapter) {
-            console.log("features:", [...adapter.features]);
-            const device = await adapter.requestDevice();
-            console.log("device:", device);
-        }
-    })();
 
     createOutputCanvas();
-    const gpu = await WebSR.initWebGPU();
-    console.log('WebSR GPU support:', gpu);
-    if (gpu === undefined) {
-        throw new Error("This feature requires HTTPS");
-    }
-    if (!gpu) throw new Error("Browser/device doesn't support WebGPU. This feature also requires HTTPS.");
+    const generation = ++renderGeneration;
+    isProcessing = false;
+    isReady = false;
+    isShowingOutput = false;
 
-    // const weight_url = "../static/websr/cnn-xs.bin"
-    // const buffer = await (await fetch(weight_url)).arrayBuffer();
-    // if (!buffer) {
-    //     throw new Error(`Failed to load WebSR weights from ${weight_url}`);
-    // }
-    const weight_url = "../static/websr/cnn-2x-s-an.json"
-    const response = await fetch(weight_url);
-    if (!response.ok) {
-        throw new Error(`Failed to load WebSR weights (${response.status})`);
-    }
+    const ready = new Promise((resolve, reject) => {
+        worker = new Worker(new URL('../websr/worker.js', import.meta.url), {
+            type: 'module'
+        });
 
-    websr = new WebSR({
-        network_name: 'anime4k/cnn-2x-s',
-        weights: await response.json(),
-        // network_name: 'websr/cnn-xs',
-        // weights: WebSR.parseBinaryWeights(buffer),
-        gpu,
-        canvas: outputCanvas
+        worker.onmessage = (event) => {
+            const { type, message, width, height } = event.data;
+            if (generation !== renderGeneration) return;
+
+            if (type === 'ready') {
+                isReady = true;
+                button.classList.add('active');
+                button.setAttribute('aria-pressed', 'true');
+                resolve();
+            } else if (type === 'done') {
+                isProcessing = false;
+                if (!isShowingOutput) {
+                    if (!width || !height) {
+                        failUpscaling(new Error('WebSR output canvas is empty'));
+                        return;
+                    }
+                    isShowingOutput = true;
+                    const renderedSource = getSourceCanvas();
+                    renderedSource.style.transition = 'opacity 240ms ease';
+                    requestAnimationFrame(() => {
+                        if (generation === renderGeneration && outputCanvas) {
+                            renderedSource.style.opacity = '0';
+                        }
+                    });
+                }
+                requestAnimationFrame(() => sendFrame(generation));
+            } else if (type === 'error') {
+                const error = new Error(message || 'Unknown WebSR worker error');
+                if (!isReady) reject(error);
+                else failUpscaling(error);
+            }
+        };
+        worker.onerror = (event) => {
+            const error = new Error(event.message || 'WebSR worker failed');
+            if (!isReady) reject(error);
+            else failUpscaling(error);
+        };
+
+        try {
+            const offscreen = outputCanvas.transferControlToOffscreen();
+            worker.postMessage({ type: 'init', canvas: offscreen }, [offscreen]);
+        } catch (error) {
+            reject(error);
+        }
     });
 
-    const generation = ++renderGeneration;
-    button.classList.add('active');
-    button.setAttribute('aria-pressed', 'true');
-    renderFrame(generation, () => {
-        const renderedVideo = getVideo();
-        renderedVideo.style.transition = 'opacity 240ms ease';
-        requestAnimationFrame(() => {
-            if (generation === renderGeneration && outputCanvas) {
-                renderedVideo.style.opacity = '0';
-            }
-        });
+    return ready.then(() => sendFrame(generation)).catch((error) => {
+        if (generation === renderGeneration) disableUpscaling();
+        throw error;
     });
 }
 
 function disableUpscaling() {
     renderGeneration++;
-    if (websr && typeof websr.destroy === 'function') websr.destroy();
-    websr = null;
+    if (worker) worker.terminate();
+    worker = null;
+    isProcessing = false;
+    isReady = false;
+    isShowingOutput = false;
     removeOutputCanvas();
 
     const button = document.getElementById('websrToggleButton');
@@ -203,7 +223,7 @@ function createWebSRButton() {
             <path d="m12 2 1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8L12 2zm7 13 .8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15z"/>
         </svg>`;
     button.addEventListener('click', async () => {
-        if (websr) {
+        if (worker) {
             disableUpscaling();
             return;
         }
@@ -213,9 +233,8 @@ function createWebSRButton() {
             await enableUpscaling(button);
         } catch (error) {
             console.error('Failed to enable WebSR', error);
-            disableUpscaling();
             if (typeof showToast === 'function') {
-                showToast(`无法启用超采样: ${error.message}`, 3000);
+                showToast(`无法启用超分辨率: ${error.message}`, 3000);
             }
         } finally {
             button.disabled = false;

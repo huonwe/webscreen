@@ -73,11 +73,19 @@ async function start() {
             console.log("Received remote video track:", event.track);
             // const el = document.getElementById('remoteVideo');
             // el.srcObject = event.streams[0];
-            const el = document.getElementById('remoteVideo');
-            renderStreamToCanvas(event.track, el);
+            const canvas = document.getElementById('remoteVideo');
+            canvas.addEventListener('loadedmetadata', triggerCheck);
+            canvas.addEventListener('resize', triggerCheck);
+            const offscreen = canvas.transferControlToOffscreen();
+            const processor = new MediaStreamTrackProcessor({ track: event.track });
+            const readable = processor.readable;
 
-            el.addEventListener('loadedmetadata', triggerCheck);
-            el.addEventListener('resize', triggerCheck);
+            const worker = new Worker('/static/canvasWorker.js');
+            // self.onmessage = async function (videoTrack, canvas) {
+            worker.postMessage(
+                { readable: readable, canvas: offscreen },
+                [readable, offscreen]
+            );
         } else if (event.track.kind === 'audio') {
             const audioEl = document.createElement('audio');
             audioEl.srcObject = event.streams[0];
@@ -367,27 +375,27 @@ async function updateUIBasedOnCapabilities(caps) {
 }
 
 async function renderStreamToCanvas(videoTrack, canvas) {
-  const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d');
 
-  // 1. 创建处理器，将轨道转换为可读流
-  const processor = new MediaStreamTrackProcessor({ track: videoTrack });
-  const reader = processor.readable.getReader();
+    // 1. 创建处理器，将轨道转换为可读流
+    const processor = new MediaStreamTrackProcessor({ track: videoTrack });
+    const reader = processor.readable.getReader();
 
-  // 2. 循环读取每一帧 VideoFrame
-  while (true) {
-    const { done, value: frame } = await reader.read();
-    if (done) break;
+    // 2. 循环读取每一帧 VideoFrame
+    while (true) {
+        const { done, value: frame } = await reader.read();
+        if (done) break;
 
-    // 动态同步画布宽高
-    if (canvas.width !== frame.displayWidth || canvas.height !== frame.displayHeight) {
-      canvas.width = frame.displayWidth;
-      canvas.height = frame.displayHeight;
+        // 动态同步画布宽高
+        if (canvas.width !== frame.displayWidth || canvas.height !== frame.displayHeight) {
+            canvas.width = frame.displayWidth;
+            canvas.height = frame.displayHeight;
+        }
+
+        // 3. 直接将 VideoFrame 绘制到 Canvas
+        ctx.drawImage(frame, 0, 0);
+
+        // ⚠️ 极其重要：必须手动释放帧内存，否则会瞬间内存泄漏导致页面崩溃
+        frame.close();
     }
-
-    // 3. 直接将 VideoFrame 绘制到 Canvas
-    ctx.drawImage(frame, 0, 0);
-
-    // ⚠️ 极其重要：必须手动释放帧内存，否则会瞬间内存泄漏导致页面崩溃
-    frame.close();
-  }
 }
