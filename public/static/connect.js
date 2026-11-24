@@ -455,6 +455,11 @@ async function updateUIBasedOnCapabilities(caps) {
                 await loadScript('/static/capabilities/keyboard.js');
                 await loadScript('/static/capabilities/touch.js');
             }
+            if (caps.is_windows) {
+                await loadScript('/static/capabilities/linux_mouse.js');
+                await loadScript('/static/capabilities/keyboard.js');
+                await loadScript('/static/capabilities/gamestream.js');
+            }
             if (caps.is_android) {
                 await loadScript('/static/capabilities/keyboard.js');
                 await loadScript('/static/capabilities/touch.js');

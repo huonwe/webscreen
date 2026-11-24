@@ -35,6 +35,7 @@ const (
 
 	EVENT_TYPE_OPEN_HARD_KEYBOARD_SETTINGS EventType = 0x0F
 	EVENT_TYPE_RESET_VIDEO                 EventType = 0x10
+	EVENT_TYPE_GAMEPAD                     EventType = 0x11
 
 	EVENT_TYPE_REQ_IDR EventType = EVENT_TYPE_RESET_VIDEO
 	// -> Web Toast Message
@@ -158,6 +159,22 @@ type IDRReqEvent struct{}
 
 func (e IDRReqEvent) Type() EventType {
 	return EVENT_TYPE_REQ_IDR
+}
+
+type GamepadEvent struct {
+	ControllerNumber  uint8
+	ActiveGamepadMask uint16
+	Buttons           uint32
+	LeftTrigger       uint8
+	RightTrigger      uint8
+	LeftStickX        int16
+	LeftStickY        int16
+	RightStickX       int16
+	RightStickY       int16
+}
+
+func (e GamepadEvent) Type() EventType {
+	return EVENT_TYPE_GAMEPAD
 }
 
 type GetClipboardEvent struct {

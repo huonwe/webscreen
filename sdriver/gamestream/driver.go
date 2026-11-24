@@ -38,6 +38,7 @@ type Driver struct {
 	lastIDRReq time.Time
 	inputMu    sync.Mutex
 	modifiers  byte
+	padArrived [4]bool
 }
 
 // New initializes a GameStream / Sunshine streaming session (HTTP launch + RTSP handshake).

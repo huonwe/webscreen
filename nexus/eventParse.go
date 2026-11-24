@@ -68,6 +68,8 @@ func (r *Remote) parseEvent(raw []byte) (sdriver.Event, error) {
 		return r.parseSetClipboardEvent(raw)
 	case sdriver.EVENT_TYPE_REQ_IDR:
 		return r.parseIDRReqEvent()
+	case sdriver.EVENT_TYPE_GAMEPAD:
+		return r.parseGamepadEvent(raw)
 	default:
 		return nil, fmt.Errorf("unknown event type: %d", eventType)
 	}
@@ -142,6 +144,23 @@ func (r *Remote) parseRotateEvent() (*sdriver.RotateEvent, error) {
 
 func (r *Remote) parseIDRReqEvent() (*sdriver.IDRReqEvent, error) {
 	return &sdriver.IDRReqEvent{}, nil
+}
+
+func (r *Remote) parseGamepadEvent(raw []byte) (*sdriver.GamepadEvent, error) {
+	if len(raw) != 18 {
+		return nil, fmt.Errorf("invalid gamepad event message length: %d", len(raw))
+	}
+	return &sdriver.GamepadEvent{
+		ControllerNumber:  raw[1],
+		ActiveGamepadMask: binary.BigEndian.Uint16(raw[2:4]),
+		Buttons:           binary.BigEndian.Uint32(raw[4:8]),
+		LeftTrigger:       raw[8],
+		RightTrigger:      raw[9],
+		LeftStickX:        int16(binary.BigEndian.Uint16(raw[10:12])),
+		LeftStickY:        int16(binary.BigEndian.Uint16(raw[12:14])),
+		RightStickX:       int16(binary.BigEndian.Uint16(raw[14:16])),
+		RightStickY:       int16(binary.BigEndian.Uint16(raw[16:18])),
+	}, nil
 }
 
 func (r *Remote) parseUHIDCreateEvent(raw []byte) (*sdriver.UHIDCreateEvent, error) {

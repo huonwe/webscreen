@@ -7,14 +7,18 @@ import (
 )
 
 const (
-	magicKeyDown      uint32 = 0x00000003
-	magicKeyUp        uint32 = 0x00000004
-	magicMouseAbs     uint32 = 0x00000005
-	magicMouseBtnDown uint32 = 0x00000008
-	magicMouseBtnUp   uint32 = 0x00000009
-	magicScroll       uint32 = 0x0000000A
-	magicHScroll      uint32 = 0x55000001
-	magicTouch        uint32 = 0x55000002
+	magicKeyDown           uint32 = 0x00000003
+	magicKeyUp             uint32 = 0x00000004
+	magicMouseAbs          uint32 = 0x00000005
+	magicMouseBtnDown      uint32 = 0x00000008
+	magicMouseBtnUp        uint32 = 0x00000009
+	magicScroll            uint32 = 0x0000000A
+	magicMultiController   uint32 = 0x0000000C
+	magicHScroll           uint32 = 0x55000001
+	magicTouch             uint32 = 0x55000002
+	magicControllerArrival uint32 = 0x55000004
+
+	ctrlChannelGamepadBase uint8 = 0x10
 
 	modShift byte = 0x01
 	modCtrl  byte = 0x02
@@ -44,6 +48,10 @@ func (d *Driver) SendEvent(event sdriver.Event) error {
 		return d.sendTouchEvent(e)
 	case sdriver.TouchEvent:
 		return d.sendTouchEvent(&e)
+	case *sdriver.GamepadEvent:
+		return d.sendGamepadEvent(e)
+	case sdriver.GamepadEvent:
+		return d.sendGamepadEvent(&e)
 	case *sdriver.IDRReqEvent, sdriver.IDRReqEvent:
 		d.RequestIDR(true)
 		return nil
@@ -175,12 +183,12 @@ func (d *Driver) sendHScroll(amt int16) error {
 }
 
 func (d *Driver) sendTouchEvent(e *sdriver.TouchEvent) error {
-	var evType byte = 0x02 // MOVE
+	var evType byte = 0x03 // LI_TOUCH_EVENT_MOVE
 	switch e.Action {
 	case sdriver.TOUCH_ACTION_DOWN:
-		evType = 0x01
+		evType = 0x01 // LI_TOUCH_EVENT_DOWN
 	case sdriver.TOUCH_ACTION_UP:
-		evType = 0x03
+		evType = 0x02 // LI_TOUCH_EVENT_UP
 	}
 	w := float32(e.Width)
 	if w <= 0 {
@@ -200,10 +208,59 @@ func (d *Driver) sendTouchEvent(e *sdriver.TouchEvent) error {
 	pkt[8] = evType
 	binary.LittleEndian.PutUint16(pkt[10:12], 0xFFFF)
 	binary.LittleEndian.PutUint32(pkt[12:16], uint32(e.PointerID))
-	binary.BigEndian.PutUint32(pkt[16:20], math.Float32bits(nx))
-	binary.BigEndian.PutUint32(pkt[20:24], math.Float32bits(ny))
-	binary.BigEndian.PutUint32(pkt[24:28], math.Float32bits(float32(e.Pressure)/65535.0))
-	return d.ctrl.send(ctrlTypeInputData, pkt, ctrlChannelTouch, true)
+	binary.LittleEndian.PutUint32(pkt[16:20], math.Float32bits(nx))
+	binary.LittleEndian.PutUint32(pkt[20:24], math.Float32bits(ny))
+	binary.LittleEndian.PutUint32(pkt[24:28], math.Float32bits(float32(e.Pressure)/65535.0))
+	return d.ctrl.send(ctrlTypeInputData, pkt, ctrlChannelTouch, evType != 0x03)
+}
+
+func (d *Driver) sendGamepadEvent(e *sdriver.GamepadEvent) error {
+	num := e.ControllerNumber & 0x03
+	ch := ctrlChannelGamepadBase + num
+
+	d.inputMu.Lock()
+	needArrival := !d.padArrived[num] && (e.ActiveGamepadMask&(1<<num)) != 0
+	if needArrival {
+		d.padArrived[num] = true
+	}
+	if (e.ActiveGamepadMask & (1 << num)) == 0 {
+		d.padArrived[num] = false
+	}
+	d.inputMu.Unlock()
+
+	if needArrival {
+		// SS_CONTROLLER_ARRIVAL_PACKET (16 bytes): size(4 BE=12) + magic(4 LE) + controllerNumber(1) + type(1=Xbox 0x01) + capabilities(2 LE=0x03) + supportedButtonFlags(4 LE)
+		arr := make([]byte, 16)
+		binary.BigEndian.PutUint32(arr[0:4], 12)
+		binary.LittleEndian.PutUint32(arr[4:8], magicControllerArrival)
+		arr[8] = num
+		arr[9] = 0x01 // Xbox controller
+		binary.LittleEndian.PutUint16(arr[10:12], 0x0003)
+		binary.LittleEndian.PutUint32(arr[12:16], 0x0000FFFF)
+		if err := d.ctrl.send(ctrlTypeInputData, arr, ch, true); err != nil {
+			return err
+		}
+	}
+
+	// NV_MULTI_CONTROLLER_PACKET (34 bytes: size=30 + 4-byte size prefix)
+	pkt := make([]byte, 34)
+	binary.BigEndian.PutUint32(pkt[0:4], 30)
+	binary.LittleEndian.PutUint32(pkt[4:8], magicMultiController)
+	binary.LittleEndian.PutUint16(pkt[8:10], 0x001A) // MC_HEADER_B
+	binary.LittleEndian.PutUint16(pkt[10:12], uint16(num))
+	binary.LittleEndian.PutUint16(pkt[12:14], e.ActiveGamepadMask)
+	binary.LittleEndian.PutUint16(pkt[14:16], 0x0014) // MC_MID_B
+	binary.LittleEndian.PutUint16(pkt[16:18], uint16(e.Buttons&0xFFFF))
+	pkt[18] = e.LeftTrigger
+	pkt[19] = e.RightTrigger
+	binary.LittleEndian.PutUint16(pkt[20:22], uint16(e.LeftStickX))
+	binary.LittleEndian.PutUint16(pkt[22:24], uint16(e.LeftStickY))
+	binary.LittleEndian.PutUint16(pkt[24:26], uint16(e.RightStickX))
+	binary.LittleEndian.PutUint16(pkt[26:28], uint16(e.RightStickY))
+	binary.LittleEndian.PutUint16(pkt[28:30], 0x009C) // MC_TAIL_A
+	binary.LittleEndian.PutUint16(pkt[30:32], uint16(e.Buttons>>16))
+	binary.LittleEndian.PutUint16(pkt[32:34], 0x0055) // MC_TAIL_B
+	return d.ctrl.send(ctrlTypeInputData, pkt, ch, true)
 }
 
 func mapMouseButton(buttons uint32) byte {
