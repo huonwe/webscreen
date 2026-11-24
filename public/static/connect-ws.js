@@ -32,116 +32,7 @@ let videoConfig = null;
 let videoNeedsKeyFrame = true;
 let lastVideoTimestamp = -1;
 let videoFrameCount = 0;
-
-function splitAnnexB(payload) {
-    const nalus = [];
-    let offset = 0;
-
-    for (let i = 0; i + 3 < payload.length;) {
-        let start = -1;
-        let startSize = 0;
-
-        if (payload[i] === 0 && payload[i + 1] === 0 &&
-            payload[i + 2] === 0 && payload[i + 3] === 1) {
-            start = i;
-            startSize = 4;
-        } else if (payload[i] === 0 && payload[i + 1] === 0 &&
-            payload[i + 2] === 1) {
-            start = i;
-            startSize = 3;
-        }
-
-        if (start !== -1) {
-            if (offset >= 0 && offset < start) {
-                nalus.push(payload.subarray(offset, start));
-            }
-            offset = start + startSize;
-            i = offset;
-        } else {
-            i++;
-        }
-    }
-
-    if (offset < payload.length) {
-        nalus.push(payload.subarray(offset));
-    }
-    return nalus.filter(nalu => nalu.length > 0);
-}
-
-function h264ToAvcc(payload) {
-    let nalus = splitAnnexB(payload);
-    if (nalus.length === 1 && nalus[0] === payload) {
-        const avccNalus = [];
-        let offset = 0;
-        let looksLikeAvcc = true;
-        while (offset + 4 <= payload.length) {
-            const naluSize = new DataView(payload.buffer, payload.byteOffset + offset, 4).getUint32(0, false);
-            offset += 4;
-            if (naluSize === 0 || offset + naluSize > payload.length) {
-                looksLikeAvcc = false;
-                break;
-            }
-            avccNalus.push(payload.subarray(offset, offset + naluSize));
-            offset += naluSize;
-        }
-        if (looksLikeAvcc && offset === payload.length) {
-            nalus = avccNalus;
-        }
-    }
-    if (nalus.length === 0) nalus = [payload];
-
-    const avcc = [];
-    for (const nalu of nalus) {
-        const length = new Uint8Array(4);
-        new DataView(length.buffer).setUint32(0, nalu.length, false);
-        avcc.push(length, nalu);
-    }
-
-    let size = 0;
-    for (const part of avcc) size += part.length;
-    const result = new Uint8Array(size);
-    let offset = 0;
-    for (const part of avcc) {
-        result.set(part, offset);
-        offset += part.length;
-    }
-    return result;
-}
-
-function updateAvcConfiguration(payload) {
-    let nalus = splitAnnexB(payload);
-    if (nalus.length === 0) nalus = [payload];
-
-    const sps = nalus.find(nalu => (nalu[0] & 0x1f) === 7);
-    const pps = nalus.find(nalu => (nalu[0] & 0x1f) === 8);
-    if (!sps || sps.length < 4 || !pps) return;
-
-    const description = new Uint8Array(6 + 2 + sps.length + 1 + 2 + pps.length);
-    description.set([
-        1,
-        sps[1],
-        sps[2],
-        sps[3],
-        0xff,
-        0xe1
-    ]);
-    let offset = 6;
-    new DataView(description.buffer).setUint16(offset, sps.length, false);
-    offset += 2;
-    description.set(sps, offset);
-    offset += sps.length;
-    description[offset++] = 1;
-    new DataView(description.buffer).setUint16(offset, pps.length, false);
-    offset += 2;
-    description.set(pps, offset);
-
-    videoConfig = {
-        codec: `avc1.${sps[1].toString(16).padStart(2, '0')}${sps[2].toString(16).padStart(2, '0')}${sps[3].toString(16).padStart(2, '0')}`,
-        codedWidth: videoConfig?.codedWidth || 1280,
-        codedHeight: videoConfig?.codedHeight || 720,
-        description
-    };
-}
+let lastAudioTimestamp = -1;
 
 function status(text) {
     let el = document.getElementById('wsStatus');
@@ -171,7 +62,7 @@ async function initWebCodecs(mediaMeta) {
     videoConfig = null;
     switch (videoCodec.toLowerCase()) {
         case 'h264':
-            videoConfig = { codec: 'avc1.640028', codedWidth: width, codedHeight: height };
+            videoConfig = { codec: 'avc3.640028', codedWidth: width, codedHeight: height };
             break;
         case 'h265':
         case 'hevc':
@@ -227,6 +118,13 @@ async function initWebCodecs(mediaMeta) {
         error(error) {
             console.error('AudioDecoder error:', error);
             status(`Audio decoder error: ${error}`);
+            lastAudioTimestamp = -1;
+            try {
+                audioDecoder.reset();
+                audioDecoder.configure(audioSupport.config);
+            } catch (resetError) {
+                console.error('Failed to reset audio decoder:', resetError);
+            }
         }
     });
     audioDecoder.configure(audioSupport.config);
@@ -240,7 +138,10 @@ async function ensureAudioStarted() {
 
     if (!audioContext) {
         const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-        audioContext = new AudioContextClass({ sampleRate: 48000 });
+        audioContext = new AudioContextClass({
+            sampleRate: 48000,
+            latencyHint: 'interactive'
+        });
         nextAudioTime = 0;
     }
 
@@ -259,7 +160,7 @@ async function ensureAudioStarted() {
 }
 
 function queueAudioData(audioData) {
-    if (audioQueue.length >= 100) {
+    if (audioQueue.length >= 12) {
         audioQueue.shift();
     }
 
@@ -318,7 +219,12 @@ function playChannels(channels, frameCount, sampleRate) {
     source.connect(audioContext.destination);
 
     const now = audioContext.currentTime;
-    if (nextAudioTime < now + 0.01) nextAudioTime = now + 0.01;
+    if (nextAudioTime < now) {
+        nextAudioTime = now;
+    } else if (nextAudioTime - now > 0.05) {
+        nextAudioTime = now;
+    }
+
     source.start(nextAudioTime);
     nextAudioTime += frameCount / sampleRate;
 }
@@ -350,20 +256,9 @@ function handleMediaFrame(buffer) {
             status('Dropping stale video frames');
             return;
         }
-        if (CONFIG.driver_config?.video_codec === 'h264') {
-            updateAvcConfiguration(payload);
-
-            if (videoNeedsKeyFrame && keyFrame && videoConfig?.description) {
-                videoDecoder.reset();
-                videoDecoder.configure(videoConfig);
-                videoNeedsKeyFrame = false;
-            }
-
-            if (videoNeedsKeyFrame) {
-                if (!keyFrame) return;
-            }
-
-            payload = h264ToAvcc(payload);
+        if (videoNeedsKeyFrame && !keyFrame) return;
+        if (videoNeedsKeyFrame && keyFrame) {
+            videoNeedsKeyFrame = false;
         }
 
         let timestamp = Number.isFinite(pts) ? pts : 0;
@@ -380,9 +275,22 @@ function handleMediaFrame(buffer) {
         }));
     } else if (kind === 1) {
         if (!audioDecoder || audioDecoder.state !== 'configured') return;
+        if (payload.length === 0) return;
+        if (audioDecoder.decodeQueueSize > 8) {
+            lastAudioTimestamp = -1;
+            status('Dropping stale audio frames');
+            return;
+        }
+
+        let timestamp = Number.isFinite(pts) ? pts : 0;
+        if (timestamp <= lastAudioTimestamp) {
+            timestamp = lastAudioTimestamp + 20000;
+        }
+        lastAudioTimestamp = timestamp;
+
         audioDecoder.decode(new EncodedAudioChunk({
             type: 'key',
-            timestamp: pts,
+            timestamp,
             data: payload
         }));
     }
