@@ -379,19 +379,26 @@ func (s *authStore) pair(ip string, port int, pin string) error {
 	}
 
 	// Verify via mTLS /serverinfo in case the host already finalized pairing on step 5
+	var errMTLS error
 	if tlsClient, err := s.httpsClient(serverCert); err == nil {
 		u := fmt.Sprintf("https://%s:%d/serverinfo?uniqueid=%s&uuid=%s", ip, httpsPort, defaultUniqueID, defaultUUID)
 		if resp, err := tlsClient.Get(u); err == nil {
 			body, _ := io.ReadAll(resp.Body)
 			resp.Body.Close()
 			var info serverInfo
-			if xml.Unmarshal(body, &info) == nil && info.PairStatus == 1 {
+			if uErr := xml.Unmarshal(body, &info); uErr == nil && info.PairStatus == 1 {
 				return s.saveServerCert(ip, serverCert)
+			} else {
+				errMTLS = fmt.Errorf("status=%d pairStatus=%d unmarshalErr=%v", resp.StatusCode, info.PairStatus, uErr)
 			}
+		} else {
+			errMTLS = err
 		}
+	} else {
+		errMTLS = err
 	}
 
-	return fmt.Errorf("pairchallenge failed (http: %v; https: %v)", errHTTP, errHTTPS)
+	return fmt.Errorf("pairchallenge failed (http: %v; https: %v; mtls_serverinfo: %v)", errHTTP, errHTTPS, errMTLS)
 }
 
 func (s *authStore) pairChallengeHTTPS(ip string, httpsPort int, serverCert *x509.Certificate) error {
