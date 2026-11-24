@@ -57,6 +57,8 @@ func (d *Driver) videoLoop(conn *net.UDPConn, remoteAddr *net.UDPAddr, rtsp *rts
 	var frameBlocks [4][][]byte // up to 4 FEC blocks per frame
 	var curFrameIdx uint32
 	var curFrameInit bool
+	var lastEmittedFrameIdx uint32
+	var hasEmittedFrame bool
 	waitingForIDR := true
 
 	flushFrame := func(frameIdx uint32) {
@@ -70,6 +72,11 @@ func (d *Driver) videoLoop(conn *net.UDPConn, remoteAddr *net.UDPAddr, rtsp *rts
 		if len(frameBuf) == 0 {
 			return
 		}
+		if hasEmittedFrame && int32(frameIdx-lastEmittedFrameIdx) <= 0 {
+			return
+		}
+		lastEmittedFrameIdx = frameIdx
+		hasEmittedFrame = true
 		isIDR := d.emitVideoFrame(frameBuf, frameIdx)
 		if isIDR {
 			waitingForIDR = false

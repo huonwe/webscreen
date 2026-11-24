@@ -123,19 +123,9 @@ func (d *Driver) Start() error {
 func (d *Driver) Pause() {}
 
 func (d *Driver) RequestIDR(force bool) {
-	if !force {
-		d.mu.RLock()
-		for _, nal := range [][]byte{d.lastVPS, d.lastSPS, d.lastPPS, d.lastIDR} {
-			if len(nal) > 0 {
-				select {
-				case d.videoChan <- sdriver.AVBox{Data: append([]byte(nil), nal...), NoDuration: true}:
-				default:
-				}
-			}
-		}
-		d.mu.RUnlock()
-	}
-
+	// Never replay a stale cached IDR into the live stream (which would cause the
+	// video to jump backward in time). Always ask the host for a fresh IDR frame,
+	// throttled to at most once every 500ms unless force is true.
 	d.mu.Lock()
 	now := time.Now()
 	shouldSend := force || now.Sub(d.lastIDRReq) >= 500*time.Millisecond
