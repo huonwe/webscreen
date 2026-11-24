@@ -11,9 +11,7 @@
     <script src="/static/ui.js" defer></script>
     <script>
         const connectionScript = document.createElement('script');
-        connectionScript.src = new URLSearchParams(window.location.search).has('nexus')
-            ? '/static/connectN.js'
-            : '/static/connect.js';
+        connectionScript.src = '/static/connect.js';
         connectionScript.defer = true;
         document.head.appendChild(connectionScript);
     </script>
@@ -34,7 +32,7 @@
 <body>
     <div class="main-container">
         <div class="video-container">
-            <video id="remoteVideo" autoplay muted playsinline></video>
+            <canvas id="remoteVideo" autoplay muted playsinline></canvas>
         </div>
         <div class="controls-container">
             <a href="/console" class="control-btn" data-i18n-title="device_manager" title="设备管理"
