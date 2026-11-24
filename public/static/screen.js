@@ -4,7 +4,9 @@ window.isUHIDMouseEnabled = false;
 // 缓存视频元素的位置和尺寸，避免频繁调用 getBoundingClientRect
 window.cachedRect = {
     VideoRect: null,
-    ContentRect: { left: 0, top: 0, width: 0, height: 0 }
+    ContentRect: { left: 0, top: 0, width: 0, height: 0 },
+    MediaWidth: 0,
+    MediaHeight: 0
 }
 function getMediaDimensions(element) {
     if (element instanceof HTMLCanvasElement) {
@@ -61,6 +63,8 @@ function updateVideoCache() {
             width: drawWidth,
             height: drawHeight
         };
+        window.cachedRect.MediaWidth = vidWidth;
+        window.cachedRect.MediaHeight = vidHeight;
         return true;
     }
 

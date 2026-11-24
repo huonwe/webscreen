@@ -33,28 +33,29 @@ function scheduleMoveSend() {
 }
 
 function getScreenCoordinates(clientX, clientY) {
-    // 使用缓存的矩形和缩放比例
-    if (!window.cachedRect.VideoRect) {
+    const dimensions = getMediaDimensions(remoteVideo);
+    if (!dimensions.width || !dimensions.height) {
+        return null;
+    }
+    const cache = window.cachedRect;
+    if (!cache.VideoRect ||
+        cache.MediaWidth !== dimensions.width ||
+        cache.MediaHeight !== dimensions.height) {
         if (!updateVideoCache()) {
             return null;
         }
     }
 
-    const dimensions = getMediaDimensions(remoteVideo);
-    if (!dimensions.width || !dimensions.height) {
-        return null;
-    }
-
-    const offsetX = clientX - window.cachedRect.VideoRect.left;
-    const offsetY = clientY - window.cachedRect.VideoRect.top;
+    const offsetX = clientX - cache.VideoRect.left;
+    const offsetY = clientY - cache.VideoRect.top;
 
     // 相对于视频内容区域的坐标
-    const contentX = offsetX - window.cachedRect.ContentRect.left;
-    const contentY = offsetY - window.cachedRect.ContentRect.top;
+    const contentX = offsetX - cache.ContentRect.left;
+    const contentY = offsetY - cache.ContentRect.top;
 
     // 映射到视频源分辨率
-    const x = (contentX / window.cachedRect.ContentRect.width) * dimensions.width;
-    const y = (contentY / window.cachedRect.ContentRect.height) * dimensions.height;
+    const x = (contentX / cache.ContentRect.width) * dimensions.width;
+    const y = (contentY / cache.ContentRect.height) * dimensions.height;
 
     // Clamp coordinates to be within video bounds
     const clampedX = Math.max(0, Math.min(Math.round(x), dimensions.width));
