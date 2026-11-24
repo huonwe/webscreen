@@ -24,5 +24,13 @@ func ConfigDescription() []ConfigParamDescription {
 			Default:     false,
 			Description: "Use WebSocket instead of WebRTC for streaming. (Now developing, no real effect yet)",
 		},
+		{
+			Name:        "protocol",
+			Type:        "string",
+			Required:    true,
+			Default:     "webrtc",
+			Options:     []string{"webrtc", "websocket"},
+			Description: "Connection protocol to use. (Now developing, no real effect yet)",
+		},
 	}
 }

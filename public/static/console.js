@@ -93,6 +93,7 @@ function ensureDeviceConfig(device) {
             device_ip: device.ip || '0',
             device_port: device.port || '0',
             av_sync: baseConfig.av_sync,
+            remote_uuid: device.uuid || '',
             driver_config: baseConfig.driver_config
         };
         saveDeviceConfigs(deviceConfigs);
@@ -510,6 +511,8 @@ function startStream(serial) {
         device_ip: config.device_ip || '0',
         device_port: config.device_port || '0',
         av_sync: config.av_sync || false,
+        remote_uuid: config.remote_uuid || '',
+        protocol: config.protocol || 'not set',
         use_local_timestamp: config.use_local_timestamp || false,
         driver_config: drv
     };
@@ -774,6 +777,7 @@ function saveDeviceConfig() {
             }
         }
     }
+    console.log('Saving config for device', activeConfigSerial, config);
 
     saveDeviceConfigs(deviceConfigs);
     renderDeviceList();

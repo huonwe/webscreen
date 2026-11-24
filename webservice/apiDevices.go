@@ -3,11 +3,12 @@ package webservice
 import (
 	"log"
 	"uuid"
+	"webscreen/consts"
 	"webscreen/db"
+	"webscreen/nexus"
 	linuxDriver "webscreen/sdriver/linux"
 	rockchipDriver "webscreen/sdriver/rockchip-hdmirx"
 	"webscreen/sdriver/scrcpy"
-	sagent "webscreen/streamAgent"
 	"webscreen/webservice/android"
 
 	"github.com/gin-gonic/gin"
@@ -127,7 +128,7 @@ func (wm *WebMaster) handleConnectDevice(c *gin.Context) {
 		addr = addr + ":" + req.Port
 	}
 	switch req.DeviceType {
-	case sagent.DEVICE_TYPE_ANDROID:
+	case consts.DEVICE_TYPE_ANDROID:
 		if err := android.ConnectDevice(addr); err != nil {
 			c.JSON(500, gin.H{"error": err.Error()})
 			return
@@ -153,7 +154,7 @@ func (wm *WebMaster) handlePairDevice(c *gin.Context) {
 	}
 	addr := req.IP + ":" + req.Port
 	switch req.DeviceType {
-	case sagent.DEVICE_TYPE_ANDROID:
+	case consts.DEVICE_TYPE_ANDROID:
 		if err := android.PairDevice(addr, req.Code); err != nil {
 			c.JSON(500, gin.H{"error": err.Error()})
 			return
@@ -170,17 +171,17 @@ func (wm *WebMaster) handleDeviceConfigDescription(c *gin.Context) {
 	dtype := c.Query("device_type")
 	id := c.Query("device_id")
 	switch dtype {
-	case sagent.DEVICE_TYPE_ANDROID:
+	case consts.DEVICE_TYPE_ANDROID:
 		desc := scrcpy.ConfigDescription(id)
 		c.JSON(200, desc)
-	case sagent.DEVICE_TYPE_LINUX:
+	case consts.DEVICE_TYPE_LINUX:
 		desc := linuxDriver.ConfigDescription()
 		c.JSON(200, desc)
-	case sagent.DEVICE_TYPE_ROCKCHIP_HDMIRX:
+	case consts.DEVICE_TYPE_ROCKCHIP_HDMIRX:
 		desc := rockchipDriver.ConfigDescription()
 		c.JSON(200, desc)
 	case "universal":
-		desc := sagent.ConfigDescription()
+		desc := nexus.ConfigDescription()
 		c.JSON(200, desc)
 	default:
 		c.JSON(400, gin.H{"error": "Unsupported device type"})

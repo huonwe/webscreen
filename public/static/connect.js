@@ -58,7 +58,8 @@ var CONFIG = (function () {
 })();
 
 async function start() {
-    if (CONFIG.device_type === "none") {
+    console.log("CONFIG:", CONFIG);
+    if (!CONFIG.remote_uuid) {
         console.error("No device configuration found. Please set up the device configuration in the console.");
         showToast(i18n.t('error_no_device_config'), 3000);
         return;
@@ -69,6 +70,7 @@ async function start() {
     // 1. Listen for remote tracks
     pc.ontrack = function (event) {
         if (event.track.kind === 'video') {
+            console.log("Received remote video track:", event.track);
             const el = document.getElementById('remoteVideo');
             el.srcObject = event.streams[0];
 
@@ -91,8 +93,6 @@ async function start() {
                 if ('jitterBufferTarget' in receiver) {
                     receiver.jitterBufferTarget = 0;
                 }
-
-                console.log('✓ (playoutDelayHint=', receiver.playoutDelayHint, ', jitterBufferTarget=', receiver.jitterBufferTarget, ')');
             }
         });
     };
@@ -102,10 +102,10 @@ async function start() {
     pc.addTransceiver('audio', { direction: 'recvonly' });
 
     // Add data channel for control messages if needed
-    const dataChannelOrdered = pc.createDataChannel("control-ordered" ,{
+    const dataChannelOrdered = pc.createDataChannel("control-ordered", {
         ordered: true,
     });
-    const dataChannelUnordered = pc.createDataChannel("control-unordered" ,{
+    const dataChannelUnordered = pc.createDataChannel("control-unordered", {
         ordered: false,
         // maxRetransmits: 0,
     });
@@ -114,33 +114,33 @@ async function start() {
     dataChannelUnordered.addEventListener('message', (event) => {
         console.log("DataChannel Unordered Message:", event.data);
         const view = new Uint8Array(event.data);
-            const decoder = new TextDecoder();
-            // console.log("Received binary message, type:", view[0]);
-            switch (view[0]) {
-                case 0x17: // TYPE_CLIPBOARD_DATA
-                    const text = decoder.decode(view.slice(1));
-                    console.log("Clipboard from device:", text);
-                    // Copy to browser clipboard
-                    try {
-                        navigator.clipboard.writeText(text).catch(err => {
-                            console.error('Failed to write to clipboard:', err);
-                        });
-                    } catch (e) {
-                        console.error('Clipboard API not available:', e);
-                        console.log("HTTPS is required for clipboard access.");
-                    }
-                    break;
-                case 0x64: // TYPE_TEXT_MSG
-                    const textMsg = decoder.decode(view.slice(1));
-                    console.log("Text message from agent:", textMsg);
-                    showToast(textMsg, 3000);
-                    break;
-                default:
-                    console.warn("Unknown binary message type:", view[0]);
+        const decoder = new TextDecoder();
+        // console.log("Received binary message, type:", view[0]);
+        switch (view[0]) {
+            case 0x17: // TYPE_CLIPBOARD_DATA
+                const text = decoder.decode(view.slice(1));
+                console.log("Clipboard from device:", text);
+                // Copy to browser clipboard
+                try {
+                    navigator.clipboard.writeText(text).catch(err => {
+                        console.error('Failed to write to clipboard:', err);
+                    });
+                } catch (e) {
+                    console.error('Clipboard API not available:', e);
+                    console.log("HTTPS is required for clipboard access.");
                 }
+                break;
+            case 0x64: // TYPE_TEXT_MSG
+                const textMsg = decoder.decode(view.slice(1));
+                console.log("Text message from agent:", textMsg);
+                showToast(textMsg, 3000);
+                break;
+            default:
+                console.warn("Unknown binary message type:", view[0]);
         }
+    }
     )
-    
+
 
 
     // 3. Create Offer
@@ -155,7 +155,6 @@ async function start() {
 
     // 5. Establish WebSocket connection
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    // Construct URL matching the hardcoded config to satisfy backend check
     const wsUrl = `${protocol}//${window.location.host}/screen/ws`;
 
     window.ws = new WebSocket(wsUrl);
@@ -163,80 +162,69 @@ async function start() {
 
     window.ws.onopen = () => {
         console.log('WebSocket connected');
-        // 发送 Config 和 SDP
-        console.log("config:", CONFIG);
         const config = {
-            ...CONFIG,
-            sdp: pc.localDescription.sdp
+            protocol: CONFIG.protocol || "websocket",
+            video_codec: CONFIG.driver_config?.video_codec || "h264",
+            audio_codec: CONFIG.driver_config?.audio_codec || "opus",
+            remote_uuid: CONFIG.remote_uuid,
+            extra: {
+                sdp: pc.localDescription.sdp,
+                av_sync: String(CONFIG.av_sync === true)
+            }
         };
-        console.log(CONFIG.driver_config)
+        console.log("connection config:", config);
         window.ws.send(JSON.stringify(config));
     };
+    let remoteConfigSent = false;
     window.ws.onmessage = async (event) => {
-        // if (typeof event.data === 'string') {
-            const message = JSON.parse(event.data);
-            console.log("Received message status:", message.status);
-            switch (message.status) {
-                case 'ok':
-                    switch (message.stage) {
-                        case 'webrtc_init':
-                            let answerSdp = message.sdp;
-                            console.log("Received SDP Answer");
-                            if (!answerSdp.length) {
-                                console.error("Empty SDP Answer received");
-                                showToast(i18n.t('error_empty_sdp_answer'), 2000);
-                                console.error("WebRTC connection cannot be established without a valid SDP answer. This may be the browser not supporting the required codecs (H264/H265).");
-                                return;
-                            }
+        const message = JSON.parse(event.data);
+        console.log("Received message:", message);
+        if (message.status === 'error') {
+            console.error("Error from server:", message);
+            showToast(i18n.t('error_from_server', { msg: message.message }), 2000);
+            return;
+        }
 
-                            // for edge browser compatibility, format the SDP properly
-                            let formattedSdp = answerSdp
-                                .split(/\r\n|\r|\n/)
-                                .map(line => line.trim())
-                                .filter(line => line.length > 0)
-                                .join('\r\n');
-                            // formattedSdp += '\r\n';
-                            if (!formattedSdp.endsWith('\r\n')) {
-                                formattedSdp += '\r\n';
-                            }
-                            // 设置 Answer
-                            await pc.setRemoteDescription(new RTCSessionDescription({
-                                type: 'answer',
-                                sdp: formattedSdp
-                            }));
-                            console.log("WebRTC connection established");
-                            break;
-                        case 'webrtc_metainfo':
-                            const capabilities = message.capabilities;
-                            const media_meta = message.media_meta;
-                            console.log("Driver Capabilities:", capabilities);
-                            console.log("Media Meta:", media_meta);
-                            // Update UI based on capabilities
-                            await updateUIBasedOnCapabilities(capabilities);
-                            setInterval(() => force_sync(pc), 1000);
-                            setTimeout(() => {
-                                let rect = remoteVideo.getBoundingClientRect();
-                                // console.log("Initial video size:", rect.width, "x", rect.height);
-                                // updateVideoCache();
-                                // console.log(rect.width / rect.height, media_meta.width / media_meta.height);
-                                if (rect.width / rect.height != media_meta.width / media_meta.height) {
-                                    let p = createRequestKeyFramePacket();
-                                    ws.send(p);
-                                }
-                            }, 2000);
-                            break;
-                        default:
-                            break;
-                    }
-                    break;
-                case 'error':
-                    console.error("Error from server:", message);
-                    showToast(i18n.t('error_from_server', { msg: message.message }), 2000);
-                    break;
-                default:
-                    console.warn("Unknown message status:", message.status);
+        if (message.stage === 'metainfo_remote' && message.capabilities) {
+            console.log("Received capabilities from Nexus:", message.capabilities);
+            await updateUIBasedOnCapabilities(message.capabilities);
+            return;
+        }
+        if (message.stage === 'metainfo_remote' && message.media_meta) {
+            console.log("Received media meta from Nexus:", message.media_meta);
+            return;
+        }
+        if (message.status !== 'ok' || message.stage !== 'connection_view_session' || !message.sdp) {
+
+            return;
+        }
+        if (message.sdp) {
+            const answerSdp = message.sdp;
+            console.log("Received SDP answer from Nexus:", answerSdp);
+            if (!answerSdp.length) {
+                showToast(i18n.t('error_empty_sdp_answer'), 2000);
+                return;
             }
+            const formattedSdp = answerSdp
+                .split(/\r\n|\r|\n/)
+                .map(line => line.trim())
+                .filter(line => line.length > 0)
+                .join('\r\n') + '\r\n';
+            await pc.setRemoteDescription({ type: 'answer', sdp: formattedSdp });
+            console.log("WebRTC connection established with Nexus");
+        }
+        if (message.useWSTransport) {
 
+            console.log("Using WebSocket transport for control messages");
+        }
+        if (!remoteConfigSent) {
+            remoteConfigSent = true;
+            const remoteConfig = { ...(CONFIG.driver_config || {}) };
+            if (CONFIG.type === 'android') {
+                remoteConfig.deviceID = CONFIG.device_ip || CONFIG.device_id || '';
+            }
+            window.ws.send(JSON.stringify(remoteConfig));
+        }
     };
 }
 

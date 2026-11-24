@@ -21,8 +21,7 @@ import (
 type WebMaster struct {
 	// WSConns []*websocket.Conn
 
-	Nexus         *nexus.Nexus
-	WebRTCManager *WebRTCManager
+	Nexus *nexus.Nexus
 	// ScreenSessions map[string]ScreenSession
 
 	pin                  string
@@ -49,7 +48,6 @@ func New(config WebMasterConfig, staticFS fs.FS, database *sql.DB) *WebMaster {
 		devicesDiscovered:    make(map[string]db.DeviceInfo),
 		staticFS:             staticFS,
 		UnlockAttemptRecords: make(map[string]UnlockAttemptRecord),
-		WebRTCManager:        NewWebRTCManager(),
 		pin:                  config.PIN,
 		trustedIPs:           append([]string(nil), config.TrustedIPs...),
 		authService:          auth.NewService(database, config.JWTSecret),
@@ -107,18 +105,14 @@ func (wm *WebMaster) setRouter() {
 			ctx.FileFromFS("screen.html", http.FS(wm.staticFS))
 		})
 		screen.GET("/ws", wm.handleScreenWS)
-		screen.GET("/wsn", wm.handleScreenWSN)
 	}
 
 	r.GET("/console", func(c *gin.Context) {
 		c.FileFromFS("console.html", http.FS(wm.staticFS))
 	})
-	r.GET("/consoleN", func(c *gin.Context) {
-		c.FileFromFS("consoleN.html", http.FS(wm.staticFS))
-	})
 
 	r.GET("/screen-ws", func(ctx *gin.Context) { ctx.FileFromFS("screen-ws.html", http.FS(wm.staticFS)) })
-	r.GET("/screen-ws/wsn", wm.handleScreenWSN)
+	r.GET("/screen-ws/wsn", wm.handleScreenWS)
 	api := r.Group("/api")
 	{
 		api.GET("/auth/status", wm.handleAuthStatus)

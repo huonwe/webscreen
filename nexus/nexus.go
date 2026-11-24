@@ -12,6 +12,8 @@ import (
 	"webscreen/consts"
 	"webscreen/db"
 	"webscreen/sdriver"
+	linuxDriver "webscreen/sdriver/linux"
+	rockchiphdmirx "webscreen/sdriver/rockchip-hdmirx"
 	"webscreen/sdriver/scrcpy"
 
 	"github.com/gorilla/websocket"
@@ -534,12 +536,22 @@ func (n *Nexus) setupRemote(remoteUUID string, config RemoteConfig) (sdriver.SDr
 	config["deviceID"] = deviceInfo.DeviceID
 	var driver sdriver.SDriver
 	switch deviceInfo.Type {
-	case consts.DeviceTypeAndroid:
+	case consts.DEVICE_TYPE_ANDROID:
 		driver, err = scrcpy.New(config)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create scrcpy driver for remoteUUID %s: %v", remoteUUID, err)
 		}
 		// Do something with the created driver, e.g., store it or use it for further processing
+	case consts.DEVICE_TYPE_LINUX:
+		driver, err = linuxDriver.New(config)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create linux driver for remoteUUID %s: %v", remoteUUID, err)
+		}
+	case consts.DEVICE_TYPE_ROCKCHIP_HDMIRX:
+		driver, err = rockchiphdmirx.New(config)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create rockchip-hdmirx driver for remoteUUID %s: %v", remoteUUID, err)
+		}
 	default:
 		return nil, fmt.Errorf("unsupported device type: %s", deviceInfo.Type)
 	}

@@ -1,6 +1,6 @@
 package android
 
-import sagent "webscreen/streamAgent"
+import "webscreen/consts"
 
 type AndroidDevice struct {
 	UUID     string `json:"uuid"`
@@ -19,7 +19,7 @@ type AndroidDevice struct {
 }
 
 func (d AndroidDevice) GetType() string {
-	return sagent.DEVICE_TYPE_ANDROID
+	return consts.DEVICE_TYPE_ANDROID
 }
 
 func (d AndroidDevice) GetDeviceID() string {
