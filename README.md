@@ -2,7 +2,7 @@
 
 # 📺 Webscreen
 
-A self-hosted screen streaming web application for Android and Linux devices, based on WebRTC. 
+A self-hosted screen streaming web application for Android and Linux devices. 
 
 [![GitHub release](https://img.shields.io/github/v/release/huonwe/webscreen?style=flat-square)](https://github.com/huonwe/webscreen/releases)
 [![GitHub stars](https://img.shields.io/github/stars/huonwe/webscreen?style=flat-square)](https://github.com/huonwe/webscreen/stargazers)
