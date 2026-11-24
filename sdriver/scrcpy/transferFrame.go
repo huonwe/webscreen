@@ -105,7 +105,7 @@ func (da *ScrcpyDriver) convertVideoFrame() {
 		}
 		select {
 		case da.VideoChan <- sdriver.AVBox{
-			Data:       payloadBuf[4:],
+			Data:       payloadBuf,
 			PTS:        header.PTS,
 			Type:       0,
 			NoDuration: false,

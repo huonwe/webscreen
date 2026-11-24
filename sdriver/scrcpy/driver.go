@@ -237,9 +237,7 @@ func New(config map[string]string) (*ScrcpyDriver, error) {
 			video_codec_options_webrtc += "intra-refresh-period=60,i-frame-interval=-1"
 		}
 		video_codec_options_webrtc += ",intra-refresh-period=60,i-frame-interval=-1"
-		if strings.HasPrefix(video_codec_options_webrtc, ",") {
-			video_codec_options_webrtc = strings.TrimPrefix(video_codec_options_webrtc, ",")
-		}
+		video_codec_options_webrtc = strings.TrimPrefix(video_codec_options_webrtc, ",")
 		log.Printf("Enabling intra refresh for the video stream: %s", video_codec_options_webrtc)
 	}
 
@@ -256,7 +254,8 @@ func New(config map[string]string) (*ScrcpyDriver, error) {
 		"audio":               config["audio"],
 		// "audio_bit_rate":      config["audio_bit_rate"],
 		// "audio_codec_options": "durationUs=10000", // 10ms
-		"control":   config["control"],
+		"control": config["control"],
+		// "raw_stream": "true",
 		"cleanup":   "true",
 		"log_level": "info",
 
@@ -279,24 +278,7 @@ func New(config map[string]string) (*ScrcpyDriver, error) {
 		log.Printf("start_app: %s", config["start_app"])
 	}
 
-	if da.localMode {
-		// With tunnel_forward the scrcpy server creates the listener itself
-		// (LocalServerSocket -> abstract socket) and accepts the three
-		// connections on it. The dummy byte must be turned off so the stream
-		// framing stays identical to the adb (reverse tunnel) mode.
-		options["tunnel_forward"] = "true"
-		options["send_dummy_byte"] = "false"
-	}
-
-	if da.localMode {
-		if err := da.startLocalScrcpyServer(options); err != nil {
-			log.Printf("[scrcpy] start local scrcpy server failed: %v", err)
-			listener.Close()
-			return nil, err
-		}
-	} else {
-		da.adbClient.StartScrcpyServer(options)
-	}
+	da.adbClient.StartScrcpyServer(options)
 	da.options = options
 	// log.Println("Scrcpy server started successfully")
 	// conns := make([]net.Conn, 3)
@@ -323,8 +305,10 @@ func New(config map[string]string) (*ScrcpyDriver, error) {
 			return nil, err
 		}
 		log.Printf("[scrcpy] Connected Device: %s", da.deviceName)
-
-		da.assignConn(conn)
+		da.videoConn = conn
+		da.capabilities.CanVideo = true
+		codecID := readCodecID(conn)
+		da.mediaMeta.VideoCodec = codecID
 	}
 	if options["audio"] == "true" {
 		conn, err := listener.Accept()
@@ -334,7 +318,11 @@ func New(config map[string]string) (*ScrcpyDriver, error) {
 			da.cleanupTunnel()
 			return nil, fmt.Errorf("failed to accept connection from scrcpy-server: %v", err)
 		}
-		da.assignConn(conn)
+		codecID := readCodecID(conn)
+		da.audioConn = conn
+		da.capabilities.CanAudio = true
+		da.mediaMeta.AudioCodec = codecID
+		log.Println("Scrcpy Audio Connection Established")
 	}
 	if options["control"] == "true" {
 		conn, err := listener.Accept()
@@ -365,10 +353,6 @@ func New(config map[string]string) (*ScrcpyDriver, error) {
 		}
 	}
 
-	// 设更合理的读缓冲区大小
-	// da.videoConn.(*net.TCPConn).SetReadBuffer(2 * 1024 * 1024)
-	// da.audioConn.(*net.TCPConn).SetReadBuffer(64 * 1024)
-
 	setupOK = true
 	return da, nil
 }
@@ -396,27 +380,6 @@ func (da *ScrcpyDriver) markDead(reason string) {
 func (da *ScrcpyDriver) ShowDeviceInfo() {
 	log.Printf("[scrcpy] Device Name: %s", da.deviceName)
 	log.Printf("[scrcpy] media Meta: %v", da.mediaMeta)
-}
-
-// Please Ensure the input conn is not Control conn
-func (da *ScrcpyDriver) assignConn(conn net.Conn) error {
-	codecID := readCodecID(conn)
-	switch codecID {
-	case "h264", "h265", "av1":
-		da.videoConn = conn
-		da.mediaMeta.VideoCodec = codecID
-		da.capabilities.CanVideo = true
-		log.Println("Scrcpy Video Connection Established")
-	case "aac ", "opus":
-		da.audioConn = conn
-		da.mediaMeta.AudioCodec = codecID
-		da.capabilities.CanAudio = true
-		log.Println("Audio Connection Established")
-		// default:
-		// 	da.controlConn = conn
-		// 	log.Println("Scrcpy Control Connection Established")
-	}
-	return nil
 }
 
 func (da *ScrcpyDriver) readDeviceMeta(conn net.Conn) error {

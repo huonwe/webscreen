@@ -84,11 +84,11 @@ function ensureDeviceConfig(device) {
     const serial = typeof device === 'string' ? device : device.device_id;
     console.log('Ensuring config for device', serial);
     if (!deviceConfigs[serial]) {
-        const type = device.device_type;
-        console.log(`Creating default config for new device: ${serial} of type ${type}`);
+        const device_type = device["type"] || device.device_type || 'unknown';
+        console.log(`Creating default config for new device: ${serial} of type ${device_type}`);
         let baseConfig = JSON.parse(JSON.stringify(defaultConfig));
         deviceConfigs[serial] = {
-            device_type: type,
+            device_type: device_type,
             device_id: serial,
             device_ip: device.ip || '0',
             device_port: device.port || '0',
@@ -393,9 +393,13 @@ async function fetchDevices() {
             );
         }
         for (const device of devices) {
+            console.log('Fetching schema for device:', device);
             let activeConfigSerial = typeof device === 'string' ? device : device.device_id;
-            let dtype = device.type;
-            if (dtype === 'xvfb') dtype = 'linux';
+            let dtype = device["type"] || device.device_type || 'unknown';
+            if (!dtype) {
+                console.warn('Device type is missing for device:', device);
+                dtype = 'unknown';
+            }
             const cacheKey = `${dtype}_${activeConfigSerial}`;
             if (!schemaCache[cacheKey]) {
                 schemaPromises.push(
@@ -510,7 +514,7 @@ function startStream(serial) {
         driver_config: drv
     };
 
-    if (config.device_type == 'android') {
+    if (config.type == 'android') {
         finalConfig.driver_config.deviceID = config.device_ip || '';
     }
     console.log('Starting stream with config:', finalConfig);
@@ -569,6 +573,7 @@ async function showConfigModal(serial) {
     activeConfigSerial = serial;
     const device = knownDevices.find(d => d.device_id === serial) || { device_id: serial };
     const config = ensureDeviceConfig(device);
+    console.log('Showing config modal for device', serial, config);
 
     document.getElementById('configModalTitle').textContent = i18n.t('config_device_title', { serial: serial });
 
@@ -578,14 +583,9 @@ async function showConfigModal(serial) {
     if (universalContainer) universalContainer.innerHTML = `<div class="flex justify-center py-8"><div class="spinner"></div></div>`;
     openModal('configModal');
 
-    // For compatibility with older versions, treat 'xvfb' as 'linux' for config schema purposes
-    if (config.device_type === 'xvfb') {
-        config.device_type = 'linux';
-    }
-
     try {
         const [resDyn, resUni] = await Promise.all([
-            fetch(`/api/device/configDescription?device_type=${config.device_type}&device_id=${encodeURIComponent(device.device_id)}`),
+            fetch(`/api/device/configDescription?device_type=${config["device_type"]}&device_id=${encodeURIComponent(device.device_id)}`),
             fetch(`/api/device/configDescription?device_type=universal`)
         ]);
 
