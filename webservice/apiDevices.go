@@ -2,10 +2,12 @@ package webservice
 
 import (
 	"log"
+	"strconv"
 	"uuid"
 	"webscreen/consts"
 	"webscreen/db"
 	"webscreen/nexus"
+	"webscreen/sdriver/gamestream"
 	linuxDriver "webscreen/sdriver/linux"
 	rockchipDriver "webscreen/sdriver/rockchip-hdmirx"
 	"webscreen/sdriver/scrcpy"
@@ -88,6 +90,21 @@ func (wm *WebMaster) handleListDevices(c *gin.Context) {
 		}
 	}
 
+	gamestreamDevices, err := gamestream.GetDevices()
+	if err != nil {
+		log.Printf("[device-list] GameStream discovery failed: %v", err)
+	} else {
+		for _, d := range gamestreamDevices {
+			wm.registerDevice(db.DeviceInfo{
+				Type:     d.GetType(),
+				DeviceID: d.GetDeviceID(),
+				IP:       d.GetIP(),
+				Port:     d.GetPort(),
+				Status:   d.GetStatus(),
+			})
+		}
+	}
+
 	all_devices, err := db.QueryAllDevices(wm.DB)
 	if err != nil {
 		log.Printf("Error querying all devices: %v", err)
@@ -159,11 +176,58 @@ func (wm *WebMaster) handlePairDevice(c *gin.Context) {
 			c.JSON(500, gin.H{"error": err.Error()})
 			return
 		}
+	case consts.DEVICE_TYPE_GAMESTREAM:
+		port, _ := strconv.Atoi(req.Port)
+		if err := gamestream.PairDevice(req.IP, port, req.Code); err != nil {
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
 	default:
 		c.JSON(400, gin.H{"error": "Unsupported device type"})
 		return
 	}
 
+	c.JSON(200, gin.H{"status": "paired"})
+}
+
+func (wm *WebMaster) handleGameStreamDiscover(c *gin.Context) {
+	devices, err := gamestream.DiscoverDevices()
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, gin.H{"devices": devices})
+}
+
+func (wm *WebMaster) handleGameStreamPair(c *gin.Context) {
+	var req struct {
+		DeviceID string `json:"device_id"`
+		IP       string `json:"ip"`
+		Port     int    `json:"port"`
+		PIN      string `json:"pin"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"error": "Invalid request"})
+		return
+	}
+	if req.Port <= 0 {
+		req.Port = 47989
+	}
+	if err := gamestream.PairDevice(req.IP, req.Port, req.PIN); err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	deviceID := req.DeviceID
+	if deviceID == "" {
+		deviceID = req.IP
+	}
+	wm.registerDevice(db.DeviceInfo{
+		Type:     consts.DEVICE_TYPE_GAMESTREAM,
+		DeviceID: deviceID,
+		IP:       req.IP,
+		Port:     req.Port,
+		Status:   "active",
+	})
 	c.JSON(200, gin.H{"status": "paired"})
 }
 
@@ -179,6 +243,9 @@ func (wm *WebMaster) handleDeviceConfigDescription(c *gin.Context) {
 		c.JSON(200, desc)
 	case consts.DEVICE_TYPE_ROCKCHIP_HDMIRX:
 		desc := rockchipDriver.ConfigDescription()
+		c.JSON(200, desc)
+	case consts.DEVICE_TYPE_GAMESTREAM:
+		desc := gamestream.ConfigDescription()
 		c.JSON(200, desc)
 	case "universal":
 		desc := nexus.ConfigDescription()

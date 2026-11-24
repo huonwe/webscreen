@@ -5,12 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"uuid"
 	"webscreen/consts"
 	"webscreen/db"
 	"webscreen/sdriver"
+	"webscreen/sdriver/gamestream"
 	linuxDriver "webscreen/sdriver/linux"
 	rockchiphdmirx "webscreen/sdriver/rockchip-hdmirx"
 	"webscreen/sdriver/scrcpy"
@@ -550,6 +552,17 @@ func (n *Nexus) setupRemote(remoteUUID string, config RemoteConfig) (sdriver.SDr
 		driver, err = rockchiphdmirx.New(config)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create rockchip-hdmirx driver for remoteUUID %s: %v", remoteUUID, err)
+		}
+	case consts.DEVICE_TYPE_GAMESTREAM:
+		if config["ip"] == "" {
+			config["ip"] = deviceInfo.IP
+		}
+		if config["port"] == "" && deviceInfo.Port > 0 {
+			config["port"] = strconv.Itoa(deviceInfo.Port)
+		}
+		driver, err = gamestream.New(config)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create gamestream driver for remoteUUID %s: %v", remoteUUID, err)
 		}
 	default:
 		return nil, fmt.Errorf("unsupported device type: %s", deviceInfo.Type)

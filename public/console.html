@@ -74,6 +74,11 @@
                     <span class="material-symbols-rounded text-lg">qr_code_scanner</span>
                     <span data-i18n="wireless_pair">无线配对</span>
                 </button>
+                <button onclick="openGameStreamPairModal()"
+                    class="flex-1 md:flex-none flex items-center justify-center gap-2 px-5 py-2.5 rounded-full bg-[#2a2b2c] text-[#e3e3e3] hover:bg-[#333] transition-colors font-medium text-sm">
+                    <span class="material-symbols-rounded text-lg">sports_esports</span>
+                    <span data-i18n="gamestream_pair">GameStream 配对</span>
+                </button>
                 <button onclick="openModal('connectModal')"
                     class="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-2.5 rounded-full bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)] hover:opacity-90 transition-opacity font-medium text-sm shadow-md">
                     <span class="material-symbols-rounded text-lg">add</span>
@@ -172,6 +177,51 @@
                 <button onclick="pairDevice()"
                     class="px-6 py-2.5 rounded-full bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)] font-medium text-sm shadow-sm hover:opacity-90 transition-opacity"
                     data-i18n="pair">配对</button>
+            </div>
+        </div>
+    </dialog>
+
+    <!-- GameStream Pair Modal -->
+    <dialog id="gamestreamPairModal" class="bg-transparent p-4 m-auto outline-none">
+        <div class="dialog-panel w-full max-w-md bg-[#1e1f20] rounded-[28px] p-6 shadow-2xl border border-[#333]">
+            <div class="flex justify-between items-center mb-5">
+                <div class="flex items-center gap-2.5">
+                    <span class="material-symbols-rounded text-2xl text-[var(--md-sys-color-primary)]">sports_esports</span>
+                    <h3 class="text-xl font-medium" data-i18n="gamestream_pair_title">GameStream 设备配对</h3>
+                </div>
+                <div class="flex items-center gap-1">
+                    <button onclick="discoverGameStreamDevices()" class="p-1.5 rounded-full hover:bg-white/10"
+                        data-i18n-title="refresh" title="Refresh">
+                        <span class="material-symbols-rounded text-gray-400">refresh</span>
+                    </button>
+                    <button onclick="closeModal('gamestreamPairModal')" class="p-1.5 rounded-full hover:bg-white/10">
+                        <span class="material-symbols-rounded text-gray-400">close</span>
+                    </button>
+                </div>
+            </div>
+
+            <div id="gsDiscoveredList" class="space-y-2.5 max-h-60 overflow-y-auto mb-5"></div>
+
+            <div id="gsPairChallengeForm" class="hidden space-y-4 pt-4 border-t border-[#333]">
+                <div class="flex items-center justify-between text-xs text-gray-400 px-1">
+                    <span id="gsSelectedDeviceLabel" class="font-medium text-[#e3e3e3]"></span>
+                    <span id="gsSelectedDeviceAddr" class="font-mono"></span>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-[var(--md-sys-color-primary)] mb-1 ml-1"
+                        data-i18n="gamestream_pin">配对 PIN 码 (4位)</label>
+                    <input type="text" id="gsPairPin" maxlength="8"
+                        class="md-input w-full px-4 py-3 rounded-xl text-white placeholder-gray-500"
+                        placeholder="1234">
+                </div>
+                <div class="flex justify-end gap-3 pt-2">
+                    <button onclick="closeModal('gamestreamPairModal')"
+                        class="px-5 py-2.5 rounded-full text-[var(--md-sys-color-primary)] hover:bg-white/5 font-medium text-sm transition-colors"
+                        data-i18n="cancel">取消</button>
+                    <button id="gsPairSubmitBtn" onclick="pairGameStreamDevice()"
+                        class="px-6 py-2.5 rounded-full bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)] font-medium text-sm shadow-sm hover:opacity-90 transition-opacity"
+                        data-i18n="gamestream_challenge">发起配对 Challenge</button>
+                </div>
             </div>
         </div>
     </dialog>

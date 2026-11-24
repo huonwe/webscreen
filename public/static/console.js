@@ -277,12 +277,14 @@ function renderDeviceList() {
                 <span class="material-symbols-rounded">visibility_off</span>
             </button>`;
 
+        const deviceIcon = (config.device_type || '').toLowerCase() === 'gamestream' ? 'sports_esports' : 'smartphone';
+
         card.innerHTML = `
                     <div>
                         <div class="device-card-header flex justify-between items-start mb-4">
                             <div class="device-card-identity flex items-center gap-3">
                                 <div class="w-10 h-10 rounded-full bg-[var(--md-sys-color-secondary-container)] flex items-center justify-center text-[var(--md-sys-color-on-secondary-container)]">
-                                    <span class="material-symbols-rounded">smartphone</span>
+                                    <span class="material-symbols-rounded">${deviceIcon}</span>
                                 </div>
                                 <div>
                                     <h3 class="font-medium text-lg leading-tight text-[#e3e3e3] truncate max-w-[140px] md:max-w-[180px]" title="${serial}">${displayName}</h3>
@@ -325,7 +327,7 @@ function renderDeviceList() {
     visibleDevices.forEach(device => {
         const serial = typeof device === 'string' ? device : device.device_id;
         const info = typeof adbInfo === 'function' ? adbInfo(serial) : null;
-        const type = (device.device_type || '').toLowerCase();
+        const type = (device.type || device.device_type || '').toLowerCase();
         if (type === 'android') {
             const transport = (info && info.transport) || device.connection || '';
             if (String(transport).toUpperCase() === 'USB') groups[0].devices.push(device);
@@ -505,6 +507,124 @@ async function pairDevice() {
         }
     } catch (error) {
         showToast(i18n.t('pair_failed'), 'error');
+    }
+}
+
+let gsDiscoveredDevices = [];
+let selectedGSDevice = null;
+
+function openGameStreamPairModal() {
+    selectedGSDevice = null;
+    const form = document.getElementById('gsPairChallengeForm');
+    if (form) form.classList.add('hidden');
+    const pinInput = document.getElementById('gsPairPin');
+    if (pinInput) pinInput.value = '';
+    openModal('gamestreamPairModal');
+    discoverGameStreamDevices();
+}
+
+async function discoverGameStreamDevices() {
+    const listEl = document.getElementById('gsDiscoveredList');
+    if (!listEl) return;
+    listEl.innerHTML = `
+        <div class="flex flex-col items-center justify-center py-8 text-gray-400">
+            <div class="spinner mb-3"></div>
+            <p class="text-sm">${i18n.t('gamestream_scanning') || '正在发现局域网 GameStream 设备...'}</p>
+        </div>`;
+
+    try {
+        const resp = await fetch('/api/gamestream/discover');
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || 'discover failed');
+        gsDiscoveredDevices = Array.isArray(data.devices) ? data.devices : [];
+        renderGameStreamDiscoveredList();
+    } catch (err) {
+        console.error('GameStream discover failed:', err);
+        listEl.innerHTML = `<div class="text-center py-6 text-sm text-red-300">${i18n.t('call_api_failed')}</div>`;
+    }
+}
+
+function renderGameStreamDiscoveredList() {
+    const listEl = document.getElementById('gsDiscoveredList');
+    if (!listEl) return;
+    if (!gsDiscoveredDevices.length) {
+        listEl.innerHTML = `
+            <div class="text-center py-8 text-sm text-gray-400 bg-[#28292a]/50 rounded-2xl border border-dashed border-gray-700">
+                ${i18n.t('gamestream_no_devices') || '未发现网络中的 GameStream / Sunshine 服务端'}
+            </div>`;
+        return;
+    }
+
+    listEl.innerHTML = '';
+    gsDiscoveredDevices.forEach((dev, idx) => {
+        const isSelected = selectedGSDevice && selectedGSDevice.ip === dev.ip;
+        const badgeClass = dev.paired ? 'gs-badge-paired' : 'gs-badge-unpaired';
+        const badgeText = dev.paired
+            ? (i18n.t('gamestream_paired_badge') || '已配对')
+            : (i18n.t('gamestream_unpaired_badge') || '未配对');
+        const item = document.createElement('div');
+        item.className = `gs-device-item ${isSelected ? 'selected' : ''}`;
+        item.onclick = () => selectGameStreamDevice(idx);
+        item.innerHTML = `
+            <div class="min-w-0 pr-3">
+                <div class="font-medium text-sm text-[#e3e3e3] truncate">${dev.device_id || dev.ip}</div>
+                <div class="text-xs text-gray-400 font-mono">${dev.ip}:${dev.port || 47989}</div>
+            </div>
+            <span class="px-2.5 py-0.5 rounded-full text-xs font-medium shrink-0 ${badgeClass}">${badgeText}</span>
+        `;
+        listEl.appendChild(item);
+    });
+}
+
+function selectGameStreamDevice(index) {
+    const dev = gsDiscoveredDevices[index];
+    if (!dev) return;
+    selectedGSDevice = dev;
+    renderGameStreamDiscoveredList();
+
+    const form = document.getElementById('gsPairChallengeForm');
+    const label = document.getElementById('gsSelectedDeviceLabel');
+    const addr = document.getElementById('gsSelectedDeviceAddr');
+    if (label) label.textContent = dev.device_id || dev.ip;
+    if (addr) addr.textContent = `${dev.ip}:${dev.port || 47989}`;
+    if (form) form.classList.remove('hidden');
+    const pinInput = document.getElementById('gsPairPin');
+    if (pinInput) pinInput.focus();
+}
+
+async function pairGameStreamDevice() {
+    if (!selectedGSDevice) return;
+    const pinInput = document.getElementById('gsPairPin');
+    const pin = pinInput ? pinInput.value.trim() : '';
+    if (!pin) {
+        showToast(i18n.t('fill_all_fields'), 'error');
+        return;
+    }
+
+    const btn = document.getElementById('gsPairSubmitBtn');
+    if (btn) btn.disabled = true;
+    try {
+        const resp = await fetch('/api/gamestream/pair', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                device_id: selectedGSDevice.device_id,
+                ip: selectedGSDevice.ip,
+                port: selectedGSDevice.port || 47989,
+                pin,
+            }),
+        });
+        const data = await resp.json();
+        if (!resp.ok) {
+            throw new Error(data.error || i18n.t('pair_failed'));
+        }
+        showToast(i18n.t('pair_success'));
+        closeModal('gamestreamPairModal');
+        fetchDevices();
+    } catch (err) {
+        showToast(err.message || i18n.t('pair_failed'), 'error');
+    } finally {
+        if (btn) btn.disabled = false;
     }
 }
 

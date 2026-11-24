@@ -1,0 +1,170 @@
+package gamestream
+
+import (
+	"fmt"
+	"net"
+	"sync"
+	"time"
+	"webscreen/sdriver"
+)
+
+type Driver struct {
+	cfg       *streamConfig
+	httpSess  *httpSession
+	rtsp      *rtspResult
+	ctrl      *controlStream
+	videoConn *net.UDPConn
+	audioConn *net.UDPConn
+
+	videoChan   chan sdriver.AVBox
+	audioChan   chan sdriver.AVBox
+	msgChan     chan sdriver.Event
+	controlChan chan sdriver.Event
+
+	meta      sdriver.MediaMeta
+	startTime time.Time
+
+	startOnce sync.Once
+	stopOnce  sync.Once
+	done      chan struct{}
+
+	mu        sync.RWMutex
+	lastVPS   []byte
+	lastSPS   []byte
+	lastPPS   []byte
+	lastIDR   []byte
+	inputMu   sync.Mutex
+	modifiers byte
+}
+
+// New initializes a GameStream / Sunshine streaming session (HTTP launch + RTSP handshake).
+func New(config map[string]string) (*Driver, error) {
+	cfg, err := parseConfig(config)
+	if err != nil {
+		return nil, err
+	}
+	store, err := loadOrCreateAuth(cfg.authDir)
+	if err != nil {
+		return nil, fmt.Errorf("gamestream: init auth: %w", err)
+	}
+	hs, err := newHTTPSession(cfg, store)
+	if err != nil {
+		return nil, err
+	}
+	rtsp, err := performRTSPHandshake(hs, cfg)
+	if err != nil {
+		_ = hs.cancel()
+		return nil, fmt.Errorf("gamestream: rtsp handshake failed: %w", err)
+	}
+
+	videoConn, err := net.ListenUDP("udp", nil)
+	if err != nil {
+		_ = hs.cancel()
+		return nil, err
+	}
+	audioConn, err := net.ListenUDP("udp", nil)
+	if err != nil {
+		_ = videoConn.Close()
+		_ = hs.cancel()
+		return nil, err
+	}
+
+	ctrlEnc := (rtsp.encryptionEnabled & ssEncControlV2) != 0
+	ctrl, err := startControlStream(cfg.ip, rtsp.controlPort, rtsp.controlConnectData, hs.rikey, ctrlEnc)
+	if err != nil {
+		_ = videoConn.Close()
+		_ = audioConn.Close()
+		_ = hs.cancel()
+		return nil, fmt.Errorf("gamestream: control stream failed: %w", err)
+	}
+
+	return &Driver{
+		cfg:         cfg,
+		httpSess:    hs,
+		rtsp:        rtsp,
+		ctrl:        ctrl,
+		videoConn:   videoConn,
+		audioConn:   audioConn,
+		videoChan:   make(chan sdriver.AVBox, 64),
+		audioChan:   make(chan sdriver.AVBox, 64),
+		msgChan:     make(chan sdriver.Event, 16),
+		controlChan: make(chan sdriver.Event, 16),
+		meta: sdriver.MediaMeta{
+			VideoCodec: cfg.codec,
+			AudioCodec: "opus",
+			Width:      uint32(cfg.width),
+			Height:     uint32(cfg.height),
+			FPS:        uint32(cfg.fps),
+		},
+		done: make(chan struct{}),
+	}, nil
+}
+
+func (d *Driver) GetReceivers() (<-chan sdriver.AVBox, <-chan sdriver.AVBox, chan sdriver.Event, chan sdriver.Event) {
+	return d.videoChan, d.audioChan, d.msgChan, d.controlChan
+}
+
+func (d *Driver) Start() error {
+	d.startOnce.Do(func() {
+		d.startTime = time.Now()
+		videoAddr, _ := net.ResolveUDPAddr("udp", net.JoinHostPort(d.cfg.ip, itoa(d.rtsp.videoPort)))
+		audioAddr, _ := net.ResolveUDPAddr("udp", net.JoinHostPort(d.cfg.ip, itoa(d.rtsp.audioPort)))
+		go d.videoLoop(d.videoConn, videoAddr, d.rtsp, d.httpSess.rikey)
+		go d.audioLoop(d.audioConn, audioAddr, d.rtsp, d.httpSess.rikey, d.httpSess.rikeyID)
+	})
+	return nil
+}
+
+func (d *Driver) Pause() {}
+
+func (d *Driver) RequestIDR(force bool) {
+	if force && d.ctrl != nil {
+		_ = d.ctrl.requestIDR()
+		return
+	}
+	d.mu.RLock()
+	for _, nal := range [][]byte{d.lastVPS, d.lastSPS, d.lastPPS, d.lastIDR} {
+		if len(nal) > 0 {
+			select {
+			case d.videoChan <- sdriver.AVBox{Data: append([]byte(nil), nal...), NoDuration: true}:
+			default:
+			}
+		}
+	}
+	d.mu.RUnlock()
+	if d.ctrl != nil {
+		_ = d.ctrl.requestIDR()
+	}
+}
+
+func (d *Driver) Capabilities() sdriver.DriverCaps {
+	return sdriver.DriverCaps{
+		CanVideo:   true,
+		CanAudio:   true,
+		CanControl: true,
+		IsWindows:  true,
+	}
+}
+
+func (d *Driver) MediaMeta() sdriver.MediaMeta {
+	return d.meta
+}
+
+func (d *Driver) Stop() {
+	d.stopOnce.Do(func() {
+		close(d.done)
+		if d.ctrl != nil {
+			d.ctrl.close()
+		}
+		if d.videoConn != nil {
+			_ = d.videoConn.Close()
+		}
+		if d.audioConn != nil {
+			_ = d.audioConn.Close()
+		}
+		if d.httpSess != nil {
+			_ = d.httpSess.cancel()
+		}
+		close(d.controlChan)
+	})
+}

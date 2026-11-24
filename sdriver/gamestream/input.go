@@ -1,0 +1,309 @@
+package gamestream
+
+import (
+	"encoding/binary"
+	"math"
+	"webscreen/sdriver"
+)
+
+const (
+	magicKeyDown      uint32 = 0x00000003
+	magicKeyUp        uint32 = 0x00000004
+	magicMouseAbs     uint32 = 0x00000005
+	magicMouseBtnDown uint32 = 0x00000008
+	magicMouseBtnUp   uint32 = 0x00000009
+	magicScroll       uint32 = 0x0000000A
+	magicHScroll      uint32 = 0x55000001
+	magicTouch        uint32 = 0x55000002
+
+	modShift byte = 0x01
+	modCtrl  byte = 0x02
+	modAlt   byte = 0x04
+	modMeta  byte = 0x08
+)
+
+func (d *Driver) SendEvent(event sdriver.Event) error {
+	if d.ctrl == nil {
+		return nil
+	}
+
+	switch e := event.(type) {
+	case *sdriver.KeyEvent:
+		return d.sendKeyEvent(e)
+	case sdriver.KeyEvent:
+		return d.sendKeyEvent(&e)
+	case *sdriver.MouseEvent:
+		return d.sendMouseEvent(e)
+	case sdriver.MouseEvent:
+		return d.sendMouseEvent(&e)
+	case *sdriver.ScrollEvent:
+		return d.sendScrollEvent(e)
+	case sdriver.ScrollEvent:
+		return d.sendScrollEvent(&e)
+	case *sdriver.TouchEvent:
+		return d.sendTouchEvent(e)
+	case sdriver.TouchEvent:
+		return d.sendTouchEvent(&e)
+	case *sdriver.IDRReqEvent, sdriver.IDRReqEvent:
+		d.RequestIDR(true)
+		return nil
+	default:
+		return nil
+	}
+}
+
+func (d *Driver) sendKeyEvent(e *sdriver.KeyEvent) error {
+	vk := androidKeyToVK(e.KeyCode)
+	if vk == 0 {
+		return nil
+	}
+	magic := magicKeyDown
+	if e.Action != 0 {
+		magic = magicKeyUp
+	}
+
+	d.inputMu.Lock()
+	d.updateModifierState(vk, e.Action == 0)
+	mods := d.modifiers
+	d.inputMu.Unlock()
+
+	// NV_KEYBOARD_PACKET: size(4 BE) + magic(4 LE) + flags(1) + keyCode(2 LE) + modifiers(1) + zero2(2) = 14 bytes
+	pkt := make([]byte, 14)
+	binary.BigEndian.PutUint32(pkt[0:4], 10)
+	binary.LittleEndian.PutUint32(pkt[4:8], magic)
+	pkt[8] = 0
+	binary.LittleEndian.PutUint16(pkt[9:11], uint16(0x8000|vk))
+	pkt[11] = mods
+	return d.ctrl.send(ctrlTypeInputData, pkt, ctrlChannelKey, true)
+}
+
+func (d *Driver) updateModifierState(vk uint16, down bool) {
+	var bit byte
+	switch vk {
+	case 0x10, 0xA0, 0xA1:
+		bit = modShift
+	case 0x11, 0xA2, 0xA3:
+		bit = modCtrl
+	case 0x12, 0xA4, 0xA5:
+		bit = modAlt
+	case 0x5B, 0x5C:
+		bit = modMeta
+	}
+	if bit == 0 {
+		return
+	}
+	if down {
+		d.modifiers |= bit
+	} else {
+		d.modifiers &^= bit
+	}
+}
+
+func (d *Driver) sendMouseEvent(e *sdriver.MouseEvent) error {
+	// Move (abs)
+	pkt := make([]byte, 18) // size(4) + magic(4) + x(2) + y(2) + unused(2) + width(2) + height(2)
+	binary.BigEndian.PutUint32(pkt[0:4], 14)
+	binary.LittleEndian.PutUint32(pkt[4:8], magicMouseAbs)
+	binary.BigEndian.PutUint16(pkt[8:10], uint16(e.PosX))
+	binary.BigEndian.PutUint16(pkt[10:12], uint16(e.PosY))
+	binary.BigEndian.PutUint16(pkt[12:14], 0)
+	binary.BigEndian.PutUint16(pkt[14:16], uint16(d.meta.Width))
+	binary.BigEndian.PutUint16(pkt[16:18], uint16(d.meta.Height))
+	if err := d.ctrl.send(ctrlTypeInputData, pkt, ctrlChannelMouse, false); err != nil {
+		return err
+	}
+
+	// Button down/up
+	if e.Action == 0 || e.Action == 1 {
+		magic := magicMouseBtnDown
+		if e.Action == 1 {
+			magic = magicMouseBtnUp
+		}
+		if btn := mapMouseButton(e.Buttons); btn != 0 {
+			bp := make([]byte, 9) // size(4) + magic(4) + button(1)
+			binary.BigEndian.PutUint32(bp[0:4], 5)
+			binary.LittleEndian.PutUint32(bp[4:8], magic)
+			bp[8] = btn
+			if err := d.ctrl.send(ctrlTypeInputData, bp, ctrlChannelMouse, true); err != nil {
+				return err
+			}
+		}
+	}
+
+	if e.WheelDeltaY != 0 {
+		if err := d.sendVScroll(e.WheelDeltaY * 120); err != nil {
+			return err
+		}
+	}
+	if e.WheelDeltaX != 0 {
+		if err := d.sendHScroll(e.WheelDeltaX * 120); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (d *Driver) sendScrollEvent(e *sdriver.ScrollEvent) error {
+	if int16(e.VScroll) != 0 {
+		if err := d.sendVScroll(int16(e.VScroll) * 120); err != nil {
+			return err
+		}
+	}
+	if int16(e.HScroll) != 0 {
+		if err := d.sendHScroll(int16(e.HScroll) * 120); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (d *Driver) sendVScroll(amt int16) error {
+	pkt := make([]byte, 14) // size(4) + magic(4) + amt1(2) + amt2(2) + zero(2)
+	binary.BigEndian.PutUint32(pkt[0:4], 10)
+	binary.LittleEndian.PutUint32(pkt[4:8], magicScroll)
+	binary.BigEndian.PutUint16(pkt[8:10], uint16(amt))
+	binary.BigEndian.PutUint16(pkt[10:12], uint16(amt))
+	return d.ctrl.send(ctrlTypeInputData, pkt, ctrlChannelMouse, true)
+}
+
+func (d *Driver) sendHScroll(amt int16) error {
+	pkt := make([]byte, 10) // size(4) + magic(4) + scrollAmount(2)
+	binary.BigEndian.PutUint32(pkt[0:4], 6)
+	binary.LittleEndian.PutUint32(pkt[4:8], magicHScroll)
+	binary.BigEndian.PutUint16(pkt[8:10], uint16(amt))
+	return d.ctrl.send(ctrlTypeInputData, pkt, ctrlChannelMouse, true)
+}
+
+func (d *Driver) sendTouchEvent(e *sdriver.TouchEvent) error {
+	var evType byte = 0x02 // MOVE
+	switch e.Action {
+	case sdriver.TOUCH_ACTION_DOWN:
+		evType = 0x01
+	case sdriver.TOUCH_ACTION_UP:
+		evType = 0x03
+	}
+	w := float32(e.Width)
+	if w <= 0 {
+		w = float32(d.meta.Width)
+	}
+	h := float32(e.Height)
+	if h <= 0 {
+		h = float32(d.meta.Height)
+	}
+	nx := float32(e.PosX) / w
+	ny := float32(e.PosY) / h
+
+	// SS_TOUCH_PACKET: size(4) + magic(4) + eventType(1) + zero(1) + rotation(2) + pointerId(4) + x(4) + y(4) + pressureOrDistance(4) + contactAreaMajor(4) + contactAreaMinor(4) = 36 bytes
+	pkt := make([]byte, 36)
+	binary.BigEndian.PutUint32(pkt[0:4], 32)
+	binary.LittleEndian.PutUint32(pkt[4:8], magicTouch)
+	pkt[8] = evType
+	binary.LittleEndian.PutUint16(pkt[10:12], 0xFFFF)
+	binary.LittleEndian.PutUint32(pkt[12:16], uint32(e.PointerID))
+	binary.BigEndian.PutUint32(pkt[16:20], math.Float32bits(nx))
+	binary.BigEndian.PutUint32(pkt[20:24], math.Float32bits(ny))
+	binary.BigEndian.PutUint32(pkt[24:28], math.Float32bits(float32(e.Pressure)/65535.0))
+	return d.ctrl.send(ctrlTypeInputData, pkt, ctrlChannelTouch, true)
+}
+
+func mapMouseButton(buttons uint32) byte {
+	switch {
+	case buttons&sdriver.BUTTON_PRIMARY != 0:
+		return 1
+	case buttons&sdriver.BUTTON_TERTIARY != 0:
+		return 2
+	case buttons&sdriver.BUTTON_SECONDARY != 0:
+		return 3
+	default:
+		return 0
+	}
+}
+
+func androidKeyToVK(code uint32) uint16 {
+	// Letters A-Z: Android 29..54 -> VK 0x41..0x5A
+	if code >= 29 && code <= 54 {
+		return uint16('A' + (code - 29))
+	}
+	// Digits 0-9: Android 7..16 -> VK 0x30..0x39
+	if code >= 7 && code <= 16 {
+		return uint16('0' + (code - 7))
+	}
+	// F1-F12: Android 131..142 -> VK 0x70..0x7B
+	if code >= 131 && code <= 142 {
+		return uint16(0x70 + (code - 131))
+	}
+	switch code {
+	case 66:
+		return 0x0D // Enter
+	case 67:
+		return 0x08 // Backspace
+	case 61:
+		return 0x09 // Tab
+	case 62:
+		return 0x20 // Space
+	case 111:
+		return 0x1B // Escape
+	case 112:
+		return 0x2E // Delete
+	case 124:
+		return 0x2D // Insert
+	case 122:
+		return 0x24 // Home
+	case 123:
+		return 0x23 // End
+	case 92:
+		return 0x21 // PageUp
+	case 93:
+		return 0x22 // PageDown
+	case 19:
+		return 0x26 // Up
+	case 20:
+		return 0x28 // Down
+	case 21:
+		return 0x25 // Left
+	case 22:
+		return 0x27 // Right
+	case 59:
+		return 0xA0 // LShift
+	case 60:
+		return 0xA1 // RShift
+	case 113:
+		return 0xA2 // LCtrl
+	case 114:
+		return 0xA3 // RCtrl
+	case 57:
+		return 0xA4 // LAlt
+	case 58:
+		return 0xA5 // RAlt
+	case 117:
+		return 0x5B // LWin
+	case 118:
+		return 0x5C // RWin
+	case 115:
+		return 0x14 // CapsLock
+	case 68:
+		return 0xC0 // Grave
+	case 69:
+		return 0xBD // Minus
+	case 70:
+		return 0xBB // Equals
+	case 71:
+		return 0xDB // LBracket
+	case 72:
+		return 0xDD // RBracket
+	case 73:
+		return 0xDC // Backslash
+	case 74:
+		return 0xBA // Semicolon
+	case 75:
+		return 0xDE // Apostrophe
+	case 55:
+		return 0xBC // Comma
+	case 56:
+		return 0xBE // Period
+	case 76:
+		return 0xBF // Slash
+	default:
+		return 0
+	}
+}

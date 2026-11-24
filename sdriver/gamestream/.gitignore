@@ -1,0 +1,3 @@
+# Pairing keys / certificates generated at runtime
+gamestream_auth/
+*.pem

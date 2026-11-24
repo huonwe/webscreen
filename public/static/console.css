@@ -197,6 +197,38 @@ dialog[open] .dialog-panel {
     transform: scale(1) translateY(0);
 }
 
+/* GameStream Discovery & Pairing List */
+.gs-device-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1rem;
+    border-radius: 16px;
+    background-color: var(--md-sys-color-surface-container-high);
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: border-color 0.2s, background-color 0.2s;
+}
+
+.gs-device-item:hover {
+    background-color: #323335;
+}
+
+.gs-device-item.selected {
+    border-color: var(--md-sys-color-primary);
+    background-color: rgba(168, 199, 250, 0.12);
+}
+
+.gs-badge-paired {
+    background-color: rgba(52, 211, 153, 0.15);
+    color: #6ee7b7;
+}
+
+.gs-badge-unpaired {
+    background-color: rgba(251, 191, 36, 0.15);
+    color: #fcd34d;
+}
+
 /* Toast Notification */
 #toast-container {
     position: fixed;
