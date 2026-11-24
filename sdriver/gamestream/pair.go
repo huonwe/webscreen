@@ -209,7 +209,7 @@ func pairDeviceWithDir(authDir, ip string, port int, pin string) error {
 }
 
 func (s *authStore) pair(ip string, port int, pin string) error {
-	httpClient := &http.Client{Timeout: 15 * time.Second}
+	httpClient := &http.Client{Timeout: 120 * time.Second}
 	doPair := func(query string) (*pairXMLRoot, error) {
 		u := fmt.Sprintf("http://%s:%d/pair?uniqueid=%s&uuid=%s&devicename=%s&updateState=1&%s",
 			ip, port, defaultUniqueID, defaultUUID, defaultDeviceName, query)
@@ -232,7 +232,7 @@ func (s *authStore) pair(ip string, port int, pin string) error {
 		return &root, nil
 	}
 
-	// 1. getservercert
+	// 1. getservercert (retry once after /unpair if a stale pairing session is stuck on the host)
 	salt := make([]byte, 16)
 	if _, err := rand.Read(salt); err != nil {
 		return err
@@ -240,8 +240,17 @@ func (s *authStore) pair(ip string, port int, pin string) error {
 	aesHash := sha256.Sum256(append(append([]byte(nil), salt...), []byte(pin)...))
 	aesKey := aesHash[:16]
 
-	resp1, err := doPair(fmt.Sprintf("phrase=getservercert&salt=%x&clientcert=%s",
-		salt, hex.EncodeToString(s.clientPEM)))
+	getServerCertQuery := fmt.Sprintf("phrase=getservercert&salt=%x&clientcert=%s",
+		salt, hex.EncodeToString(s.clientPEM))
+	resp1, err := doPair(getServerCertQuery)
+	if err != nil || resp1.Paired != 1 {
+		// Reset stale pairing state on host and retry once
+		unpairURL := fmt.Sprintf("http://%s:%d/unpair?uniqueid=%s&uuid=%s", ip, port, defaultUniqueID, defaultUUID)
+		if uResp, uErr := httpClient.Get(unpairURL); uErr == nil {
+			uResp.Body.Close()
+		}
+		resp1, err = doPair(getServerCertQuery)
+	}
 	if err != nil {
 		return fmt.Errorf("getservercert: %w", err)
 	}
