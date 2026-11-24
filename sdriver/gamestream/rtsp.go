@@ -55,7 +55,8 @@ type rtspHeader struct {
 }
 
 type rtspClient struct {
-	host          string
+	dialHost      string
+	hostHeader    string
 	port          string
 	targetURL     string
 	clientVersion int
@@ -72,9 +73,13 @@ func performRTSPHandshake(hs *httpSession, cfg *streamConfig) (*rtspResult, erro
 	if err != nil {
 		return nil, fmt.Errorf("gamestream: parse sessionUrl %q: %w", hs.sessionURL, err)
 	}
-	// Always dial the configured host IP (cfg.ip) rather than the hostname in sessionUrl0,
-	// because servers behind NAT/Docker (such as Wolf) may report a WAN or container IP there.
-	host := cfg.ip
+	// Dial the configured host IP (cfg.ip), but send sessionUrl0's hostname in the RTSP Host header
+	// because servers like Wolf use that synthetic IP in sessionUrl0 to match RTSP SETUP/ANNOUNCE/PLAY requests.
+	dialHost := cfg.ip
+	hostHeader := u.Hostname()
+	if hostHeader == "" {
+		hostHeader = cfg.ip
+	}
 	port := u.Port()
 	if port == "" {
 		port = "48010"
@@ -111,11 +116,12 @@ func performRTSPHandshake(hs *httpSession, cfg *streamConfig) (*rtspResult, erro
 		if encrypted {
 			scheme = "rtspenc"
 		}
-		targetURL = fmt.Sprintf("%s://%s:%s", scheme, host, port)
+		targetURL = fmt.Sprintf("%s://%s:%s", scheme, hostHeader, port)
 	}
 
 	rc := &rtspClient{
-		host:          host,
+		dialHost:      dialHost,
+		hostHeader:    hostHeader,
 		port:          port,
 		targetURL:     targetURL,
 		clientVersion: clientVer,
@@ -245,7 +251,7 @@ func (rc *rtspClient) setup(target string) (*rtspMessage, error) {
 
 func (rc *rtspClient) do(method, target string, headers []rtspHeader, body string) (*rtspMessage, error) {
 	rc.cseq++
-	addr := net.JoinHostPort(rc.host, rc.port)
+	addr := net.JoinHostPort(rc.dialHost, rc.port)
 
 	var conn net.Conn
 	var err error
@@ -268,7 +274,7 @@ func (rc *rtspClient) do(method, target string, headers []rtspHeader, body strin
 	fmt.Fprintf(&sb, "%s %s RTSP/1.0\r\n", method, target)
 	fmt.Fprintf(&sb, "CSeq: %d\r\n", rc.cseq)
 	fmt.Fprintf(&sb, "X-GS-ClientVersion: %d\r\n", rc.clientVersion)
-	fmt.Fprintf(&sb, "Host: %s\r\n", rc.host)
+	fmt.Fprintf(&sb, "Host: %s\r\n", rc.hostHeader)
 	for _, h := range headers {
 		fmt.Fprintf(&sb, "%s: %s\r\n", h.key, h.val)
 	}
