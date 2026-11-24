@@ -57,18 +57,38 @@ func (d *Driver) videoLoop(conn *net.UDPConn, remoteAddr *net.UDPAddr, rtsp *rts
 	var frameBlocks [4][][]byte // up to 4 FEC blocks per frame
 	var curFrameIdx uint32
 	var curFrameInit bool
+	var curFrameCorrupt bool
 	var lastEmittedFrameIdx uint32
 	var hasEmittedFrame bool
 	waitingForIDR := true
 
-	flushFrame := func(frameIdx uint32) {
-		var frameBuf []byte
+	resetFrame := func() {
 		for b := 0; b < len(frameBlocks); b++ {
+			frameBlocks[b] = nil
+		}
+		curFrameInit = false
+		curFrameCorrupt = false
+	}
+
+	flushFrame := func(frameIdx uint32, expectedLastBlock int) {
+		if curFrameCorrupt {
+			resetFrame()
+			return
+		}
+		var frameBuf []byte
+		for b := 0; b <= expectedLastBlock && b < len(frameBlocks); b++ {
+			if frameBlocks[b] == nil {
+				// Missing a block in this frame; drop the whole frame and wait for IDR.
+				resetFrame()
+				waitingForIDR = true
+				d.RequestIDR(false)
+				return
+			}
 			for _, p := range frameBlocks[b] {
 				frameBuf = append(frameBuf, p...)
 			}
-			frameBlocks[b] = nil
 		}
+		resetFrame()
 		if len(frameBuf) == 0 {
 			return
 		}
@@ -77,21 +97,30 @@ func (d *Driver) videoLoop(conn *net.UDPConn, remoteAddr *net.UDPAddr, rtsp *rts
 		}
 		lastEmittedFrameIdx = frameIdx
 		hasEmittedFrame = true
-		isIDR := d.emitVideoFrame(frameBuf, frameIdx)
-		if isIDR {
-			waitingForIDR = false
-		} else if waitingForIDR {
-			d.RequestIDR(false)
-		}
+		d.emitVideoFrame(frameBuf, frameIdx, &waitingForIDR)
 	}
 
 	completeBlock := func(blk *fecBlock) {
 		if blk == nil || blk.dataShards <= 0 {
 			return
 		}
+		if curFrameInit && blk.frameIndex != curFrameIdx {
+			// Previous frame never saw its final block; discard it cleanly.
+			resetFrame()
+			waitingForIDR = true
+			d.RequestIDR(false)
+		}
+		curFrameIdx = blk.frameIndex
+		curFrameInit = true
+
 		if blk.receivedData < blk.dataShards {
 			if blk.receivedCount >= blk.dataShards && blk.parityShards > 0 {
 				shardLen := rtsp.videoPacketSize + rtpHeaderSize + 4
+				for i := range blk.shards {
+					if blk.present[i] && len(blk.shards[i]) > shardLen {
+						shardLen = len(blk.shards[i])
+					}
+				}
 				for i := range blk.shards {
 					if blk.present[i] && len(blk.shards[i]) < shardLen {
 						padded := make([]byte, shardLen)
@@ -101,11 +130,13 @@ func (d *Driver) videoLoop(conn *net.UDPConn, remoteAddr *net.UDPAddr, rtsp *rts
 				}
 				if err := rsDecode(blk.shards, blk.present, blk.dataShards, blk.parityShards, shardLen); err != nil {
 					log.Printf("[gamestream] video frame %d block %d FEC failed (%v); requesting IDR", blk.frameIndex, blk.blockNumber, err)
+					curFrameCorrupt = true
 					waitingForIDR = true
 					d.RequestIDR(false)
 					return
 				}
 			} else {
+				curFrameCorrupt = true
 				waitingForIDR = true
 				d.RequestIDR(false)
 				return
@@ -116,12 +147,11 @@ func (d *Driver) videoLoop(conn *net.UDPConn, remoteAddr *net.UDPAddr, rtsp *rts
 		payloads := make([][]byte, 0, blk.dataShards)
 		for i := 0; i < blk.dataShards; i++ {
 			pkt := blk.shards[i]
-			hdrLen := rtpHeaderSize
-			hdrByte := pkt[0]
-			if !blk.present[i] {
+			if !blk.present[i] || len(pkt) == 0 {
 				continue
 			}
-			if hdrByte&rtpFlagExtension != 0 {
+			hdrLen := rtpHeaderSize
+			if pkt[0]&rtpFlagExtension != 0 {
 				hdrLen += 4
 			}
 			if len(pkt) < hdrLen+nvVideoPacketSize {
@@ -146,17 +176,11 @@ func (d *Driver) videoLoop(conn *net.UDPConn, remoteAddr *net.UDPAddr, rtsp *rts
 			payloads = append(payloads, payload)
 		}
 
-		if curFrameInit && blk.frameIndex != curFrameIdx {
-			flushFrame(curFrameIdx)
-		}
-		curFrameIdx = blk.frameIndex
-		curFrameInit = true
 		if blk.blockNumber >= 0 && blk.blockNumber < len(frameBlocks) {
 			frameBlocks[blk.blockNumber] = payloads
 		}
 		if blk.blockNumber >= blk.lastBlock {
-			flushFrame(blk.frameIndex)
-			curFrameInit = false
+			flushFrame(blk.frameIndex, blk.lastBlock)
 		}
 	}
 
@@ -277,10 +301,13 @@ func frameHeaderSize(payload []byte) int {
 	return 8
 }
 
-func (d *Driver) emitVideoFrame(annexB []byte, frameIdx uint32) bool {
+func (d *Driver) emitVideoFrame(annexB []byte, frameIdx uint32, waitingForIDR *bool) bool {
 	ptsUs := uint64(time.Since(d.startTime).Microseconds())
 	isIDR := false
 
+	// Split all NAL units first so we know if this frame is an IDR before emitting
+	// (when waitingForIDR is true, we drop P-frames to prevent macroblock artifacts).
+	var nals [][]byte
 	offset := 0
 	for {
 		idx, startLen := findStartCode(annexB[offset:])
@@ -297,26 +324,43 @@ func (d *Driver) emitVideoFrame(annexB []byte, frameIdx uint32) bool {
 			nal = annexB[nalStart : nalStart+nextIdx]
 			offset = nalStart + nextIdx
 		}
-		nal = trimTrailingZeros(nal)
-		if len(nal) == 0 {
-			continue
-		}
-		if d.emitNAL(nal, ptsUs) {
-			isIDR = true
+		if len(nal) > 0 {
+			if d.isIDRNAL(nal) {
+				isIDR = true
+			}
+			nals = append(nals, nal)
 		}
 		if offset >= len(annexB) {
 			break
 		}
 	}
+
+	if *waitingForIDR {
+		if !isIDR {
+			d.RequestIDR(false)
+			return false
+		}
+		*waitingForIDR = false
+	}
+
+	for _, nal := range nals {
+		d.emitNAL(nal, ptsUs)
+	}
 	return isIDR
 }
 
-func trimTrailingZeros(b []byte) []byte {
-	end := len(b)
-	for end > 0 && b[end-1] == 0 {
-		end--
+func (d *Driver) isIDRNAL(nal []byte) bool {
+	if d.meta.VideoCodec == "h265" {
+		if len(nal) < 2 {
+			return false
+		}
+		nalType := (nal[0] >> 1) & 0x3f
+		return nalType >= 19 && nalType <= 21
 	}
-	return b[:end]
+	if len(nal) < 1 {
+		return false
+	}
+	return (nal[0] & 0x1f) == 5
 }
 
 func (d *Driver) emitNAL(nal []byte, ptsUs uint64) bool {

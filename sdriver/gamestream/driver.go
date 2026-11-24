@@ -66,12 +66,14 @@ func New(config map[string]string) (*Driver, error) {
 		_ = hs.cancel()
 		return nil, err
 	}
+	_ = videoConn.SetReadBuffer(4 * 1024 * 1024)
 	audioConn, err := net.ListenUDP("udp", nil)
 	if err != nil {
 		_ = videoConn.Close()
 		_ = hs.cancel()
 		return nil, err
 	}
+	_ = audioConn.SetReadBuffer(512 * 1024)
 
 	controlV2 := (rtsp.encryptionEnabled & ssEncControlV2) != 0
 	ctrlEnc := hs.appVersionAtLeast(7, 1, 431) || controlV2

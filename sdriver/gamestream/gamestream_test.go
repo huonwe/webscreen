@@ -115,15 +115,16 @@ func TestEmitVideoFrameSplitsNALs(t *testing.T) {
 		meta:      sdriver.MediaMeta{VideoCodec: "h264"},
 	}
 
-	// SPS (type 7) + PPS (type 8) + IDR (type 5) with trailing FEC zero padding
+	// SPS (type 7) + PPS (type 8) + IDR (type 5)
 	annexB := []byte{
 		0x00, 0x00, 0x00, 0x01, 0x67, 0x42, 0x00, 0x1E,
 		0x00, 0x00, 0x00, 0x01, 0x68, 0xCE, 0x3C, 0x80,
-		0x00, 0x00, 0x01, 0x65, 0x88, 0x84, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x01, 0x65, 0x88, 0x84,
 	}
-	isIDR := d.emitVideoFrame(annexB, 1)
-	if !isIDR {
-		t.Fatalf("expected IDR frame")
+	waitingForIDR := true
+	isIDR := d.emitVideoFrame(annexB, 1, &waitingForIDR)
+	if !isIDR || waitingForIDR {
+		t.Fatalf("expected IDR frame and waitingForIDR cleared")
 	}
 	if len(d.videoChan) != 3 {
 		t.Fatalf("expected 3 NAL boxes, got %d", len(d.videoChan))
