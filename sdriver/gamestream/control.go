@@ -28,6 +28,7 @@ const (
 type controlStream struct {
 	enet      *enetClient
 	encrypted bool
+	controlV2 bool
 	aead      cipher.AEAD
 
 	mu   sync.Mutex
@@ -35,7 +36,7 @@ type controlStream struct {
 	done chan struct{}
 }
 
-func startControlStream(ip string, port int, connectData uint32, rikey [16]byte, encrypted bool) (*controlStream, error) {
+func startControlStream(ip string, port int, connectData uint32, rikey [16]byte, encrypted bool, controlV2 bool) (*controlStream, error) {
 	remoteAddr, err := net.ResolveUDPAddr("udp", net.JoinHostPort(ip, itoa(port)))
 	if err != nil {
 		return nil, err
@@ -53,7 +54,11 @@ func startControlStream(ip string, port int, connectData uint32, rikey [16]byte,
 			enet.close()
 			return nil, err
 		}
-		aead, err = cipher.NewGCM(blk)
+		if controlV2 {
+			aead, err = cipher.NewGCM(blk)
+		} else {
+			aead, err = cipher.NewGCMWithNonceSize(blk, 16)
+		}
 		if err != nil {
 			enet.close()
 			return nil, err
@@ -63,6 +68,7 @@ func startControlStream(ip string, port int, connectData uint32, rikey [16]byte,
 	cs := &controlStream{
 		enet:      enet,
 		encrypted: encrypted,
+		controlV2: controlV2,
 		aead:      aead,
 		done:      make(chan struct{}),
 	}
@@ -97,7 +103,7 @@ func (cs *controlStream) send(ptype uint16, payload []byte, channelID uint8, rel
 		cs.seq++
 		cs.mu.Unlock()
 
-		wire = encryptControlPacket(cs.aead, seq, ptype, payload)
+		wire = encryptControlPacket(cs.aead, seq, ptype, payload, cs.controlV2)
 	} else {
 		wire = make([]byte, 4+len(payload))
 		binary.LittleEndian.PutUint16(wire[0:2], ptype)
@@ -111,18 +117,26 @@ func (cs *controlStream) send(ptype uint16, payload []byte, channelID uint8, rel
 	return cs.enet.sendUnsequenced(channelID, wire)
 }
 
-func encryptControlPacket(aead cipher.AEAD, seq uint32, ptype uint16, payload []byte) []byte {
+func encryptControlPacket(aead cipher.AEAD, seq uint32, ptype uint16, payload []byte, controlV2 bool) []byte {
 	inner := make([]byte, 4+len(payload))
 	binary.LittleEndian.PutUint16(inner[0:2], ptype)
 	binary.LittleEndian.PutUint16(inner[2:4], uint16(len(payload)))
 	copy(inner[4:], payload)
 
-	var iv [12]byte
-	binary.LittleEndian.PutUint32(iv[0:4], seq)
-	iv[10] = 'C'
-	iv[11] = 'C'
+	var iv []byte
+	if controlV2 {
+		var iv12 [12]byte
+		binary.LittleEndian.PutUint32(iv12[0:4], seq)
+		iv12[10] = 'C'
+		iv12[11] = 'C'
+		iv = iv12[:]
+	} else {
+		var iv16 [16]byte
+		iv16[0] = byte(seq)
+		iv = iv16[:]
+	}
 
-	sealed := aead.Seal(nil, iv[:], inner, nil)
+	sealed := aead.Seal(nil, iv, inner, nil)
 	ctLen := len(inner)
 	ct := sealed[:ctLen]
 	tag := sealed[ctLen:]

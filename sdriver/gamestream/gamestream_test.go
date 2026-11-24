@@ -76,7 +76,7 @@ func TestEncryptControlPacket(t *testing.T) {
 	}
 
 	payload := []byte{0xAA, 0xBB, 0xCC}
-	pkt := encryptControlPacket(aead, 42, 0x0206, payload)
+	pkt := encryptControlPacket(aead, 42, 0x0206, payload, true)
 
 	if hdrType := binary.LittleEndian.Uint16(pkt[0:2]); hdrType != 0x0001 {
 		t.Fatalf("unexpected header type 0x%x", hdrType)

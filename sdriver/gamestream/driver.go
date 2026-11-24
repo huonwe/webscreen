@@ -73,8 +73,9 @@ func New(config map[string]string) (*Driver, error) {
 		return nil, err
 	}
 
-	ctrlEnc := hs.appVersionAtLeast(7, 1, 431) || (rtsp.encryptionEnabled&ssEncControlV2) != 0
-	ctrl, err := startControlStream(cfg.ip, rtsp.controlPort, rtsp.controlConnectData, hs.rikey, ctrlEnc)
+	controlV2 := (rtsp.encryptionEnabled & ssEncControlV2) != 0
+	ctrlEnc := hs.appVersionAtLeast(7, 1, 431) || controlV2
+	ctrl, err := startControlStream(cfg.ip, rtsp.controlPort, rtsp.controlConnectData, hs.rikey, ctrlEnc, controlV2)
 	if err != nil {
 		_ = videoConn.Close()
 		_ = audioConn.Close()
