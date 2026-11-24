@@ -6,16 +6,36 @@ window.cachedRect = {
     VideoRect: null,
     ContentRect: { left: 0, top: 0, width: 0, height: 0 }
 }
+function getMediaDimensions(element) {
+    if (element instanceof HTMLCanvasElement) {
+        return {
+            width: element.width,
+            height: element.height
+        };
+    }
+
+    if (element instanceof HTMLVideoElement) {
+        return {
+            width: element.videoWidth,
+            height: element.videoHeight
+        };
+    }
+
+    return { width: 0, height: 0 };
+}
 // 更新缓存的视频尺寸和位置
 function updateVideoCache() {
-    if (remoteVideo.videoWidth && remoteVideo.videoHeight) {
-        window.cachedRect.VideoRect = remoteVideo.getBoundingClientRect();
-        
+    const dimensions = getMediaDimensions(remoteVideo);
+    const vidWidth = dimensions.width;
+    const vidHeight = dimensions.height;
+
+    if (vidWidth && vidHeight) {
+        window.cachedRect.VideoRect =
+            remoteVideo.getBoundingClientRect();
+
         const elWidth = window.cachedRect.VideoRect.width;
         const elHeight = window.cachedRect.VideoRect.height;
-        const vidWidth = remoteVideo.videoWidth;
-        const vidHeight = remoteVideo.videoHeight;
-        
+
         if (elWidth === 0 || elHeight === 0) return false;
 
         const vidRatio = vidWidth / vidHeight;
@@ -24,19 +44,17 @@ function updateVideoCache() {
         let drawWidth, drawHeight, startX, startY;
 
         if (elRatio > vidRatio) {
-            // 元素比视频宽 (Pillarbox: 左右黑边)
             drawHeight = elHeight;
             drawWidth = drawHeight * vidRatio;
             startY = 0;
             startX = (elWidth - drawWidth) / 2;
         } else {
-            // 元素比视频高 (Letterbox: 上下黑边)
             drawWidth = elWidth;
             drawHeight = drawWidth / vidRatio;
             startX = 0;
             startY = (elHeight - drawHeight) / 2;
         }
-        
+
         window.cachedRect.ContentRect = {
             left: startX,
             top: startY,
@@ -45,6 +63,7 @@ function updateVideoCache() {
         };
         return true;
     }
+
     return false;
 }
 

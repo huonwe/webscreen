@@ -40,6 +40,11 @@ function getScreenCoordinates(clientX, clientY) {
         }
     }
 
+    const dimensions = getMediaDimensions(remoteVideo);
+    if (!dimensions.width || !dimensions.height) {
+        return null;
+    }
+
     const offsetX = clientX - window.cachedRect.VideoRect.left;
     const offsetY = clientY - window.cachedRect.VideoRect.top;
 
@@ -48,12 +53,12 @@ function getScreenCoordinates(clientX, clientY) {
     const contentY = offsetY - window.cachedRect.ContentRect.top;
 
     // 映射到视频源分辨率
-    const x = (contentX / window.cachedRect.ContentRect.width) * remoteVideo.videoWidth;
-    const y = (contentY / window.cachedRect.ContentRect.height) * remoteVideo.videoHeight;
+    const x = (contentX / window.cachedRect.ContentRect.width) * dimensions.width;
+    const y = (contentY / window.cachedRect.ContentRect.height) * dimensions.height;
 
     // Clamp coordinates to be within video bounds
-    const clampedX = Math.max(0, Math.min(Math.round(x), remoteVideo.videoWidth));
-    const clampedY = Math.max(0, Math.min(Math.round(y), remoteVideo.videoHeight));
+    const clampedX = Math.max(0, Math.min(Math.round(x), dimensions.width));
+    const clampedY = Math.max(0, Math.min(Math.round(y), dimensions.height));
 
     return { x: clampedX, y: clampedY };
 }
@@ -206,7 +211,7 @@ function sendTouchEvent(action, ptrId, x, y, pressure = 65535, buttons = 1) {
     // praseTouchEvent(p);
     // window.ws.send(p);
     // console.log("Sending touch event packet:", p);
-    sendDataChannelMessage(window.dataChannelUnordered, p);
+    window.sendDataChannelMessage(window.dataChannelUnordered, p);
 }
 
 

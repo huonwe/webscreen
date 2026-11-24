@@ -99,7 +99,10 @@ async function renderFrame(generation, onFirstFrame) {
             }
             onFirstFrame();
         }
-        getVideo().requestVideoFrameCallback(() => renderFrame(generation));
+        const video = getVideo();
+        if (video instanceof HTMLVideoElement) {
+            video.requestVideoFrameCallback(() => renderFrame(generation));
+        }
     } catch (error) {
         console.error('WebSR rendering failed', error);
         disableUpscaling();
@@ -108,7 +111,13 @@ async function renderFrame(generation, onFirstFrame) {
 
 async function enableUpscaling(button) {
     const video = getVideo();
-    if (!video || !video.videoWidth || !video.videoHeight) {
+    if (!video) {
+        throw new Error('WebSR cannot start before the video metadata is available');
+    }
+    if (video instanceof HTMLCanvasElement) {
+        throw new Error('WebSR does not support WebCodecs Canvas output');
+    }
+    if (!video.videoWidth || !video.videoHeight) {
         throw new Error('WebSR cannot start before the video metadata is available');
     }
 

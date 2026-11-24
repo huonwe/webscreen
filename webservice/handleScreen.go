@@ -64,6 +64,9 @@ func (wm *WebMaster) handleScreenWSN(c *gin.Context) {
 		conn.WriteJSON(map[string]any{"status": "error", "message": "Remote UUID is required", "stage": "connection_view_session"})
 		return
 	}
+	if connectionConfig.Protocol == "websocket" {
+		connectionConfig.WSConn = conn
+	}
 	viewSession, err := wm.Nexus.NewViewSession(userID.(string), connectionConfig)
 	if err != nil {
 		log.Println("Failed to create view session:", err)
@@ -72,6 +75,7 @@ func (wm *WebMaster) handleScreenWSN(c *gin.Context) {
 	}
 	if connectionConfig.Protocol == "websocket" {
 		viewSession.WSConn = conn
+		log.Println("set WSConnection to viewSession")
 		conn.WriteJSON(map[string]any{"status": "ok", "useWSTransport": true, "message": "WebSocket connection established", "stage": "connection_view_session"})
 	}
 	if connectionConfig.Protocol == "webrtc" {
@@ -107,8 +111,10 @@ func (wm *WebMaster) handleScreenWSN(c *gin.Context) {
 	if err != nil {
 		log.Println("Failed to bind view session to remote:", err)
 		conn.WriteJSON(map[string]any{"status": "error", "message": err.Error(), "stage": "connection_remote"})
+		wm.Nexus.CloseViewSession(viewSession.SessionID)
 		return
 	}
+	<-viewSession.Done()
 }
 
 // /:id/ws

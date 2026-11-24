@@ -116,11 +116,13 @@
         if (!isTranslating) return;
 
         const videoEl = document.getElementById(CONFIG.videoElementId);
+        const dimensions = getMediaDimensions(videoEl);
+        if (!dimensions.width || !dimensions.height) return;
         
         // 1. 截图
         const canvas = document.createElement('canvas');
-        canvas.width = videoEl.videoWidth; // 使用视频原始分辨率
-        canvas.height = videoEl.videoHeight;
+        canvas.width = dimensions.width;
+        canvas.height = dimensions.height;
         const ctx = canvas.getContext('2d');
         ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
 
@@ -147,8 +149,10 @@
 
         // 计算视频在屏幕上的缩放比例 (视频原始尺寸 vs 显示尺寸)
         // 这一步对于坐标对齐至关重要
-        const scaleX = videoEl.offsetWidth / videoEl.videoWidth;
-        const scaleY = videoEl.offsetHeight / videoEl.videoHeight;
+        const dimensions = getMediaDimensions(videoEl);
+        if (!dimensions.width || !dimensions.height) return;
+        const scaleX = videoEl.offsetWidth / dimensions.width;
+        const scaleY = videoEl.offsetHeight / dimensions.height;
 
         for (const word of ocrData.words) {
             if (word.confidence < CONFIG.confidenceThreshold) continue;

@@ -16,6 +16,7 @@ func (r *Remote) HandleControlEvent(raw []byte) error {
 		log.Printf("[agent] Failed to parse control event: %v", err)
 		return err
 	}
+	log.Println("[agent] Parsed control event:", event)
 	// log.Printf("Parsed control event: %+v", event)
 	return r.sdriver.SendEvent(event)
 }

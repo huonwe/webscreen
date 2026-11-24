@@ -193,7 +193,7 @@ function flushPendingEvents(actionType, buttonsOverride) {
 function sendControlPacket(action, dx, dy, buttons, wheel) {
     // console.log(`Send: Act=${action}, dx=${dx}, dy=${dy}, Btn=${buttons}`);
     const packet = createMousePacket(action, dx, dy, buttons, 0, -wheel);
-    sendDataChannelMessage(window.dataChannelUnordered, packet);
+    window.sendDataChannelMessage(window.dataChannelUnordered, packet);
 }
 
 

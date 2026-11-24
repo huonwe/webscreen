@@ -1,6 +1,7 @@
 package nexus
 
 import (
+	"encoding/binary"
 	"log"
 	"sync"
 	"webscreen/sdriver"
@@ -58,22 +59,88 @@ type ViewSession struct {
 
 // func New
 
+func makeWebSocketMediaFrame(kind byte, keyFrame bool, pts uint64, payload []byte) []byte {
+	frame := make([]byte, 10+len(payload))
+	frame[0] = kind
+	if keyFrame {
+		frame[1] = 1
+	}
+	binary.BigEndian.PutUint64(frame[2:10], pts)
+	copy(frame[10:], payload)
+	return frame
+}
+
+func isKeyFrameVideo(payload []byte, codec string) bool {
+	if len(payload) == 0 {
+		return false
+	}
+
+	startCodeOffsets := make([]int, 0, 4)
+	for i := 0; i+3 < len(payload); i++ {
+		if payload[i] == 0 && payload[i+1] == 0 && payload[i+2] == 1 {
+			startCodeOffsets = append(startCodeOffsets, i+3)
+			i += 2
+			continue
+		}
+		if i+4 <= len(payload) && payload[i] == 0 && payload[i+1] == 0 &&
+			payload[i+2] == 0 && payload[i+3] == 1 {
+			startCodeOffsets = append(startCodeOffsets, i+4)
+			i += 3
+		}
+	}
+
+	switch codec {
+	case "h264":
+		for _, offset := range startCodeOffsets {
+			if offset < len(payload) && payload[offset]&0x1f == 5 {
+				return true
+			}
+		}
+		if len(startCodeOffsets) == 0 && payload[0]&0x1f == 5 {
+			return true
+		}
+	case "h265", "hevc":
+		for _, offset := range startCodeOffsets {
+			if offset < len(payload) {
+				nalType := (payload[offset] >> 1) & 0x3f
+				if nalType >= 16 && nalType <= 21 {
+					return true
+				}
+			}
+		}
+		if len(startCodeOffsets) == 0 && (payload[0]>>1)&0x3f >= 16 &&
+			(payload[0]>>1)&0x3f <= 21 {
+			return true
+		}
+	}
+	return false
+}
+
 // 非阻塞写入：如果某个观众网络极卡导致缓冲区满，直接丢帧保护其他观众
 func (v *ViewSession) PushingAVBox() {
 	if v.cacheVideoCh == nil || v.cacheAudioCh == nil {
 		log.Printf("[nexus] PushPacket: videoCh or audioCh is nil, reject to pushing")
 		return
 	}
-
+	log.Println("[nexus] ViewSession PushingAVBox started, sessionID:", v.SessionID, "protocol:", v.ConnectionConfig.Protocol)
 	if v.ConnectionConfig.Protocol == "websocket" {
 		for {
 			select {
 			case box := <-v.cacheVideoCh:
-				// ts := v.videoTSMapper.NextTimestamp(box)
-				v.WSConn.WriteMessage(websocket.BinaryMessage, append([]byte{0}, box.Data...))
+				frame := makeWebSocketMediaFrame(0, isKeyFrameVideo(box.Data, v.ConnectionConfig.VideoCodec), box.PTS, box.Data)
+				// log.Printf("[nexus ws] ViewSession %s pushing video frame: PTS=%d, size=%d bytes", v.SessionID, box.PTS, len(box.Data))
+				if err := v.WSConn.WriteMessage(websocket.BinaryMessage, frame); err != nil {
+					log.Printf("[nexus] ViewSession %s video WriteMessage failed: %v", v.SessionID, err)
+					v.Close()
+					return
+				}
 			case box := <-v.cacheAudioCh:
-				// ts := v.audioTSMapper.NextTimestamp(box)
-				v.WSConn.WriteMessage(websocket.BinaryMessage, append([]byte{1}, box.Data...))
+				frame := makeWebSocketMediaFrame(1, false, box.PTS, box.Data)
+				if err := v.WSConn.WriteMessage(websocket.BinaryMessage, frame); err != nil {
+					log.Printf("[nexus] ViewSession %s audio WriteMessage failed: %v", v.SessionID, err)
+					v.Close()
+					return
+				}
 			case <-v.done:
 				log.Printf("[nexus] ViewSession %s done, exiting PushingBox goroutine", v.SessionID)
 				return
@@ -118,4 +185,8 @@ func (v *ViewSession) Close() {
 			v.closeFn()
 		}
 	})
+}
+
+func (v *ViewSession) Done() <-chan struct{} {
+	return v.done
 }

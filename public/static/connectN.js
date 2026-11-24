@@ -165,7 +165,7 @@ async function start() {
     window.ws.onopen = () => {
         console.log('WebSocket connected');
         const config = {
-            protocol: "webrtc",
+            protocol: "websocket",
             video_codec: CONFIG.driver_config?.video_codec || "h264",
             audio_codec: CONFIG.driver_config?.audio_codec || "opus",
             remote_uuid: CONFIG.remote_uuid,
@@ -186,7 +186,7 @@ async function start() {
             showToast(i18n.t('error_from_server', { msg: message.message }), 2000);
             return;
         }
-        
+
         if (message.stage === 'metainfo_remote' && message.capabilities) {
             console.log("Received capabilities from Nexus:", message.capabilities);
             await updateUIBasedOnCapabilities(message.capabilities);
@@ -200,24 +200,25 @@ async function start() {
 
             return;
         }
-
-        const answerSdp = message.sdp;
-        console.log("Received SDP answer from Nexus:", answerSdp);
-        if (!answerSdp.length) {
-            showToast(i18n.t('error_empty_sdp_answer'), 2000);
-            return;
+        if (message.sdp) {
+            const answerSdp = message.sdp;
+            console.log("Received SDP answer from Nexus:", answerSdp);
+            if (!answerSdp.length) {
+                showToast(i18n.t('error_empty_sdp_answer'), 2000);
+                return;
+            }
+            const formattedSdp = answerSdp
+                .split(/\r\n|\r|\n/)
+                .map(line => line.trim())
+                .filter(line => line.length > 0)
+                .join('\r\n') + '\r\n';
+            await pc.setRemoteDescription({ type: 'answer', sdp: formattedSdp });
+            console.log("WebRTC connection established with Nexus");
         }
-        const formattedSdp = answerSdp
-            .split(/\r\n|\r|\n/)
-            .map(line => line.trim())
-            .filter(line => line.length > 0)
-            .join('\r\n') + '\r\n';
-        await pc.setRemoteDescription({ type: 'answer', sdp: formattedSdp });
-        console.log("WebRTC connection established with Nexus");
-        // await loadScript('/static/capabilities/keyboard.js');
-        // await loadScript('/static/capabilities/touch.js');
-        // await loadScript('/static/capabilities/scroll.js');
-        // await loadScript('/static/capabilities/buttons.js');
+        if (message.useWSTransport) {
+
+            console.log("Using WebSocket transport for control messages");
+        }
         if (!remoteConfigSent) {
             remoteConfigSent = true;
             const remoteConfig = { ...(CONFIG.driver_config || {}) };

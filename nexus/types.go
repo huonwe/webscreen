@@ -1,5 +1,7 @@
 package nexus
 
+import "github.com/gorilla/websocket"
+
 // type deviceType string
 
 // const (
@@ -33,6 +35,7 @@ type ConnectionConfig struct {
 	Extra map[string]string `json:"extra,omitempty"`
 	// AVSync            bool `json:"av_sync"`
 	// UseLocalTimestamp bool `json:"use_local_timestamp"`
+	WSConn *websocket.Conn `json:"-"`
 
 	// RemoteType string `json:"remote_type"`
 	RemoteUUID string `json:"remote_uuid"`

@@ -84,10 +84,10 @@ const MODIFIER_MAP = {
 function initUHIDKeyboard() {
     if (uhidKeyboardInitialized) return;
 
-    sendDataChannelMessage(window.dataChannelOrdered, createUHIDKeyboardDestroyPacket());
+    window.sendDataChannelMessage(window.dataChannelOrdered, createUHIDKeyboardDestroyPacket());
 
     const packet = createUHIDKeyboardCreatePacket();
-    sendDataChannelMessage(window.dataChannelOrdered, packet);
+    window.sendDataChannelMessage(window.dataChannelOrdered, packet);
     uhidKeyboardInitialized = true;
     console.log("UHID Keyboard device created");
 }
@@ -96,7 +96,7 @@ function destroyUHIDKeyboard() {
     if (!uhidKeyboardInitialized) return;
 
     const packet = createUHIDKeyboardDestroyPacket();
-    sendDataChannelMessage(window.dataChannelOrdered, packet);
+    window.sendDataChannelMessage(window.dataChannelOrdered, packet);
     uhidKeyboardInitialized = false;
     window.uhidKeyboardEnabled = false;
     console.log("UHID Keyboard device destroyed");
@@ -130,7 +130,7 @@ function sendKeyboardReport() {
     // if (window.ws && window.ws.readyState === WebSocket.OPEN) {
     //     window.ws.send(packet);
     // }
-    sendDataChannelMessage(window.dataChannelOrdered, packet);
+    window.sendDataChannelMessage(window.dataChannelOrdered, packet);
 }
 
 // 事件监听

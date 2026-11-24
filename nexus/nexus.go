@@ -7,6 +7,7 @@ import (
 	"log"
 	"sync"
 	"sync/atomic"
+	"time"
 	"uuid"
 	"webscreen/consts"
 	"webscreen/db"
@@ -476,6 +477,7 @@ func (v *ViewSession) connectToNexus(n *Nexus, cfg ConnectionConfig) error {
 	case "webtransport":
 		// Implement WebTransport connection logic here
 	case "websocket":
+		v.WSConn = cfg.WSConn
 		if v.WSConn == nil {
 			return errors.New("WebSocket connection is not established")
 		}
@@ -486,14 +488,16 @@ func (v *ViewSession) connectToNexus(n *Nexus, cfg ConnectionConfig) error {
 		})
 		// v.WSConn.WriteJSON(map[string]any{"status": "ok", "message": "WebSocket connection established"})
 		go func() {
+			time.Sleep(5 * time.Second) // 延迟 1 秒再发送，确保浏览器端的 onmessage 回调已注册
 			for {
 				// Handle WebSocket messages
 				mtype, message, err := v.WSConn.ReadMessage()
 				if err != nil {
 					log.Printf("Error reading WebSocket message: %v", err)
+					n.CloseViewSession(v.SessionID)
 					return
 				}
-				log.Printf("Received WebSocket message: %s", string(message))
+				// log.Printf("Received WebSocket message: %s", string(message))
 				switch mtype {
 				case websocket.TextMessage:
 					log.Printf("Text message received: %s", string(message))
