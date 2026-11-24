@@ -60,6 +60,9 @@ func (d *Driver) videoLoop(conn *net.UDPConn, remoteAddr *net.UDPAddr, rtsp *rts
 	var curFrameCorrupt bool
 	var lastEmittedFrameIdx uint32
 	var hasEmittedFrame bool
+	var completedBlockFrame uint32
+	var completedBlockNum int
+	var hasCompletedBlock bool
 	waitingForIDR := true
 
 	resetFrame := func() {
@@ -249,6 +252,14 @@ func (d *Driver) videoLoop(conn *net.UDPConn, remoteAddr *net.UDPAddr, rtsp *rts
 			continue
 		}
 
+		if hasCompletedBlock && frameIndex == completedBlockFrame && blockNum == completedBlockNum {
+			// Trailing FEC parity or duplicate packets for an already-completed block; ignore.
+			continue
+		}
+		if hasEmittedFrame && int32(frameIndex-lastEmittedFrameIdx) <= 0 {
+			continue
+		}
+
 		if curBlock == nil || curBlock.frameIndex != frameIndex || curBlock.blockNumber != blockNum {
 			if curBlock != nil {
 				completeBlock(curBlock)
@@ -285,6 +296,9 @@ func (d *Driver) videoLoop(conn *net.UDPConn, remoteAddr *net.UDPAddr, rtsp *rts
 		}
 
 		if curBlock.receivedData == curBlock.dataShards {
+			completedBlockFrame = curBlock.frameIndex
+			completedBlockNum = curBlock.blockNumber
+			hasCompletedBlock = true
 			completeBlock(curBlock)
 			curBlock = nil
 		}
