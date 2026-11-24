@@ -11,7 +11,7 @@ var CONFIG = (function () {
         type: 'android',
         av_sync: false,
         driver_config: {
-            video_codec: 'h265',
+            video_codec: 'h264',
             audio_codec: 'opus',
             audio: 'true',
             video_bit_rate: '8000000',
@@ -409,7 +409,7 @@ async function start() {
     window.ws.onopen = () => {
         window.ws.send(JSON.stringify({
             protocol: 'websocket',
-            video_codec: 'h265',
+            video_codec: 'h264',
             audio_codec: CONFIG.driver_config?.audio_codec || 'opus',
             remote_uuid: '68bf97a0-011c-40b5-8710-cb49a5bad369',
             extra: { av_sync: String(CONFIG.av_sync === true) }
