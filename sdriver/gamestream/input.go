@@ -118,7 +118,7 @@ func (d *Driver) sendMouseEvent(e *sdriver.MouseEvent) error {
 		binary.LittleEndian.PutUint32(pkt[4:8], magicMouseRel)
 		binary.BigEndian.PutUint16(pkt[8:10], uint16(dx))
 		binary.BigEndian.PutUint16(pkt[10:12], uint16(dy))
-		if err := d.ctrl.send(ctrlTypeInputData, pkt, ctrlChannelMouse, false); err != nil {
+		if err := d.ctrl.send(ctrlTypeInputData, pkt, ctrlChannelMouse, true); err != nil {
 			return err
 		}
 	}
@@ -213,7 +213,7 @@ func (d *Driver) sendTouchEvent(e *sdriver.TouchEvent) error {
 	binary.LittleEndian.PutUint32(pkt[16:20], math.Float32bits(nx))
 	binary.LittleEndian.PutUint32(pkt[20:24], math.Float32bits(ny))
 	binary.LittleEndian.PutUint32(pkt[24:28], math.Float32bits(float32(e.Pressure)/65535.0))
-	return d.ctrl.send(ctrlTypeInputData, pkt, ctrlChannelTouch, evType != 0x03)
+	return d.ctrl.send(ctrlTypeInputData, pkt, ctrlChannelTouch, true)
 }
 
 func (d *Driver) sendGamepadEvent(e *sdriver.GamepadEvent) error {
