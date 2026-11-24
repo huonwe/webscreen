@@ -11,6 +11,15 @@ import (
 )
 
 func (wm *WebMaster) handleSetupUI(c *gin.Context) {
+	hasAdmin, err := wm.authService.HasAdmin()
+	if err != nil {
+		c.String(http.StatusInternalServerError, "账户状态检查失败")
+		return
+	}
+	if hasAdmin {
+		c.Redirect(http.StatusFound, "/login")
+		return
+	}
 	c.FileFromFS("setup.html", http.FS(wm.staticFS))
 }
 

@@ -8,6 +8,15 @@ import (
 )
 
 func (wm *WebMaster) handleLoginUI(c *gin.Context) {
+	hasAdmin, err := wm.authService.HasAdmin()
+	if err != nil {
+		c.String(http.StatusInternalServerError, "账户状态检查失败")
+		return
+	}
+	if !hasAdmin {
+		c.Redirect(http.StatusFound, "/setup")
+		return
+	}
 	if wm.pin != "" && wm.isTrustedIP(c.ClientIP()) {
 		c.Redirect(http.StatusFound, "/unlock")
 		return
