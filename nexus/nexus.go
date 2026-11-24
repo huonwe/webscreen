@@ -416,7 +416,7 @@ func (v *ViewSession) connectToNexus(n *Nexus, cfg ConnectionConfig) error {
 			},
 		)
 		v.peerConnection.OnDataChannel(func(d *webrtc.DataChannel) {
-			log.Printf("Have DataChannel: Label '%s', ID: %d\n", d.Label(), d.ID())
+			log.Printf("Have DataChannel: Label '%s'\n", d.Label())
 			switch d.Label() {
 			case "control-ordered":
 				v.dataChannelOrdered = d
@@ -439,7 +439,7 @@ func (v *ViewSession) connectToNexus(n *Nexus, cfg ConnectionConfig) error {
 			default:
 				log.Printf("Unknown DataChannel label: %s\n", d.Label())
 				d.OnMessage(func(msg webrtc.DataChannelMessage) {
-					log.Printf("DataChannel '%s'-'%d' message: %s\n", d.Label(), d.ID(), string(msg.Data))
+					log.Printf("DataChannel '%s' message: %s\n", d.Label(), string(msg.Data))
 				})
 			}
 		})
