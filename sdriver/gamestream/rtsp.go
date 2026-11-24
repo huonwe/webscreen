@@ -49,6 +49,11 @@ type rtspMessage struct {
 	body       string
 }
 
+type rtspHeader struct {
+	key string
+	val string
+}
+
 type rtspClient struct {
 	host          string
 	port          string
@@ -131,13 +136,14 @@ func performRTSPHandshake(hs *httpSession, cfg *streamConfig) (*rtspResult, erro
 	}
 
 	// 2. DESCRIBE
-	descResp, err := rc.do("DESCRIBE", rc.targetURL, map[string]string{
-		"Accept":            "application/sdp",
-		"If-Modified-Since": "Thu, 01 Jan 1970 00:00:00 GMT",
+	descResp, err := rc.do("DESCRIBE", rc.targetURL, []rtspHeader{
+		{"Accept", "application/sdp"},
+		{"If-Modified-Since", "Thu, 01 Jan 1970 00:00:00 GMT"},
 	}, "")
 	if err != nil || descResp.statusCode != 200 {
 		return nil, fmt.Errorf("rtsp DESCRIBE failed: err=%v status=%v", err, statusOf(descResp))
 	}
+	log.Printf("[gamestream] RTSP DESCRIBE ok (sdpLen=%d)", len(descResp.body))
 
 	encSupported := parseSDPAttrUint(descResp.body, "x-ss-general.encryptionSupported")
 	encRequested := parseSDPAttrUint(descResp.body, "x-ss-general.encryptionRequested")
@@ -205,18 +211,18 @@ func performRTSPHandshake(hs *httpSession, cfg *streamConfig) (*rtspResult, erro
 		res.audioEncrypted = true
 	}
 	sdp := buildAnnounceSDP(hs, cfg, res)
-	annResp, err := rc.do("ANNOUNCE", "streamid=control/13/0", map[string]string{
-		"Session":        rc.sessionID,
-		"Content-type":   "application/sdp",
-		"Content-length": strconv.Itoa(len(sdp)),
+	annResp, err := rc.do("ANNOUNCE", "streamid=control/13/0", []rtspHeader{
+		{"Session", rc.sessionID},
+		{"Content-type", "application/sdp"},
+		{"Content-length", strconv.Itoa(len(sdp))},
 	}, sdp)
 	if err != nil || annResp.statusCode != 200 {
 		return nil, fmt.Errorf("rtsp ANNOUNCE failed: err=%v status=%v", err, statusOf(annResp))
 	}
 
 	// 7. PLAY
-	playResp, err := rc.do("PLAY", "/", map[string]string{
-		"Session": rc.sessionID,
+	playResp, err := rc.do("PLAY", "/", []rtspHeader{
+		{"Session", rc.sessionID},
 	}, "")
 	if err != nil || playResp.statusCode != 200 {
 		return nil, fmt.Errorf("rtsp PLAY failed: err=%v status=%v", err, statusOf(playResp))
@@ -226,17 +232,18 @@ func performRTSPHandshake(hs *httpSession, cfg *streamConfig) (*rtspResult, erro
 }
 
 func (rc *rtspClient) setup(target string) (*rtspMessage, error) {
-	hdrs := map[string]string{
-		"Transport":         "unicast;X-GS-ClientPort=50000-50001",
-		"If-Modified-Since": "Thu, 01 Jan 1970 00:00:00 GMT",
-	}
+	var hdrs []rtspHeader
 	if rc.sessionID != "" {
-		hdrs["Session"] = rc.sessionID
+		hdrs = append(hdrs, rtspHeader{"Session", rc.sessionID})
 	}
+	hdrs = append(hdrs,
+		rtspHeader{"Transport", "unicast;X-GS-ClientPort=50000-50001"},
+		rtspHeader{"If-Modified-Since", "Thu, 01 Jan 1970 00:00:00 GMT"},
+	)
 	return rc.do("SETUP", target, hdrs, "")
 }
 
-func (rc *rtspClient) do(method, target string, headers map[string]string, body string) (*rtspMessage, error) {
+func (rc *rtspClient) do(method, target string, headers []rtspHeader, body string) (*rtspMessage, error) {
 	rc.cseq++
 	addr := net.JoinHostPort(rc.host, rc.port)
 
@@ -262,8 +269,8 @@ func (rc *rtspClient) do(method, target string, headers map[string]string, body 
 	fmt.Fprintf(&sb, "CSeq: %d\r\n", rc.cseq)
 	fmt.Fprintf(&sb, "X-GS-ClientVersion: %d\r\n", rc.clientVersion)
 	fmt.Fprintf(&sb, "Host: %s\r\n", rc.host)
-	for k, v := range headers {
-		fmt.Fprintf(&sb, "%s: %s\r\n", k, v)
+	for _, h := range headers {
+		fmt.Fprintf(&sb, "%s: %s\r\n", h.key, h.val)
 	}
 	sb.WriteString("\r\n")
 	if body != "" {
@@ -283,6 +290,9 @@ func (rc *rtspClient) do(method, target string, headers map[string]string, body 
 	raw, err := io.ReadAll(conn)
 	if err != nil && len(raw) == 0 {
 		return nil, err
+	}
+	if len(raw) == 0 {
+		log.Printf("[gamestream] RTSP %s %s returned 0 bytes (readErr=%v)", method, target, err)
 	}
 	if rc.encrypted && len(raw) > 0 {
 		plain, err := unsealRTSPMessage(rc.aead, raw)
