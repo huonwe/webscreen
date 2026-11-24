@@ -195,9 +195,14 @@ async function start() {
         };
         console.log("connection config:", config);
         window.ws.send(JSON.stringify(config));
+
+        const remoteConfig = { ...(CONFIG.driver_config || {}) };
+        if (CONFIG.type === 'android') {
+            remoteConfig.deviceID = CONFIG.device_ip || CONFIG.device_id || '';
+        }
+        window.ws.send(JSON.stringify(remoteConfig));
     };
 
-    let remoteConfigSent = false;
     window.ws.onmessage = async (event) => {
         if (event.data instanceof ArrayBuffer) {
             if (usesWebSocket) {
@@ -307,14 +312,6 @@ async function start() {
             console.log("Using WebSocket for audio/video transport");
         }
 
-        if (!remoteConfigSent) {
-            remoteConfigSent = true;
-            const remoteConfig = { ...(CONFIG.driver_config || {}) };
-            if (CONFIG.type === 'android') {
-                remoteConfig.deviceID = CONFIG.device_ip || CONFIG.device_id || '';
-            }
-            window.ws.send(JSON.stringify(remoteConfig));
-        }
     };
     window.ws.onclose = () => {
         if (usesWebSocket) {

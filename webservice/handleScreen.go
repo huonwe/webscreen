@@ -2,36 +2,17 @@ package webservice
 
 import (
 	"log"
-	"math/rand"
 	"net/http"
-	"strings"
 	"webscreen/nexus"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 )
 
-// sdpOffersH265 reports whether the browser's SDP offer contains H.265/HEVC.
-// Only browsers that advertise it in the offer can decode it (Safari does,
-// Chrome/Chromium do not).
-func sdpOffersH265(sdp string) bool {
-	lower := strings.ToLower(sdp)
-	return strings.Contains(lower, "h265") || strings.Contains(lower, "hevc")
-}
-
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
 		return true // Allow all origins for development
 	},
-}
-
-func randomString(length int) string {
-	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	b := make([]byte, length)
-	for i := range b {
-		b[i] = charset[rand.Intn(len(charset))]
-	}
-	return string(b)
 }
 
 func (wm *WebMaster) handleScreenWS(c *gin.Context) {
@@ -62,6 +43,16 @@ func (wm *WebMaster) handleScreenWS(c *gin.Context) {
 	if connectionConfig.Protocol == "websocket" {
 		connectionConfig.WSConn = conn
 	}
+
+	remoteConfig := nexus.RemoteConfig{}
+	err = conn.ReadJSON(&remoteConfig)
+	if err != nil {
+		log.Println("Failed to read remote config:", err)
+		conn.WriteJSON(map[string]any{"status": "error", "message": err.Error(), "stage": "connection_view_session"})
+		return
+	}
+	log.Printf("Received remote config: %+v", remoteConfig)
+
 	viewSession, err := wm.Nexus.NewViewSession(userID.(string), connectionConfig)
 	if err != nil {
 		log.Println("Failed to create view session:", err)
@@ -82,14 +73,7 @@ func (wm *WebMaster) handleScreenWS(c *gin.Context) {
 		}
 		conn.WriteJSON(map[string]any{"status": "ok", "sdp": finalSDP, "stage": "connection_view_session"})
 	}
-	remoteConfig := nexus.RemoteConfig{}
-	err = conn.ReadJSON(&remoteConfig)
-	if err != nil {
-		log.Println("Failed to read remote config:", err)
-		conn.WriteJSON(map[string]any{"status": "error", "message": err.Error(), "stage": "connection_view_session"})
-		return
-	}
-	log.Printf("Received remote config: %+v", remoteConfig)
+
 	// Connect to the remote device using the provided remote UUID
 	err = wm.Nexus.ConnectToRemote(remoteUUID, remoteConfig)
 	if err != nil {

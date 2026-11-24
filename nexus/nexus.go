@@ -7,7 +7,6 @@ import (
 	"log"
 	"sync"
 	"sync/atomic"
-	"time"
 	"uuid"
 	"webscreen/consts"
 	"webscreen/db"
@@ -498,7 +497,7 @@ func (v *ViewSession) connectToNexus(n *Nexus, cfg ConnectionConfig) error {
 		})
 		// v.WSConn.WriteJSON(map[string]any{"status": "ok", "message": "WebSocket connection established"})
 		go func() {
-			time.Sleep(5 * time.Second) // 延迟 1 秒再发送，确保浏览器端的 onmessage 回调已注册
+			// time.Sleep(5 * time.Second) // 延迟 1 秒再发送，确保浏览器端的 onmessage 回调已注册
 			for {
 				// Handle WebSocket messages
 				mtype, message, err := v.WSConn.ReadMessage()

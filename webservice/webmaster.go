@@ -111,8 +111,6 @@ func (wm *WebMaster) setRouter() {
 		c.FileFromFS("console.html", http.FS(wm.staticFS))
 	})
 
-	r.GET("/screen-ws", func(ctx *gin.Context) { ctx.FileFromFS("screen-ws.html", http.FS(wm.staticFS)) })
-	r.GET("/screen-ws/wsn", wm.handleScreenWS)
 	api := r.Group("/api")
 	{
 		api.GET("/auth/status", wm.handleAuthStatus)
