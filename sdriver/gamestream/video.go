@@ -315,13 +315,14 @@ func frameHeaderSize(payload []byte) int {
 	return 8
 }
 
+var annexBStartCode = []byte{0x00, 0x00, 0x00, 0x01}
+
 func (d *Driver) emitVideoFrame(annexB []byte, frameIdx uint32, waitingForIDR *bool) bool {
 	ptsUs := uint64(time.Since(d.startTime).Microseconds())
 	isIDR := false
 
-	// Split all NAL units first so we know if this frame is an IDR before emitting
-	// (when waitingForIDR is true, we drop P-frames to prevent macroblock artifacts).
-	var nals [][]byte
+	// Split Annex-B stream into NALs (stripping AUD/SEI), keeping track of config NALs and slices.
+	var vclNALs [][]byte
 	offset := 0
 	for {
 		idx, startLen := findStartCode(annexB[offset:])
@@ -339,10 +340,9 @@ func (d *Driver) emitVideoFrame(annexB []byte, frameIdx uint32, waitingForIDR *b
 			offset = nalStart + nextIdx
 		}
 		if len(nal) > 0 {
-			if d.isIDRNAL(nal) {
-				isIDR = true
+			if d.updateConfigOrCheckIDR(nal, &isIDR) {
+				vclNALs = append(vclNALs, nal)
 			}
-			nals = append(nals, nal)
 		}
 		if offset >= len(annexB) {
 			break
@@ -357,70 +357,38 @@ func (d *Driver) emitVideoFrame(annexB []byte, frameIdx uint32, waitingForIDR *b
 		*waitingForIDR = false
 	}
 
-	for _, nal := range nals {
-		d.emitNAL(nal, ptsUs)
-	}
-	return isIDR
-}
-
-func (d *Driver) isIDRNAL(nal []byte) bool {
-	if d.meta.VideoCodec == "h265" {
-		if len(nal) < 2 {
-			return false
-		}
-		nalType := (nal[0] >> 1) & 0x3f
-		return nalType >= 19 && nalType <= 21
-	}
-	if len(nal) < 1 {
-		return false
-	}
-	return (nal[0] & 0x1f) == 5
-}
-
-func (d *Driver) emitNAL(nal []byte, ptsUs uint64) bool {
-	var nalType byte
-	if d.meta.VideoCodec == "h265" {
-		if len(nal) < 2 {
-			return false
-		}
-		nalType = (nal[0] >> 1) & 0x3f
-		// Drop HEVC AUD (35) and SEI (39, 40)
-		if nalType == 35 || nalType == 39 || nalType == 40 {
-			return false
-		}
-	} else {
-		nalType = nal[0] & 0x1f
-		// Drop H.264 AUD (9) and SEI (6)
-		if nalType == 9 || nalType == 6 {
-			return false
-		}
+	if len(vclNALs) == 0 {
+		return isIDR
 	}
 
-	isIDR := (d.meta.VideoCodec == "h264" && nalType == 5) ||
-		(d.meta.VideoCodec == "h265" && nalType >= 19 && nalType <= 21)
-
-	d.mu.Lock()
-	switch {
-	case d.meta.VideoCodec == "h265" && nalType == 32:
-		d.lastVPS = append([]byte(nil), nal...)
-	case d.meta.VideoCodec == "h265" && nalType == 33:
-		d.lastSPS = append([]byte(nil), nal...)
-	case d.meta.VideoCodec == "h265" && nalType == 34:
-		d.lastPPS = append([]byte(nil), nal...)
-	case d.meta.VideoCodec == "h264" && nalType == 7:
-		d.lastSPS = append([]byte(nil), nal...)
-	case d.meta.VideoCodec == "h264" && nalType == 8:
-		d.lastPPS = append([]byte(nil), nal...)
-	case isIDR:
-		d.lastIDR = append([]byte(nil), nal...)
+	var out []byte
+	if isIDR {
+		// Bundle VPS (if H.265), SPS, PPS, and IDR slices together with Annex-B start codes
+		// so WebCodecs and WebRTC decoders always receive a self-contained keyframe.
+		d.mu.RLock()
+		for _, cfg := range [][]byte{d.lastVPS, d.lastSPS, d.lastPPS} {
+			if len(cfg) > 0 {
+				out = append(out, annexBStartCode...)
+				out = append(out, cfg...)
+			}
+		}
+		d.mu.RUnlock()
 	}
-	d.mu.Unlock()
+	for _, nal := range vclNALs {
+		out = append(out, annexBStartCode...)
+		out = append(out, nal...)
+	}
+
+	if isIDR {
+		d.mu.Lock()
+		d.lastIDR = append([]byte(nil), out...)
+		d.mu.Unlock()
+	}
 
 	box := sdriver.AVBox{
-		Data:       append([]byte(nil), nal...),
-		PTS:        ptsUs,
-		Type:       0,
-		NoDuration: isConfigNAL(d.meta.VideoCodec, nalType),
+		Data: out,
+		PTS:  ptsUs,
+		Type: 0,
 	}
 	select {
 	case d.videoChan <- box:
@@ -429,9 +397,59 @@ func (d *Driver) emitNAL(nal []byte, ptsUs uint64) bool {
 	return isIDR
 }
 
-func isConfigNAL(codec string, nalType byte) bool {
-	return (codec == "h264" && (nalType == 7 || nalType == 8)) ||
-		(codec == "h265" && nalType >= 32 && nalType <= 34)
+// updateConfigOrCheckIDR caches VPS/SPS/PPS (without start codes), drops AUD/SEI,
+// and returns true if nal is a VCL slice to emit.
+func (d *Driver) updateConfigOrCheckIDR(nal []byte, isIDR *bool) bool {
+	if d.meta.VideoCodec == "h265" {
+		if len(nal) < 2 {
+			return false
+		}
+		nalType := (nal[0] >> 1) & 0x3f
+		if nalType == 35 || nalType == 39 || nalType == 40 {
+			return false
+		}
+		d.mu.Lock()
+		switch nalType {
+		case 32:
+			d.lastVPS = append([]byte(nil), nal...)
+			d.mu.Unlock()
+			return false
+		case 33:
+			d.lastSPS = append([]byte(nil), nal...)
+			d.mu.Unlock()
+			return false
+		case 34:
+			d.lastPPS = append([]byte(nil), nal...)
+			d.mu.Unlock()
+			return false
+		}
+		d.mu.Unlock()
+		if nalType >= 19 && nalType <= 21 {
+			*isIDR = true
+		}
+		return true
+	}
+
+	nalType := nal[0] & 0x1f
+	if nalType == 9 || nalType == 6 {
+		return false
+	}
+	d.mu.Lock()
+	switch nalType {
+	case 7:
+		d.lastSPS = append([]byte(nil), nal...)
+		d.mu.Unlock()
+		return false
+	case 8:
+		d.lastPPS = append([]byte(nil), nal...)
+		d.mu.Unlock()
+		return false
+	}
+	d.mu.Unlock()
+	if nalType == 5 {
+		*isIDR = true
+	}
+	return true
 }
 
 func findStartCode(data []byte) (int, int) {

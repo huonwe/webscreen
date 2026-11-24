@@ -126,20 +126,17 @@ func TestEmitVideoFrameSplitsNALs(t *testing.T) {
 	if !isIDR || waitingForIDR {
 		t.Fatalf("expected IDR frame and waitingForIDR cleared")
 	}
-	if len(d.videoChan) != 3 {
-		t.Fatalf("expected 3 NAL boxes, got %d", len(d.videoChan))
+	if len(d.videoChan) != 1 {
+		t.Fatalf("expected 1 bundled Annex-B keyframe box, got %d", len(d.videoChan))
 	}
-	sps := <-d.videoChan
-	if !sps.NoDuration || !bytes.Equal(sps.Data, []byte{0x67, 0x42, 0x00, 0x1E}) {
-		t.Fatalf("unexpected SPS box: %+v", sps)
+	keyframe := <-d.videoChan
+	expected := []byte{
+		0x00, 0x00, 0x00, 0x01, 0x67, 0x42, 0x00, 0x1E,
+		0x00, 0x00, 0x00, 0x01, 0x68, 0xCE, 0x3C, 0x80,
+		0x00, 0x00, 0x00, 0x01, 0x65, 0x88, 0x84,
 	}
-	pps := <-d.videoChan
-	if !pps.NoDuration || !bytes.Equal(pps.Data, []byte{0x68, 0xCE, 0x3C, 0x80}) {
-		t.Fatalf("unexpected PPS box: %+v", pps)
-	}
-	idr := <-d.videoChan
-	if idr.NoDuration || !bytes.Equal(idr.Data, []byte{0x65, 0x88, 0x84}) {
-		t.Fatalf("unexpected IDR box: %+v", idr)
+	if keyframe.NoDuration || !bytes.Equal(keyframe.Data, expected) {
+		t.Fatalf("unexpected bundled keyframe box: %+v", keyframe)
 	}
 }
 

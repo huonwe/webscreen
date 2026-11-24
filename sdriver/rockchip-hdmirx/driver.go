@@ -141,14 +141,18 @@ func (d *Driver) SendEvent(event sdriver.Event) error {
 
 func (d *Driver) RequestIDR(firstFrame bool) {
 	d.mu.RLock()
-	defer d.mu.RUnlock()
+	var bundled []byte
 	for _, nal := range [][]byte{d.lastVPS, d.lastSPS, d.lastPPS, d.lastIDR} {
 		if len(nal) > 0 {
-			select {
-			case d.videoChan <- sdriver.AVBox{Data: append([]byte(nil), nal...), NoDuration: true}:
-			default:
-				return
-			}
+			bundled = append(bundled, annexBStartCode...)
+			bundled = append(bundled, nal...)
+		}
+	}
+	d.mu.RUnlock()
+	if len(bundled) > 0 {
+		select {
+		case d.videoChan <- sdriver.AVBox{Data: bundled, NoDuration: true}:
+		default:
 		}
 	}
 }
@@ -235,6 +239,8 @@ func (d *Driver) emitNALs(buffer []byte, start time.Time) []byte {
 	}
 }
 
+var annexBStartCode = []byte{0x00, 0x00, 0x00, 0x01}
+
 func (d *Driver) emitNAL(nal []byte, start time.Time) {
 	if len(nal) == 0 {
 		return
@@ -254,34 +260,49 @@ func (d *Driver) emitNAL(nal []byte, start time.Time) {
 	switch {
 	case d.meta.VideoCodec == "h265" && nalType == 32:
 		d.lastVPS = append([]byte(nil), nal...)
+		d.mu.Unlock()
+		return
 	case d.meta.VideoCodec == "h265" && nalType == 33:
 		d.lastSPS = append([]byte(nil), nal...)
+		d.mu.Unlock()
+		return
 	case d.meta.VideoCodec == "h265" && nalType == 34:
 		d.lastPPS = append([]byte(nil), nal...)
+		d.mu.Unlock()
+		return
 	case d.meta.VideoCodec == "h264" && nalType == 7:
 		d.lastSPS = append([]byte(nil), nal...)
+		d.mu.Unlock()
+		return
 	case d.meta.VideoCodec == "h264" && nalType == 8:
 		d.lastPPS = append([]byte(nil), nal...)
+		d.mu.Unlock()
+		return
 	case isIDR:
 		d.lastIDR = append([]byte(nil), nal...)
 	}
+
+	var data []byte
+	if isIDR {
+		for _, cfg := range [][]byte{d.lastVPS, d.lastSPS, d.lastPPS} {
+			if len(cfg) > 0 {
+				data = append(data, annexBStartCode...)
+				data = append(data, cfg...)
+			}
+		}
+	}
 	d.mu.Unlock()
 
-	data := append([]byte(nil), nal...)
+	data = append(data, annexBStartCode...)
+	data = append(data, nal...)
 	box := sdriver.AVBox{
-		Data:       data,
-		PTS:        uint64(time.Since(start).Milliseconds()),
-		NoDuration: isConfigNAL(d.meta.VideoCodec, nalType),
+		Data: data,
+		PTS:  uint64(time.Since(start).Milliseconds()),
 	}
 	select {
 	case d.videoChan <- box:
 	case <-d.done:
 	}
-}
-
-func isConfigNAL(codec string, nalType byte) bool {
-	return (codec == "h264" && (nalType == 7 || nalType == 8)) ||
-		(codec == "h265" && nalType >= 32 && nalType <= 34)
 }
 
 func findStartCode(data []byte) (int, int) {
