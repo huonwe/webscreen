@@ -4,8 +4,16 @@ import (
 	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/binary"
+	"encoding/hex"
+	"encoding/pem"
+	"math/big"
 	"testing"
+	"time"
 	"webscreen/sdriver"
 )
 
@@ -147,5 +155,32 @@ func TestParseConfig(t *testing.T) {
 	}
 	if cfg.bitrate != 15000 || cfg.width != 2560 || cfg.height != 1440 || cfg.fps != 120 || cfg.codec != "h265" {
 		t.Fatalf("unexpected parsed config: %+v", cfg)
+	}
+}
+
+func TestParseServerCertHex(t *testing.T) {
+	priv, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmpl := x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject:      pkix.Name{CommonName: "Sunshine"},
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     time.Now().Add(time.Hour),
+	}
+	der, err := x509.CreateCertificate(rand.Reader, &tmpl, &tmpl, &priv.PublicKey, priv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pemBytes := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
+
+	// Sunshine sends hex-encoded PEM
+	if cert, err := parseServerCertHex(hex.EncodeToString(pemBytes)); err != nil || !bytes.Equal(cert.Raw, der) {
+		t.Fatalf("PEM-in-hex parse failed: err=%v", err)
+	}
+	// GFE sends hex-encoded DER
+	if cert, err := parseServerCertHex(hex.EncodeToString(der)); err != nil || !bytes.Equal(cert.Raw, der) {
+		t.Fatalf("DER-in-hex parse failed: err=%v", err)
 	}
 }

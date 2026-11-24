@@ -257,11 +257,7 @@ func (s *authStore) pair(ip string, port int, pin string) error {
 	if resp1.Paired != 1 {
 		return errors.New("getservercert: host rejected pairing request")
 	}
-	serverCertBytes, err := hex.DecodeString(resp1.PlainCert)
-	if err != nil || len(serverCertBytes) == 0 {
-		return errors.New("getservercert: invalid server certificate hex")
-	}
-	serverCert, err := x509.ParseCertificate(serverCertBytes)
+	serverCert, err := parseServerCertHex(resp1.PlainCert)
 	if err != nil {
 		return fmt.Errorf("parse server cert: %w", err)
 	}
@@ -422,6 +418,17 @@ func (s *authStore) pairChallengeHTTPS(ip string, httpsPort int, serverCert *x50
 		return fmt.Errorf("https pairchallenge returned paired=%d", root.Paired)
 	}
 	return nil
+}
+
+func parseServerCertHex(hexStr string) (*x509.Certificate, error) {
+	raw, err := hex.DecodeString(strings.TrimSpace(hexStr))
+	if err != nil || len(raw) == 0 {
+		return nil, errors.New("invalid server certificate hex")
+	}
+	if block, _ := pem.Decode(raw); block != nil && len(block.Bytes) > 0 {
+		raw = block.Bytes
+	}
+	return x509.ParseCertificate(raw)
 }
 
 func aesECBEncrypt(key, input []byte) ([]byte, error) {
