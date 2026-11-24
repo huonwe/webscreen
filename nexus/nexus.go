@@ -89,28 +89,18 @@ func (n *Nexus) ConnectToRemote(remoteUUID string, config RemoteConfig) error {
 	n.Unlock()
 
 	// 启动该设备的专属媒体分发泵
-	go n.pumpRemote(remoteUUID, binding)
+	go n.pumpRemoteAV(binding)
+	go n.pumpRemoteMsg(binding)
 	return nil
 }
 
 // 2. 媒体泵：从 SDriver 读取 AVBox，零拷贝广播给所有观众
-func (n *Nexus) pumpRemote(remoteUUID string, b *remoteBinding) {
+func (n *Nexus) pumpRemoteAV(b *remoteBinding) {
 	videoCh, audioCh, _, _ := b.remote.sdriver.GetReceivers()
 	var box sdriver.AVBox
 	var ok bool
-	// var localTimestamp uint32 = 0
 
-	// var packets []*rtp.Packet
-	// var pocketizer rtp.Packetizer
-	// mediaMeta := b.remote.sdriver.MediaMeta()
-	// if mediaMeta.VideoCodec == "h264" {
-	// 	pocketizer = n.videoPacketizerH264
-	// } else if mediaMeta.VideoCodec == "h265" {
-	// 	pocketizer = n.videoPacketizerH265
-	// }
 	for {
-		// elapsedUs := time.Since(n.timestampStartTime).Microseconds()
-		// var thisIsVideo bool
 		select {
 		case <-b.stopCh:
 			return
@@ -134,14 +124,13 @@ func (n *Nexus) pumpRemote(remoteUUID string, b *remoteBinding) {
 
 		if snap := b.viewersSnap.Load(); snap != nil {
 			for _, viewer := range *snap {
-				// viewer.PushBox(box, thisIsVideo)
 				if box.Type == 0 {
 					select {
 					case viewer.cacheVideoCh <- box:
 					default:
 						log.Printf("[nexus] Dropped video packet for viewer %s due to full cache", viewer.SessionID)
 					}
-				} else {
+				} else if box.Type == 1 {
 					select {
 					case viewer.cacheAudioCh <- box:
 					default:
@@ -151,6 +140,28 @@ func (n *Nexus) pumpRemote(remoteUUID string, b *remoteBinding) {
 			}
 		}
 	}
+}
+
+// SDriver -> Remote -> Nexus  -> 前端
+func (n *Nexus) pumpRemoteMsg(bind *remoteBinding) {
+	_, _, msgCh, _ := bind.remote.sdriver.GetReceivers()
+	select {
+	case <-bind.stopCh:
+		return
+	case event, ok := <-msgCh:
+		if !ok {
+			return
+		}
+		if snap := bind.viewersSnap.Load(); snap != nil {
+			for _, viewer := range *snap {
+				err := viewer.HandleMsg(event)
+				if err != nil {
+					log.Printf("[nexus] Error handling message for viewer %s: %v", viewer.SessionID, err)
+				}
+			}
+		}
+	}
+
 }
 
 // 3. 绑定观众到设备（首个人自动成为 Master，后续观众自动触发关键帧）
@@ -172,7 +183,9 @@ func (n *Nexus) BindViewSessionToRemote(sessionID, remoteUUID string) error {
 	b.refreshSnapshot() // 原子更新快照
 	n.sessionToRemote[sessionID] = remoteUUID
 	driver := b.remote.sdriver
-	v.onMessageCallback = n.generateOnMsgCallbackFunc(sessionID)
+	v.controlEventHandler = func(msg []byte) error {
+		return n.DispatchEventToRemote(b.remote, msg)
+	}
 	n.Unlock()
 
 	// 锁外请求关键帧：新观众中途加入时立刻能看到画面，无需等待下一个 GOP
@@ -180,28 +193,22 @@ func (n *Nexus) BindViewSessionToRemote(sessionID, remoteUUID string) error {
 	return nil
 }
 
-func (n *Nexus) generateOnMsgCallbackFunc(sessionID string) func([]byte) error {
-	return func(msg []byte) error {
-		return n.DispatchEvent(sessionID, msg)
-	}
-}
-
 // 4. 控制指令转发（利用 SDriver.SendEvent） browser -> Nexus -> Remote -> SDriver -> Device
-func (n *Nexus) DispatchEvent(sessionID string, raw_event []byte) error {
-	n.RLock()
-	v, ok := n.sessions[sessionID]
-	if !ok || !v.CanControl {
-		n.RUnlock()
-		return errors.New("unauthorized or session closed")
-	}
-	remoteUUID, bound := n.sessionToRemote[sessionID]
-	b := n.bindings[remoteUUID]
-	n.RUnlock()
+func (n *Nexus) DispatchEventToRemote(remote *Remote, raw_event []byte) error {
+	// n.RLock()
+	// v, ok := n.sessions[sessionID]
+	// if !ok || !v.CanControl {
+	// 	n.RUnlock()
+	// 	return errors.New("unauthorized or session closed")
+	// }
+	// remoteUUID, bound := n.sessionToRemote[sessionID]
+	// b := n.bindings[remoteUUID]
+	// n.RUnlock()
 
-	if !bound || b == nil {
-		return errors.New("remote not bound")
+	if remote == nil {
+		return errors.New("remote is nil")
 	}
-	err := b.remote.HandleControlEvent(raw_event)
+	err := remote.HandleControlEvent(raw_event)
 	return err
 }
 
@@ -305,7 +312,8 @@ func (n *Nexus) NewViewSession(userID string, config ConnectionConfig) (*ViewSes
 		ConnectionConfig:  config,
 		cacheVideoCh:      make(chan sdriver.AVBox, 30),
 		cacheAudioCh:      make(chan sdriver.AVBox, 30),
-		done:              make(chan struct{}),
+		// cacheMsgCh:        make(chan []byte, 64),
+		done: make(chan struct{}),
 
 		audioPacketizer: rtp.NewPacketizer(n.mtu, 0, 0, &codecs.OpusPayloader{}, rtp.NewRandomSequencer(), 48000),
 		videoPacketizer: packetizer,
@@ -428,8 +436,8 @@ func (v *ViewSession) connectToNexus(n *Nexus, cfg ConnectionConfig) error {
 			case "control-ordered":
 				v.dataChannelOrdered = d
 				d.OnMessage(func(msg webrtc.DataChannelMessage) {
-					if v.onMessageCallback != nil {
-						if err := v.onMessageCallback(msg.Data); err != nil {
+					if v.controlEventHandler != nil {
+						if err := v.controlEventHandler(msg.Data); err != nil {
 							log.Printf("Error handling ordered data channel message: %v", err)
 						}
 					}
@@ -437,8 +445,8 @@ func (v *ViewSession) connectToNexus(n *Nexus, cfg ConnectionConfig) error {
 			case "control-unordered":
 				v.dataChannelUnordered = d
 				d.OnMessage(func(msg webrtc.DataChannelMessage) {
-					if v.onMessageCallback != nil {
-						if err := v.onMessageCallback(msg.Data); err != nil {
+					if v.controlEventHandler != nil {
+						if err := v.controlEventHandler(msg.Data); err != nil {
 							log.Printf("Error handling unordered data channel message: %v", err)
 						}
 					}
@@ -502,7 +510,7 @@ func (v *ViewSession) connectToNexus(n *Nexus, cfg ConnectionConfig) error {
 				case websocket.TextMessage:
 					log.Printf("Text message received: %s", string(message))
 				case websocket.BinaryMessage:
-					err := v.onMessageCallback(message)
+					err := v.controlEventHandler(message)
 					if err != nil {
 						log.Printf("Error handling binary WebSocket message: %v", err)
 					}

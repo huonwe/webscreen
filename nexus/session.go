@@ -2,6 +2,7 @@ package nexus
 
 import (
 	"encoding/binary"
+	"fmt"
 	"log"
 	"sync"
 	"webscreen/sdriver"
@@ -43,14 +44,12 @@ type ViewSession struct {
 	WSConn *websocket.Conn
 
 	// 所有线路公用的回调，用于处理来自前端的控制命令
-	onMessageCallback func([]byte) error
+	controlEventHandler func([]byte) error
 
 	// 建议内部带一个带缓冲的 sendCh chan AVBox，由独立写协程消费，防止单个慢观众拖垮全局广播
 	cacheVideoCh chan sdriver.AVBox // 例如 cap = 64
 	cacheAudioCh chan sdriver.AVBox // 例如 cap = 32
-
-	msgCh     chan sdriver.Event
-	controlCh chan sdriver.Event
+	// cacheMsgCh   chan []byte        // 例如 cap = 64
 
 	done      chan struct{}
 	closeOnce sync.Once
@@ -207,15 +206,55 @@ func (v *ViewSession) PushingAVBox() {
 	}
 }
 
+func (v *ViewSession) HandleMsg(event sdriver.Event) error {
+	var msg []byte
+	eType := event.Type()
+	switch eType {
+	case sdriver.EVENT_TYPE_RECEIVE_CLIPBOARD:
+		event := event.(sdriver.SampleEvent)
+		content := event.GetContent()
+		msg = make([]byte, 1+len(content))
+		copy(msg[1:], content)
+		msg[0] = byte(sdriver.EVENT_TYPE_RECEIVE_CLIPBOARD)
+		// if !yield(msg) {
+		// 	return
+		// }
+	case sdriver.EVENT_TYPE_TEXT_MSG:
+		event := event.(sdriver.TextMsgEvent)
+		content := []byte(event.Msg)
+		msg = make([]byte, 1+len(content))
+		copy(msg[1:], content)
+		msg[0] = byte(sdriver.EVENT_TYPE_TEXT_MSG)
+		// if !yield(msg) {
+		// 	return
+		// }
+	default:
+		return fmt.Errorf("Unhandled event type in HandleMsg: %d", eType)
+	}
+	switch v.ConnectionConfig.Protocol {
+	case "websocket":
+		v.WSConn.WriteMessage(websocket.BinaryMessage, msg)
+	case "webrtc":
+		if v.dataChannelUnordered != nil {
+			v.dataChannelUnordered.Send(msg)
+		}
+	}
+
+	return nil
+
+}
+
 func (v *ViewSession) Close() {
 	v.closeOnce.Do(func() {
 		close(v.done) // 通知发送协程和 PushAV 安全退出，不关闭 data channel
+		// close(v.cacheMsgCh) // 关闭消息缓存通道
 		if v.closeFn != nil {
 			v.closeFn()
 		}
 	})
 }
 
+// Done returns a channel that is closed when the ViewSession is closed.
 func (v *ViewSession) Done() <-chan struct{} {
 	return v.done
 }
