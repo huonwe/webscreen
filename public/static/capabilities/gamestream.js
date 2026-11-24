@@ -532,40 +532,38 @@ function pollPhysicalGamepads() {
 
 initGameStreamTouch();
 
-addControlButton('gamestreamTouchToggleBtn', 'Touch',
-    `<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
-        <path d="M9 11.24V7.5C9 6.12 10.12 5 11.5 5S14 6.12 14 7.5v3.74c1.21-.81 2-2.18 2-3.74C16 5.01 13.99 3 11.5 3S7 5.01 7 7.5c0 1.56.79 2.93 2 3.74zm9.84 4.63l-4.54-2.26c-.17-.07-.35-.11-.54-.11H13v-6c0-.83-.67-1.5-1.5-1.5S10 6.67 10 7.5v10.74l-3.43-.72c-.08-.01-.15-.03-.24-.03-.31 0-.59.13-.79.33l-.79.8 4.94 4.94c.27.27.65.44 1.06.44h6.79c.75 0 1.33-.55 1.44-1.28l.75-5.27c.01-.07.02-.14.02-.2 0-.62-.38-1.16-.91-1.38z"/>
-    </svg>`,
-    () => {
-        gsTouchEnabled = !gsTouchEnabled;
-        const btn = document.getElementById('gamestreamTouchToggleBtn');
-        if (btn) btn.classList.toggle('active', gsTouchEnabled);
-        if (typeof showToast === 'function') {
-            showToast(gsTouchEnabled ? (i18n.t('gamestream_touch_on') || '触控模式已开启') : (i18n.t('gamestream_touch_off') || '触控模式已关闭'), 1500);
-        }
+addControlButton(
+    'gamestreamTouchToggleBtn',
+    'Touch',
+    'M9 11.24V7.5C9 6.12 10.12 5 11.5 5S14 6.12 14 7.5v3.74c1.21-.81 2-2.18 2-3.74C16 5.01 13.99 3 11.5 3S7 5.01 7 7.5c0 1.56.79 2.93 2 3.74zm9.84 4.63l-4.54-2.26c-.17-.07-.35-.11-.54-.11H13v-6c0-.83-.67-1.5-1.5-1.5S10 6.67 10 7.5v10.74l-3.43-.72c-.08-.01-.15-.03-.24-.03-.31 0-.59.13-.79.33l-.79.8 4.94 4.94c.27.27.65.44 1.06.44h6.79c.75 0 1.33-.55 1.44-1.28l.75-5.27c.01-.07.02-.14.02-.2 0-.62-.38-1.16-.91-1.38z'
+).addEventListener('click', () => {
+    gsTouchEnabled = !gsTouchEnabled;
+    const btn = document.getElementById('gamestreamTouchToggleBtn');
+    if (btn) btn.classList.toggle('active', gsTouchEnabled);
+    if (typeof showToast === 'function') {
+        showToast(gsTouchEnabled ? (i18n.t('gamestream_touch_on') || '触控模式已开启') : (i18n.t('gamestream_touch_off') || '触控模式已关闭'), 1500);
     }
-);
+});
 
-addControlButton('gamestreamGamepadToggleBtn', 'Gamepad',
-    `<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
-        <path d="M21 6H3c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-10 7H8v3H6v-3H3v-2h3V8h2v3h3v2zm4.5 2c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm4-3c-.83 0-1.5-.67-1.5-1.5S18.67 9 19.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
-    </svg>`,
-    () => {
-        gsGamepadEnabled = !gsGamepadEnabled;
-        const btn = document.getElementById('gamestreamGamepadToggleBtn');
-        if (btn) btn.classList.toggle('active', gsGamepadEnabled);
-        if (gsGamepadEnabled) {
-            gsPadState.activeMask = 0x01;
-            showVirtualGamepad();
-            sendGamepadState(true);
-            pollPhysicalGamepads();
-        } else {
-            if (gsPhysicalRaf) {
-                cancelAnimationFrame(gsPhysicalRaf);
-                gsPhysicalRaf = null;
-            }
-            hideVirtualGamepad();
-            disconnectGamepad();
+addControlButton(
+    'gamestreamGamepadToggleBtn',
+    'Gamepad',
+    'M21 6H3c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-10 7H8v3H6v-3H3v-2h3V8h2v3h3v2zm4.5 2c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm4-3c-.83 0-1.5-.67-1.5-1.5S18.67 9 19.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z'
+).addEventListener('click', () => {
+    gsGamepadEnabled = !gsGamepadEnabled;
+    const btn = document.getElementById('gamestreamGamepadToggleBtn');
+    if (btn) btn.classList.toggle('active', gsGamepadEnabled);
+    if (gsGamepadEnabled) {
+        gsPadState.activeMask = 0x01;
+        showVirtualGamepad();
+        sendGamepadState(true);
+        pollPhysicalGamepads();
+    } else {
+        if (gsPhysicalRaf) {
+            cancelAnimationFrame(gsPhysicalRaf);
+            gsPhysicalRaf = null;
         }
+        hideVirtualGamepad();
+        disconnectGamepad();
     }
-);
+});
