@@ -697,6 +697,10 @@ function openModal(id) {
 function closeModal(id) {
     const dialog = document.getElementById(id);
     if (dialog) {
+        const container = document.getElementById('toast-container');
+        if (container && dialog.contains(container)) {
+            document.body.appendChild(container);
+        }
         dialog.close();
     }
     if (id === 'configModal') {
@@ -923,6 +927,13 @@ function saveDeviceConfig() {
 
 function showToast(message, type = 'success') {
     const container = document.getElementById('toast-container');
+    // Native <dialog>.showModal() renders in the browser Top Layer above body z-index;
+    // mount the toast container inside the active modal so it is never covered.
+    const activeDialog = document.querySelector('dialog[open]');
+    const host = activeDialog || document.body;
+    if (container.parentElement !== host) {
+        host.appendChild(container);
+    }
     const toast = document.createElement('div');
     toast.className = `toast ${type === 'error' ? 'error' : ''}`;
     toast.innerHTML = `
