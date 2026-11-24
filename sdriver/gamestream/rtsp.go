@@ -3,8 +3,12 @@ package gamestream
 import (
 	"bufio"
 	"bytes"
+	"crypto/aes"
+	"crypto/cipher"
+	"encoding/binary"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/url"
 	"strconv"
@@ -20,6 +24,9 @@ const (
 	nvffBase            = 0x07
 	nvffAudioEncryption = 0x20
 	nvffRiEncryption    = 0x80
+
+	encryptedRTSPBit    = uint32(0x80000000)
+	encRTSPHeaderLength = 24 // 4B typeAndLength + 4B seq + 16B tag
 )
 
 type rtspResult struct {
@@ -49,9 +56,13 @@ type rtspClient struct {
 	clientVersion int
 	cseq          int
 	sessionID     string
+	encrypted     bool
+	encSeq        uint32
+	aead          cipher.AEAD
 }
 
 func performRTSPHandshake(hs *httpSession, cfg *streamConfig) (*rtspResult, error) {
+	log.Printf("[gamestream] starting RTSP handshake (sessionUrl0=%q, targetIP=%s)", hs.sessionURL, cfg.ip)
 	u, err := url.Parse(hs.sessionURL)
 	if err != nil {
 		return nil, fmt.Errorf("gamestream: parse sessionUrl %q: %w", hs.sessionURL, err)
@@ -62,6 +73,19 @@ func performRTSPHandshake(hs *httpSession, cfg *streamConfig) (*rtspResult, erro
 	port := u.Port()
 	if port == "" {
 		port = "48010"
+	}
+
+	encrypted := strings.EqualFold(u.Scheme, "rtspenc")
+	var aead cipher.AEAD
+	if encrypted {
+		blk, err := aes.NewCipher(hs.rikey[:])
+		if err != nil {
+			return nil, err
+		}
+		aead, err = cipher.NewGCM(blk)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	clientVer := 14
@@ -76,11 +100,22 @@ func performRTSPHandshake(hs *httpSession, cfg *streamConfig) (*rtspResult, erro
 		clientVer = 13
 	}
 
+	targetURL := hs.sessionURL
+	if targetURL == "" {
+		scheme := "rtsp"
+		if encrypted {
+			scheme = "rtspenc"
+		}
+		targetURL = fmt.Sprintf("%s://%s:%s", scheme, host, port)
+	}
+
 	rc := &rtspClient{
 		host:          host,
 		port:          port,
-		targetURL:     fmt.Sprintf("rtsp://%s:%s", host, port),
+		targetURL:     targetURL,
 		clientVersion: clientVer,
+		encrypted:     encrypted,
+		aead:          aead,
 	}
 
 	res := &rtspResult{
@@ -235,7 +270,13 @@ func (rc *rtspClient) do(method, target string, headers map[string]string, body 
 		sb.WriteString(body)
 	}
 
-	if _, err := conn.Write([]byte(sb.String())); err != nil {
+	wire := []byte(sb.String())
+	if rc.encrypted {
+		rc.encSeq++
+		wire = sealRTSPMessage(rc.aead, rc.encSeq, wire)
+	}
+
+	if _, err := conn.Write(wire); err != nil {
 		return nil, err
 	}
 
@@ -243,7 +284,56 @@ func (rc *rtspClient) do(method, target string, headers map[string]string, body 
 	if err != nil && len(raw) == 0 {
 		return nil, err
 	}
+	if rc.encrypted && len(raw) > 0 {
+		plain, err := unsealRTSPMessage(rc.aead, raw)
+		if err != nil {
+			return nil, err
+		}
+		raw = plain
+	}
 	return parseRTSPResponse(raw)
+}
+
+func sealRTSPMessage(aead cipher.AEAD, seq uint32, plaintext []byte) []byte {
+	var iv [12]byte
+	binary.LittleEndian.PutUint32(iv[0:4], seq)
+	iv[10] = 'C'
+	iv[11] = 'R'
+
+	sealed := aead.Seal(nil, iv[:], plaintext, nil)
+	ctLen := len(plaintext)
+	ct := sealed[:ctLen]
+	tag := sealed[ctLen:]
+
+	out := make([]byte, encRTSPHeaderLength+ctLen)
+	binary.BigEndian.PutUint32(out[0:4], encryptedRTSPBit|uint32(ctLen))
+	binary.BigEndian.PutUint32(out[4:8], seq)
+	copy(out[8:24], tag)
+	copy(out[24:], ct)
+	return out
+}
+
+func unsealRTSPMessage(aead cipher.AEAD, raw []byte) ([]byte, error) {
+	if len(raw) <= encRTSPHeaderLength {
+		return nil, fmt.Errorf("encrypted rtsp response too short (%d bytes)", len(raw))
+	}
+	typeAndLen := binary.BigEndian.Uint32(raw[0:4])
+	if typeAndLen&encryptedRTSPBit == 0 {
+		return nil, fmt.Errorf("expected encrypted rtsp response")
+	}
+	seq := binary.BigEndian.Uint32(raw[4:8])
+	tag := raw[8:24]
+	ct := raw[24:]
+
+	var iv [12]byte
+	binary.LittleEndian.PutUint32(iv[0:4], seq)
+	iv[10] = 'H'
+	iv[11] = 'R'
+
+	sealed := make([]byte, len(ct)+len(tag))
+	copy(sealed, ct)
+	copy(sealed[len(ct):], tag)
+	return aead.Open(nil, iv[:], sealed, nil)
 }
 
 func parseRTSPResponse(raw []byte) (*rtspMessage, error) {
