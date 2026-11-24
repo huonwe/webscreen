@@ -8,6 +8,8 @@ import (
 	"webscreen/sdriver"
 )
 
+var _ sdriver.SDriver = (*Driver)(nil)
+
 type Driver struct {
 	cfg       *streamConfig
 	httpSess  *httpSession
