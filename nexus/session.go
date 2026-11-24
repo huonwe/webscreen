@@ -75,6 +75,35 @@ func isKeyFrameVideo(payload []byte, codec string) bool {
 		return false
 	}
 
+	if codec == "h264" {
+		for i := 0; i+4 <= len(payload); {
+			naluSize := int(binary.BigEndian.Uint32(payload[i : i+4]))
+			i += 4
+			if naluSize <= 0 || i+naluSize > len(payload) {
+				break
+			}
+			if payload[i]&0x1f == 5 {
+				return true
+			}
+			i += naluSize
+		}
+	}
+
+	if codec == "h265" || codec == "hevc" {
+		for i := 0; i+4 <= len(payload); {
+			naluSize := int(binary.BigEndian.Uint32(payload[i : i+4]))
+			i += 4
+			if naluSize <= 0 || i+naluSize > len(payload) {
+				break
+			}
+			nalType := (payload[i] >> 1) & 0x3f
+			if nalType >= 16 && nalType <= 21 {
+				return true
+			}
+			i += naluSize
+		}
+	}
+
 	startCodeOffsets := make([]int, 0, 4)
 	for i := 0; i+3 < len(payload); i++ {
 		if payload[i] == 0 && payload[i+1] == 0 && payload[i+2] == 1 {

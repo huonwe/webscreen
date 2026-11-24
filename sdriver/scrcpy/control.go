@@ -8,6 +8,7 @@ import (
 
 func (da *ScrcpyDriver) SendTouchEvent(e *sdriver.TouchEvent) {
 	if da.controlConn == nil {
+		// log.Println("Control connection is nil, cannot send touch event")
 		return
 	}
 	// log.Printf("sending touch event: %v\n", e)
