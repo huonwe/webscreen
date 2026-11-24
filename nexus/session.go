@@ -5,6 +5,7 @@ import (
 	"sync"
 	"webscreen/sdriver"
 
+	"github.com/gorilla/websocket"
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v5"
 )
@@ -37,6 +38,9 @@ type ViewSession struct {
 	dataChannelOrdered   *webrtc.DataChannel
 	dataChannelUnordered *webrtc.DataChannel
 
+	// For WebSocket connections, to store the connection object
+	WSConn *websocket.Conn
+
 	// 所有线路公用的回调，用于处理来自前端的控制命令
 	onMessageCallback func([]byte) error
 
@@ -61,31 +65,48 @@ func (v *ViewSession) PushingAVBox() {
 		return
 	}
 
-	// go func() {
-	for {
-		select {
-		case box := <-v.cacheVideoCh:
-			ts := v.videoTSMapper.NextTimestamp(box)
-			packets := v.videoPacketizer.Packetize(box.Data, 0)
-			for _, packet := range packets {
-				packet.Timestamp = ts
-				_ = v.videoTrack.WriteRTP(packet)
+	if v.ConnectionConfig.Protocol == "websocket" {
+		for {
+			select {
+			case box := <-v.cacheVideoCh:
+				// ts := v.videoTSMapper.NextTimestamp(box)
+				v.WSConn.WriteMessage(websocket.BinaryMessage, append([]byte{0}, box.Data...))
+			case box := <-v.cacheAudioCh:
+				// ts := v.audioTSMapper.NextTimestamp(box)
+				v.WSConn.WriteMessage(websocket.BinaryMessage, append([]byte{1}, box.Data...))
+			case <-v.done:
+				log.Printf("[nexus] ViewSession %s done, exiting PushingBox goroutine", v.SessionID)
+				return
 			}
-			// nalTypeF := func(payloadBuf byte) byte { return (payloadBuf >> 1) & 0x3F }
-			// naltype := nalTypeF(box.Data[0]) // 注意：box.Data 前 4 字节是起始码
-			// log.Printf("[nexus] Pushed video frame: PTS=%d, RTP TS=%d, size=%d bytes, NAL type=%d, sessionID=%s", box.PTS, ts, len(box.Data), naltype, v.SessionID)
-		case box := <-v.cacheAudioCh:
-			// Audio
-			ts := v.audioTSMapper.NextTimestamp(box)
-			packets := v.audioPacketizer.Packetize(box.Data, 0)
-			for _, packet := range packets {
-				packet.Timestamp = ts
-				_ = v.audioTrack.WriteRTP(packet)
+		}
+	}
+
+	if v.ConnectionConfig.Protocol == "webrtc" {
+		for {
+			select {
+			case box := <-v.cacheVideoCh:
+				ts := v.videoTSMapper.NextTimestamp(box)
+				packets := v.videoPacketizer.Packetize(box.Data, 0)
+				for _, packet := range packets {
+					packet.Timestamp = ts
+					_ = v.videoTrack.WriteRTP(packet)
+				}
+				// nalTypeF := func(payloadBuf byte) byte { return (payloadBuf >> 1) & 0x3F }
+				// naltype := nalTypeF(box.Data[0]) // 注意：box.Data 前 4 字节是起始码
+				// log.Printf("[nexus] Pushed video frame: PTS=%d, RTP TS=%d, size=%d bytes, NAL type=%d, sessionID=%s", box.PTS, ts, len(box.Data), naltype, v.SessionID)
+			case box := <-v.cacheAudioCh:
+				// Audio
+				ts := v.audioTSMapper.NextTimestamp(box)
+				packets := v.audioPacketizer.Packetize(box.Data, 0)
+				for _, packet := range packets {
+					packet.Timestamp = ts
+					_ = v.audioTrack.WriteRTP(packet)
+				}
+			// log.Printf("[nexus] Pushed audio frame: PTS=%d, RTP TS=%d, size=%d bytes", box.PTS, ts, len(box.Data))
+			case <-v.done:
+				log.Printf("[nexus] ViewSession %s done, exiting PushingBox goroutine", v.SessionID)
+				return
 			}
-		// log.Printf("[nexus] Pushed audio frame: PTS=%d, RTP TS=%d, size=%d bytes", box.PTS, ts, len(box.Data))
-		case <-v.done:
-			log.Printf("[nexus] ViewSession %s done, exiting PushingBox goroutine", v.SessionID)
-			return
 		}
 	}
 }

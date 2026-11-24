@@ -13,6 +13,7 @@ import (
 	"webscreen/sdriver"
 	"webscreen/sdriver/scrcpy"
 
+	"github.com/gorilla/websocket"
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
 	"github.com/pion/rtp/codecs"
@@ -256,36 +257,41 @@ func (n *Nexus) CloseViewSession(sessionID string) {
 func (n *Nexus) NewViewSession(userID string, config ConnectionConfig) (*ViewSession, error) {
 
 	var packetizer rtp.Packetizer
-	switch config.VideoCodec {
-	case "h264":
-		packetizer = rtp.NewPacketizer(
-			1200, // MTU 大小，通常 1200 左右很安全
-			0,    // Payload Type，Pion 会自动覆盖它，填 0 即可
-			0,    // SSRC (TrackLocalStaticRTP 会自动覆盖它，填 0 即可)
-			&codecs.H264Payloader{},
-			rtp.NewRandomSequencer(), // 随机序列号生成器
-			90000,                    // 视频的基准时钟频率 (WebRTC 规定视频固定为 90kHz)
-		)
-	case "h265":
-		packetizer = rtp.NewPacketizer(
-			1200, // MTU 大小，通常 1200 左右很安全
-			0,    // Payload Type，Pion 会自动覆盖它，填 0 即可
-			0,    // SSRC (TrackLocalStaticRTP 会自动覆盖它，填 0 即可)
-			&codecs.H265Payloader{},
-			rtp.NewRandomSequencer(), // 随机序列号生成器
-			90000,                    // 视频的基准时钟频率 (WebRTC 规定视频固定为 90kHz)
-		)
-	case "av1":
-		packetizer = rtp.NewPacketizer(
-			1200, // MTU 大小，通常 1200 左右很安全
-			0,    // Payload Type，Pion 会自动覆盖它，填 0 即可
-			0,    // SSRC (TrackLocalStaticRTP 会自动覆盖它，填 0 即可)
-			&codecs.AV1Payloader{},
-			rtp.NewRandomSequencer(), // 随机序列号生成器
-			90000,                    // 视频的基准时钟频率 (WebRTC 规定视频固定为 90kHz)
-		)
-	default:
-		return nil, fmt.Errorf("unsupported video codec: %s", config.VideoCodec)
+	if config.Protocol == "webrtc" {
+		switch config.VideoCodec {
+		case "h264":
+			packetizer = rtp.NewPacketizer(
+				1200, // MTU 大小，通常 1200 左右很安全
+				0,    // Payload Type，Pion 会自动覆盖它，填 0 即可
+				0,    // SSRC (TrackLocalStaticRTP 会自动覆盖它，填 0 即可)
+				&codecs.H264Payloader{},
+				rtp.NewRandomSequencer(), // 随机序列号生成器
+				90000,                    // 视频的基准时钟频率 (WebRTC 规定视频固定为 90kHz)
+			)
+		case "h265":
+			packetizer = rtp.NewPacketizer(
+				1200, // MTU 大小，通常 1200 左右很安全
+				0,    // Payload Type，Pion 会自动覆盖它，填 0 即可
+				0,    // SSRC (TrackLocalStaticRTP 会自动覆盖它，填 0 即可)
+				&codecs.H265Payloader{},
+				rtp.NewRandomSequencer(), // 随机序列号生成器
+				90000,                    // 视频的基准时钟频率 (WebRTC 规定视频固定为 90kHz)
+			)
+		case "av1":
+			packetizer = rtp.NewPacketizer(
+				1200, // MTU 大小，通常 1200 左右很安全
+				0,    // Payload Type，Pion 会自动覆盖它，填 0 即可
+				0,    // SSRC (TrackLocalStaticRTP 会自动覆盖它，填 0 即可)
+				&codecs.AV1Payloader{},
+				rtp.NewRandomSequencer(), // 随机序列号生成器
+				90000,                    // 视频的基准时钟频率 (WebRTC 规定视频固定为 90kHz)
+			)
+		default:
+			return nil, fmt.Errorf("unsupported video codec: %s", config.VideoCodec)
+		}
+	}
+	if config.Protocol == "websocket" {
+
 	}
 	sessionID := uuid.New().String()
 	viewSession := &ViewSession{
@@ -470,7 +476,35 @@ func (v *ViewSession) connectToNexus(n *Nexus, cfg ConnectionConfig) error {
 	case "webtransport":
 		// Implement WebTransport connection logic here
 	case "websocket":
-		// Implement WebSocket connection logic here
+		if v.WSConn == nil {
+			return errors.New("WebSocket connection is not established")
+		}
+		v.WSConn.SetCloseHandler(func(code int, text string) error {
+			log.Printf("WebSocket connection closed: %d - %s", code, text)
+			n.CloseViewSession(v.SessionID)
+			return nil
+		})
+		// v.WSConn.WriteJSON(map[string]any{"status": "ok", "message": "WebSocket connection established"})
+		go func() {
+			for {
+				// Handle WebSocket messages
+				mtype, message, err := v.WSConn.ReadMessage()
+				if err != nil {
+					log.Printf("Error reading WebSocket message: %v", err)
+					return
+				}
+				log.Printf("Received WebSocket message: %s", string(message))
+				switch mtype {
+				case websocket.TextMessage:
+					log.Printf("Text message received: %s", string(message))
+				case websocket.BinaryMessage:
+					err := v.onMessageCallback(message)
+					if err != nil {
+						log.Printf("Error handling binary WebSocket message: %v", err)
+					}
+				}
+			}
+		}()
 	default:
 		return errors.New("Unsupported protocol: " + cfg.Protocol)
 	}

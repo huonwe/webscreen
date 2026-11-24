@@ -70,14 +70,19 @@ func (wm *WebMaster) handleScreenWSN(c *gin.Context) {
 		conn.WriteJSON(map[string]any{"status": "error", "message": err.Error(), "stage": "connection_view_session"})
 		return
 	}
-	conn.WriteJSON(map[string]any{"status": "ok", "view_session_id": viewSession.SessionID, "stage": "connection_view_session"})
-	finalSDP := viewSession.FinalSDP2Nexus
-	if finalSDP == "" {
-		log.Println("Failed to create view session: Final SDP is empty")
-		conn.WriteJSON(map[string]any{"status": "error", "message": "Failed to create view session: Final SDP is empty", "stage": "connection_view_session"})
-		return
+	if connectionConfig.Protocol == "websocket" {
+		viewSession.WSConn = conn
+		conn.WriteJSON(map[string]any{"status": "ok", "useWSTransport": true, "message": "WebSocket connection established", "stage": "connection_view_session"})
 	}
-	conn.WriteJSON(map[string]any{"status": "ok", "sdp": finalSDP, "stage": "connection_view_session"})
+	if connectionConfig.Protocol == "webrtc" {
+		finalSDP := viewSession.FinalSDP2Nexus
+		if finalSDP == "" {
+			log.Println("Failed to create view session: Final SDP is empty")
+			conn.WriteJSON(map[string]any{"status": "error", "message": "Failed to create view session: Final SDP is empty", "stage": "connection_view_session"})
+			return
+		}
+		conn.WriteJSON(map[string]any{"status": "ok", "sdp": finalSDP, "stage": "connection_view_session"})
+	}
 	remoteConfig := nexus.RemoteConfig{}
 	err = conn.ReadJSON(&remoteConfig)
 	if err != nil {
