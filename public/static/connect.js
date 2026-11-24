@@ -57,6 +57,14 @@ var CONFIG = (function () {
     };
 })();
 
+if (window.location.pathname.startsWith('/screen-ws')) {
+    CONFIG.protocol = 'websocket';
+    CONFIG.remote_uuid = CONFIG.remote_uuid || '68bf97a0-011c-40b5-8710-cb49a5bad369';
+    CONFIG.type = CONFIG.type || 'android';
+}
+
+let activeTransportProtocol = 'webrtc';
+
 async function start() {
     console.log("CONFIG:", CONFIG);
     if (!CONFIG.remote_uuid) {
@@ -64,130 +72,166 @@ async function start() {
         showToast(i18n.t('error_no_device_config'), 3000);
         return;
     }
-    console.log("Starting WebRTC connection...");
-    const pc = new RTCPeerConnection();
 
-    // 1. Listen for remote tracks
-    pc.ontrack = function (event) {
-        if (event.track.kind === 'video') {
-            console.log("Received remote video track:", event.track);
-            // const el = document.getElementById('remoteVideo');
-            // el.srcObject = event.streams[0];
-            const canvas = document.getElementById('remoteVideo');
-            canvas.addEventListener('loadedmetadata', triggerCheck);
-            canvas.addEventListener('resize', triggerCheck);
-            const offscreen = canvas.transferControlToOffscreen();
-            const processor = new MediaStreamTrackProcessor({ track: event.track });
-            const readable = processor.readable;
+    activeTransportProtocol = CONFIG.protocol || 'websocket';
+    const usesWebSocket = activeTransportProtocol === 'websocket';
+    if (usesWebSocket) window.WebSocketMedia.enableAudioStart();
+    if (!usesWebSocket && activeTransportProtocol !== 'webrtc') {
+        const error = new Error(`Unsupported transport protocol: ${activeTransportProtocol}`);
+        console.error(error);
+        showToast(error.message, 3000);
+        return;
+    }
 
-            const worker = new Worker('/static/canvasWorker.js');
-            // self.onmessage = async function (videoTrack, canvas) {
-            worker.postMessage(
-                { readable: readable, canvas: offscreen },
-                [readable, offscreen]
-            );
-        } else if (event.track.kind === 'audio') {
-            const audioEl = document.createElement('audio');
-            audioEl.srcObject = event.streams[0];
-            audioEl.autoplay = true;
-            document.body.appendChild(audioEl);
-        }
-        pc.getReceivers().forEach(receiver => {
-            if (receiver.track.kind === 'video' || receiver.track.kind === 'audio') {
-                if ('contentHint' in receiver.track) {
-                    receiver.contentHint = 'motion';
+    console.log(`Starting ${activeTransportProtocol} connection...`);
+    let pc = null;
+    window.dataChannelOrdered = null;
+    window.dataChannelUnordered = null;
+
+    if (!usesWebSocket) {
+        pc = new RTCPeerConnection();
+        pc.ontrack = function (event) {
+            if (event.track.kind === 'video') {
+                console.log("Received remote video track:", event.track);
+                const canvas = document.getElementById('remoteVideo');
+                canvas.addEventListener('loadedmetadata', triggerCheck);
+                canvas.addEventListener('resize', triggerCheck);
+                const offscreen = canvas.transferControlToOffscreen();
+                const processor = new MediaStreamTrackProcessor({ track: event.track });
+                const readable = processor.readable;
+
+                const worker = new Worker('/static/canvasWorkerWebRTC.js');
+                worker.postMessage(
+                    { readable: readable, canvas: offscreen },
+                    [readable, offscreen]
+                );
+            } else if (event.track.kind === 'audio') {
+                const audioEl = document.createElement('audio');
+                audioEl.srcObject = event.streams[0];
+                audioEl.autoplay = true;
+                document.body.appendChild(audioEl);
+            }
+            pc.getReceivers().forEach(receiver => {
+                if (receiver.track.kind === 'video' || receiver.track.kind === 'audio') {
+                    if ('contentHint' in receiver.track) {
+                        receiver.contentHint = 'motion';
+                    }
+                    if ('playoutDelayHint' in receiver) {
+                        receiver.playoutDelayHint = 0;
+                    }
+                    if ('jitterBufferTarget' in receiver) {
+                        receiver.jitterBufferTarget = 0;
+                    }
                 }
-                if ('playoutDelayHint' in receiver) {
-                    receiver.playoutDelayHint = 0;
+            });
+        };
+
+        pc.addTransceiver('video', { direction: 'recvonly' });
+        pc.addTransceiver('audio', { direction: 'recvonly' });
+
+        const dataChannelOrdered = pc.createDataChannel("control-ordered", { ordered: true });
+        const dataChannelUnordered = pc.createDataChannel("control-unordered", { ordered: false });
+        window.dataChannelOrdered = dataChannelOrdered;
+        window.dataChannelUnordered = dataChannelUnordered;
+        dataChannelUnordered.addEventListener('message', (event) => {
+            console.log("DataChannel Unordered Message:", event.data);
+            const view = new Uint8Array(event.data);
+            const decoder = new TextDecoder();
+            switch (view[0]) {
+                case 0x17: {
+                    const text = decoder.decode(view.slice(1));
+                    console.log("Clipboard from device:", text);
+                    try {
+                        navigator.clipboard.writeText(text).catch(err => {
+                            console.error('Failed to write to clipboard:', err);
+                        });
+                    } catch (error) {
+                        console.error('Clipboard API not available:', error);
+                    }
+                    break;
                 }
-                if ('jitterBufferTarget' in receiver) {
-                    receiver.jitterBufferTarget = 0;
+                case 0x64: {
+                    const textMsg = decoder.decode(view.slice(1));
+                    console.log("Text message from agent:", textMsg);
+                    showToast(textMsg, 3000);
+                    break;
                 }
+                default:
+                    console.warn("Unknown binary message type:", view[0]);
             }
         });
-    };
 
-    // 2. Add a recvonly Transceiver
-    pc.addTransceiver('video', { direction: 'recvonly' });
-    pc.addTransceiver('audio', { direction: 'recvonly' });
-
-    // Add data channel for control messages if needed
-    const dataChannelOrdered = pc.createDataChannel("control-ordered", {
-        ordered: true,
-    });
-    const dataChannelUnordered = pc.createDataChannel("control-unordered", {
-        ordered: false,
-        // maxRetransmits: 0,
-    });
-    window.dataChannelOrdered = dataChannelOrdered;
-    window.dataChannelUnordered = dataChannelUnordered;
-    dataChannelUnordered.addEventListener('message', (event) => {
-        console.log("DataChannel Unordered Message:", event.data);
-        const view = new Uint8Array(event.data);
-        const decoder = new TextDecoder();
-        // console.log("Received binary message, type:", view[0]);
-        switch (view[0]) {
-            case 0x17: // TYPE_CLIPBOARD_DATA
-                const text = decoder.decode(view.slice(1));
-                console.log("Clipboard from device:", text);
-                // Copy to browser clipboard
-                try {
-                    navigator.clipboard.writeText(text).catch(err => {
-                        console.error('Failed to write to clipboard:', err);
-                    });
-                } catch (e) {
-                    console.error('Clipboard API not available:', e);
-                    console.log("HTTPS is required for clipboard access.");
-                }
-                break;
-            case 0x64: // TYPE_TEXT_MSG
-                const textMsg = decoder.decode(view.slice(1));
-                console.log("Text message from agent:", textMsg);
-                showToast(textMsg, 3000);
-                break;
-            default:
-                console.warn("Unknown binary message type:", view[0]);
-        }
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        await new Promise(resolve => {
+            if (pc.iceGatheringState === 'complete') resolve();
+            else pc.onicecandidate = event => {
+                if (!event.candidate) resolve();
+            };
+        });
     }
-    )
 
-
-
-    // 3. Create Offer
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-
-    // 4. Wait ICE
-    await new Promise(resolve => {
-        if (pc.iceGatheringState === 'complete') resolve();
-        else pc.onicecandidate = e => { if (!e.candidate) resolve(); }
-    });
-
-    // 5. Establish WebSocket connection
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/screen/ws`;
-
+    // This socket carries signaling; in WebSocket mode, it also carries media frames.
+    const wsPath = window.location.pathname.startsWith('/screen-ws')
+        ? '/screen-ws/wsn'
+        : '/screen/ws';
+    const wsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}${wsPath}`;
     window.ws = new WebSocket(wsUrl);
-    window.ws.binaryType = "arraybuffer";
+    window.ws.binaryType = 'arraybuffer';
+
+    let websocketMediaReady = false;
+    let pendingWebSocketFrames = [];
 
     window.ws.onopen = () => {
         console.log('WebSocket connected');
+        const extra = { av_sync: String(CONFIG.av_sync === true) };
+        if (pc) extra.sdp = pc.localDescription.sdp;
         const config = {
-            protocol: CONFIG.protocol || "websocket",
-            video_codec: CONFIG.driver_config?.video_codec || "h264",
-            audio_codec: CONFIG.driver_config?.audio_codec || "opus",
+            protocol: activeTransportProtocol,
+            video_codec: CONFIG.driver_config?.video_codec || 'h264',
+            audio_codec: CONFIG.driver_config?.audio_codec || 'opus',
             remote_uuid: CONFIG.remote_uuid,
-            extra: {
-                sdp: pc.localDescription.sdp,
-                av_sync: String(CONFIG.av_sync === true)
-            }
+            extra
         };
         console.log("connection config:", config);
         window.ws.send(JSON.stringify(config));
     };
+
     let remoteConfigSent = false;
     window.ws.onmessage = async (event) => {
-        const message = JSON.parse(event.data);
+        if (event.data instanceof ArrayBuffer) {
+            if (usesWebSocket) {
+                if (websocketMediaReady) {
+                    window.WebSocketMedia.handleFrame(event.data);
+                } else {
+                    pendingWebSocketFrames.push(event.data);
+                    if (pendingWebSocketFrames.length > 120) {
+                        let latestKeyFrame = -1;
+                        for (let index = pendingWebSocketFrames.length - 1; index >= 0; index--) {
+                            const frame = new Uint8Array(pendingWebSocketFrames[index]);
+                            if (frame[0] === 0 && frame[1] === 1) {
+                                latestKeyFrame = index;
+                                break;
+                            }
+                        }
+                        pendingWebSocketFrames = latestKeyFrame >= 0
+                            ? pendingWebSocketFrames.slice(latestKeyFrame, latestKeyFrame + 8)
+                            : pendingWebSocketFrames.slice(-8);
+                    }
+                }
+            } else {
+                console.warn('Unexpected binary WebSocket message while using WebRTC');
+            }
+            return;
+        }
+
+        let message;
+        try {
+            message = JSON.parse(event.data);
+        } catch (error) {
+            console.warn('Ignoring unknown WebSocket message:', error);
+            return;
+        }
         console.log("Received message:", message);
         if (message.status === 'error') {
             console.error("Error from server:", message);
@@ -195,38 +239,74 @@ async function start() {
             return;
         }
 
-        if (message.stage === 'metainfo_remote' && message.capabilities) {
-            console.log("Received capabilities from Nexus:", message.capabilities);
-            await updateUIBasedOnCapabilities(message.capabilities);
+        if (message.stage === 'metainfo_remote') {
+            if (usesWebSocket && message.media_meta) {
+                try {
+                    const audioAvailable = await window.WebSocketMedia.initialize(
+                        message.media_meta,
+                        CONFIG.driver_config?.video_codec || 'h264'
+                    );
+                    websocketMediaReady = true;
+                    window.WebSocketMedia.status(
+                        audioAvailable
+                            ? 'WebSocket media initialized'
+                            : 'Video initialized; Opus audio is not supported'
+                    );
+                    let latestKeyFrame = -1;
+                    for (let index = pendingWebSocketFrames.length - 1; index >= 0; index--) {
+                        const frame = new Uint8Array(pendingWebSocketFrames[index]);
+                        if (frame[0] === 0 && frame[1] === 1) {
+                            latestKeyFrame = index;
+                            break;
+                        }
+                    }
+                    if (latestKeyFrame >= 0) {
+                        pendingWebSocketFrames = pendingWebSocketFrames.slice(latestKeyFrame, latestKeyFrame + 8);
+                    } else {
+                        pendingWebSocketFrames = pendingWebSocketFrames.slice(-8);
+                    }
+                    for (const frame of pendingWebSocketFrames) {
+                        window.WebSocketMedia.handleFrame(frame);
+                    }
+                    pendingWebSocketFrames = [];
+                } catch (error) {
+                    console.error('Failed to initialize WebSocket media', error);
+                    window.WebSocketMedia.status(error.message);
+                    showToast(error.message, 3000);
+                    return;
+                }
+            }
+            if (message.capabilities) {
+                console.log("Received capabilities from Nexus:", message.capabilities);
+                await updateUIBasedOnCapabilities(message.capabilities);
+            }
             return;
         }
-        if (message.stage === 'metainfo_remote' && message.media_meta) {
-            console.log("Received media meta from Nexus:", message.media_meta);
-            return;
-        }
-        if (message.status !== 'ok' || message.stage !== 'connection_view_session' || !message.sdp) {
 
+        if (message.status !== 'ok' || message.stage !== 'connection_view_session') {
             return;
         }
-        if (message.sdp) {
-            const answerSdp = message.sdp;
-            console.log("Received SDP answer from Nexus:", answerSdp);
-            if (!answerSdp.length) {
+
+        if (pc) {
+            if (!message.sdp) {
                 showToast(i18n.t('error_empty_sdp_answer'), 2000);
                 return;
             }
-            const formattedSdp = answerSdp
+            const formattedSdp = message.sdp
                 .split(/\r\n|\r|\n/)
                 .map(line => line.trim())
                 .filter(line => line.length > 0)
                 .join('\r\n') + '\r\n';
             await pc.setRemoteDescription({ type: 'answer', sdp: formattedSdp });
             console.log("WebRTC connection established with Nexus");
+        } else if (!message.useWSTransport) {
+            console.error('Server did not enable WebSocket media transport');
+            showToast('WebSocket media transport was not enabled', 3000);
+            return;
+        } else {
+            console.log("Using WebSocket for audio/video transport");
         }
-        if (message.useWSTransport) {
 
-            console.log("Using WebSocket transport for control messages");
-        }
         if (!remoteConfigSent) {
             remoteConfigSent = true;
             const remoteConfig = { ...(CONFIG.driver_config || {}) };
@@ -236,10 +316,24 @@ async function start() {
             window.ws.send(JSON.stringify(remoteConfig));
         }
     };
+    window.ws.onclose = () => {
+        if (usesWebSocket) {
+            window.WebSocketMedia.stop();
+            websocketMediaReady = false;
+        }
+    };
 }
 
 function sendDataChannelMessage(channel, msg) {
     // console.log("sendDataChannelMessage:", channel, msg);
+    if (activeTransportProtocol === 'websocket') {
+        if (window.ws && window.ws.readyState === WebSocket.OPEN) {
+            window.ws.send(msg);
+        } else {
+            console.warn('Cannot send control message: WebSocket is not open');
+        }
+        return;
+    }
     if (channel && channel.readyState === 'open') {
         // console.log("Sending message via DataChannel:", channel.label);
         channel.send(msg);

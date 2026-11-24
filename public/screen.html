@@ -9,12 +9,8 @@
     <link rel="stylesheet" href="/static/screen.css">
     <script src="/static/i18n.js"></script>
     <script src="/static/ui.js" defer></script>
-    <script>
-        const connectionScript = document.createElement('script');
-        connectionScript.src = '/static/connect.js';
-        connectionScript.defer = true;
-        document.head.appendChild(connectionScript);
-    </script>
+    <script src="/static/connect-ws.js" defer></script>
+    <script src="/static/connect.js" defer></script>
     <script src="/static/fullscreen.js" defer></script>
     <script src="/static/screen.js" defer></script>
     <!-- Capability controls are created by their modules after negotiation. -->
