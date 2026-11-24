@@ -67,12 +67,12 @@
         function checkOrientation() {
             if (window.MANNUAL_ROTATE) return;
             const video = document.getElementById('remoteVideo');
-            if (!video.videoWidth || !video.videoHeight) return;
+            if (!video.width || !video.height) return;
 
             const isPagePortrait = window.innerHeight > window.innerWidth;
-            const isVideoLandscape = video.videoWidth > video.videoHeight;
+            const isVideoLandscape = video.width > video.height;
             const isPageLandscape = window.innerWidth > window.innerHeight;
-            const isVideoPortrait = video.videoHeight > video.videoWidth;
+            const isVideoPortrait = video.height > video.width;
 
             if ((isPagePortrait && isVideoLandscape) ||
                 (isPageLandscape && isVideoPortrait)) {
