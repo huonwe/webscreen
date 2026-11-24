@@ -56,10 +56,9 @@ func performRTSPHandshake(hs *httpSession, cfg *streamConfig) (*rtspResult, erro
 	if err != nil {
 		return nil, fmt.Errorf("gamestream: parse sessionUrl %q: %w", hs.sessionURL, err)
 	}
-	host := u.Hostname()
-	if host == "" {
-		host = cfg.ip
-	}
+	// Always dial the configured host IP (cfg.ip) rather than the hostname in sessionUrl0,
+	// because servers behind NAT/Docker (such as Wolf) may report a WAN or container IP there.
+	host := cfg.ip
 	port := u.Port()
 	if port == "" {
 		port = "48010"
