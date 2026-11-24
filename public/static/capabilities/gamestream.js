@@ -89,7 +89,10 @@ function getVideoCoords(clientX, clientY) {
     }
     const video = document.getElementById('remoteVideo');
     if (!video) return null;
-    const rect = window.cachedRect && window.cachedRect.VideoRect ? window.cachedRect.VideoRect : video.getBoundingClientRect();
+    if ((!window.cachedRect || !window.cachedRect.MediaWidth) && typeof window.updateVideoCache === 'function') {
+        window.updateVideoCache();
+    }
+    const rect = video.getBoundingClientRect();
     const content = window.cachedRect && window.cachedRect.ContentRect && window.cachedRect.ContentRect.width > 0
         ? window.cachedRect.ContentRect
         : { left: 0, top: 0, width: rect.width, height: rect.height };

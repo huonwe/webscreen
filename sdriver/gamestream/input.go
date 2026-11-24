@@ -208,7 +208,7 @@ func (d *Driver) sendTouchEvent(e *sdriver.TouchEvent) error {
 	binary.BigEndian.PutUint32(pkt[0:4], 32)
 	binary.LittleEndian.PutUint32(pkt[4:8], magicTouch)
 	pkt[8] = evType
-	binary.LittleEndian.PutUint16(pkt[10:12], 0xFFFF)
+	binary.LittleEndian.PutUint16(pkt[10:12], 0)
 	binary.LittleEndian.PutUint32(pkt[12:16], uint32(e.PointerID))
 	binary.LittleEndian.PutUint32(pkt[16:20], math.Float32bits(nx))
 	binary.LittleEndian.PutUint32(pkt[20:24], math.Float32bits(ny))
