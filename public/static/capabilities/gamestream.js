@@ -1,7 +1,12 @@
 import { addControlButton } from './control_ui.js';
 
+const TYPE_MOUSE = 0x01;
 const TYPE_TOUCH = 0x02;
 const TYPE_GAMEPAD = 0x11;
+
+const MOUSE_DOWN = 0;
+const MOUSE_UP = 1;
+const MOUSE_MOVE = 2;
 
 const TOUCH_MOVE = 0;
 const TOUCH_DOWN = 1;
@@ -58,8 +63,25 @@ function sendUnorderedPacket(buf) {
 }
 
 // =========================================================================
-// 1. GameStream Touch
+// 1. GameStream Trackpad (Default) & Touch Screen (Toggleable)
 // =========================================================================
+
+function sendMousePacket(action, dx, dy, buttons, wheelX, wheelY) {
+    const buf = new ArrayBuffer(18);
+    const v = new DataView(buf);
+    v.setUint8(0, TYPE_MOUSE);
+    v.setUint8(1, action);
+    v.setInt32(2, Math.round(dx), false);
+    v.setInt32(6, Math.round(dy), false);
+    v.setUint32(10, buttons >>> 0, false);
+    v.setInt16(14, Math.round(wheelX), false);
+    v.setInt16(16, Math.round(wheelY), false);
+    if (action === MOUSE_MOVE && wheelX === 0 && wheelY === 0) {
+        sendUnorderedPacket(buf);
+    } else {
+        sendOrderedPacket(buf);
+    }
+}
 
 function getVideoCoords(clientX, clientY) {
     if (typeof window.getScreenCoordinates === 'function') {
@@ -103,12 +125,28 @@ function sendTouchPacket(action, ptrId, x, y, pressure) {
 
 const activeTouches = new Map();
 
-function initGameStreamTouch() {
+function initGameStreamTouchAndTrackpad() {
     const video = document.getElementById('remoteVideo');
     if (!video) return;
 
-    const handleTouch = (event, action) => {
-        if (!gsTouchEnabled) return;
+    // --- Trackpad state (active when !gsTouchEnabled) ---
+    const TRACKPAD_SENSITIVITY = 1.5;
+    let tpMode = 'idle'; // 'idle' | 'one' | 'two'
+    let tpStartTime = 0;
+    let tpMovedDist = 0;
+    let tpLastX = 0;
+    let tpLastY = 0;
+    let tpAccumX = 0;
+    let tpAccumY = 0;
+    let tpScrollAccumX = 0;
+    let tpScrollAccumY = 0;
+
+    const avgTwoFingers = (touches) => ({
+        x: (touches[0].clientX + touches[1].clientX) / 2,
+        y: (touches[0].clientY + touches[1].clientY) / 2,
+    });
+
+    const handleDirectTouch = (event, action) => {
         event.preventDefault();
         for (let i = 0; i < event.changedTouches.length; i++) {
             const t = event.changedTouches[i];
@@ -131,10 +169,97 @@ function initGameStreamTouch() {
         }
     };
 
-    video.addEventListener('touchstart', (e) => handleTouch(e, TOUCH_DOWN), { passive: false });
-    video.addEventListener('touchmove', (e) => handleTouch(e, TOUCH_MOVE), { passive: false });
-    video.addEventListener('touchend', (e) => handleTouch(e, TOUCH_UP), { passive: false });
-    video.addEventListener('touchcancel', (e) => handleTouch(e, TOUCH_UP), { passive: false });
+    video.addEventListener('touchstart', (e) => {
+        if (gsTouchEnabled) {
+            handleDirectTouch(e, TOUCH_DOWN);
+            return;
+        }
+        e.preventDefault();
+        if (e.touches.length === 1) {
+            tpMode = 'one';
+            tpStartTime = Date.now();
+            tpMovedDist = 0;
+            tpAccumX = 0;
+            tpAccumY = 0;
+            tpLastX = e.touches[0].clientX;
+            tpLastY = e.touches[0].clientY;
+        } else if (e.touches.length === 2) {
+            tpMode = 'two';
+            tpStartTime = Date.now();
+            tpMovedDist = 0;
+            tpScrollAccumX = 0;
+            tpScrollAccumY = 0;
+            const avg = avgTwoFingers(e.touches);
+            tpLastX = avg.x;
+            tpLastY = avg.y;
+        }
+    }, { passive: false });
+
+    video.addEventListener('touchmove', (e) => {
+        if (gsTouchEnabled) {
+            handleDirectTouch(e, TOUCH_MOVE);
+            return;
+        }
+        e.preventDefault();
+        if (tpMode === 'one' && e.touches.length === 1) {
+            const dx = e.touches[0].clientX - tpLastX;
+            const dy = e.touches[0].clientY - tpLastY;
+            tpLastX = e.touches[0].clientX;
+            tpLastY = e.touches[0].clientY;
+            tpMovedDist += Math.hypot(dx, dy);
+
+            tpAccumX += dx * TRACKPAD_SENSITIVITY;
+            tpAccumY += dy * TRACKPAD_SENSITIVITY;
+            const sendX = Math.trunc(tpAccumX);
+            const sendY = Math.trunc(tpAccumY);
+            if (sendX !== 0 || sendY !== 0) {
+                tpAccumX -= sendX;
+                tpAccumY -= sendY;
+                sendMousePacket(MOUSE_MOVE, sendX, sendY, 0, 0, 0);
+            }
+        } else if (tpMode === 'two' && e.touches.length >= 2) {
+            const avg = avgTwoFingers(e.touches);
+            const dx = avg.x - tpLastX;
+            const dy = avg.y - tpLastY;
+            tpLastX = avg.x;
+            tpLastY = avg.y;
+            tpMovedDist += Math.hypot(dx, dy);
+
+            tpScrollAccumX += dx / 24;
+            tpScrollAccumY += dy / 24;
+            const sx = Math.trunc(tpScrollAccumX);
+            const sy = Math.trunc(tpScrollAccumY);
+            if (sx !== 0 || sy !== 0) {
+                tpScrollAccumX -= sx;
+                tpScrollAccumY -= sy;
+                sendMousePacket(MOUSE_MOVE, 0, 0, 0, sx, sy);
+            }
+        }
+    }, { passive: false });
+
+    const endTrackpadOrTouch = (e) => {
+        if (gsTouchEnabled) {
+            handleDirectTouch(e, TOUCH_UP);
+            return;
+        }
+        e.preventDefault();
+        const elapsed = Date.now() - tpStartTime;
+        if (e.touches.length === 0) {
+            if (tpMode === 'one' && elapsed < 250 && tpMovedDist < 8) {
+                // Single-finger tap -> Left click
+                sendMousePacket(MOUSE_DOWN, 0, 0, 1, 0, 0);
+                sendMousePacket(MOUSE_UP, 0, 0, 1, 0, 0);
+            } else if (tpMode === 'two' && elapsed < 300 && tpMovedDist < 12) {
+                // Two-finger tap -> Right click
+                sendMousePacket(MOUSE_DOWN, 0, 0, 2, 0, 0);
+                sendMousePacket(MOUSE_UP, 0, 0, 2, 0, 0);
+            }
+            tpMode = 'idle';
+        }
+    };
+
+    video.addEventListener('touchend', endTrackpadOrTouch, { passive: false });
+    video.addEventListener('touchcancel', endTrackpadOrTouch, { passive: false });
 }
 
 // =========================================================================
@@ -530,7 +655,7 @@ function pollPhysicalGamepads() {
 // 3. Toolbar Controls
 // =========================================================================
 
-initGameStreamTouch();
+initGameStreamTouchAndTrackpad();
 
 addControlButton(
     'gamestreamTouchToggleBtn',
@@ -541,7 +666,12 @@ addControlButton(
     const btn = document.getElementById('gamestreamTouchToggleBtn');
     if (btn) btn.classList.toggle('active', gsTouchEnabled);
     if (typeof showToast === 'function') {
-        showToast(gsTouchEnabled ? (i18n.t('gamestream_touch_on') || '触控模式已开启') : (i18n.t('gamestream_touch_off') || '触控模式已关闭'), 1500);
+        showToast(
+            gsTouchEnabled
+                ? (i18n.t('gamestream_touch_on') || '触控模式已开启')
+                : (i18n.t('gamestream_trackpad_on') || '触摸板模式已开启'),
+            1500
+        );
     }
 });
 

@@ -10,6 +10,7 @@ const (
 	magicKeyDown           uint32 = 0x00000003
 	magicKeyUp             uint32 = 0x00000004
 	magicMouseAbs          uint32 = 0x00000005
+	magicMouseRel          uint32 = 0x00000007
 	magicMouseBtnDown      uint32 = 0x00000008
 	magicMouseBtnUp        uint32 = 0x00000009
 	magicScroll            uint32 = 0x0000000A
@@ -108,17 +109,18 @@ func (d *Driver) updateModifierState(vk uint16, down bool) {
 }
 
 func (d *Driver) sendMouseEvent(e *sdriver.MouseEvent) error {
-	// Move (abs)
-	pkt := make([]byte, 18) // size(4) + magic(4) + x(2) + y(2) + unused(2) + width(2) + height(2)
-	binary.BigEndian.PutUint32(pkt[0:4], 14)
-	binary.LittleEndian.PutUint32(pkt[4:8], magicMouseAbs)
-	binary.BigEndian.PutUint16(pkt[8:10], uint16(e.PosX))
-	binary.BigEndian.PutUint16(pkt[10:12], uint16(e.PosY))
-	binary.BigEndian.PutUint16(pkt[12:14], 0)
-	binary.BigEndian.PutUint16(pkt[14:16], uint16(d.meta.Width))
-	binary.BigEndian.PutUint16(pkt[16:18], uint16(d.meta.Height))
-	if err := d.ctrl.send(ctrlTypeInputData, pkt, ctrlChannelMouse, false); err != nil {
-		return err
+	dx := int16(int32(e.PosX))
+	dy := int16(int32(e.PosY))
+	if dx != 0 || dy != 0 {
+		// NV_REL_MOUSE_MOVE_PACKET: size(4 BE=8) + magic(4 LE=0x07) + deltaX(2 BE) + deltaY(2 BE) = 12 bytes
+		pkt := make([]byte, 12)
+		binary.BigEndian.PutUint32(pkt[0:4], 8)
+		binary.LittleEndian.PutUint32(pkt[4:8], magicMouseRel)
+		binary.BigEndian.PutUint16(pkt[8:10], uint16(dx))
+		binary.BigEndian.PutUint16(pkt[10:12], uint16(dy))
+		if err := d.ctrl.send(ctrlTypeInputData, pkt, ctrlChannelMouse, false); err != nil {
+			return err
+		}
 	}
 
 	// Button down/up
