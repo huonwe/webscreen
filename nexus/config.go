@@ -30,7 +30,7 @@ func ConfigDescription() []ConfigParamDescription {
 			Required:    true,
 			Default:     "webrtc",
 			Options:     []string{"webrtc", "websocket"},
-			Description: "Connection protocol to use. (Now developing, no real effect yet)",
+			Description: "Connection protocol to use.",
 		},
 	}
 }

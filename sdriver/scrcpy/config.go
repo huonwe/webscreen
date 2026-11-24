@@ -90,7 +90,7 @@ func ConfigDescription(opt string) []sdriver.ConfigParamDescription {
 			Name:        "video_codec_options",
 			Type:        "string",
 			Required:    false,
-			Description: "overwrite video codec options, e.g. profile=1;level=4.1;bitrate=8000000",
+			Description: "overwrite video codec options, e.g. profile=1,level=4.1,bitrate=8000000",
 		},
 		{
 			Name:        "max_size",
