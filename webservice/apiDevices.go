@@ -214,6 +214,7 @@ func (wm *WebMaster) handleGameStreamPair(c *gin.Context) {
 		req.Port = 47989
 	}
 	if err := gamestream.PairDevice(req.IP, req.Port, req.PIN); err != nil {
+		log.Printf("[gamestream] pair %s:%d failed: %v", req.IP, req.Port, err)
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}

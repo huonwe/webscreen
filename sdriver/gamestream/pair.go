@@ -348,23 +348,48 @@ func (s *authStore) pair(ip string, port int, pin string) error {
 		return errors.New("clientpairingsecret rejected")
 	}
 
-	// 6. pairchallenge (authenticated over HTTPS or HTTP depending on host)
-	if err := s.pairChallengeHTTPS(ip, port, serverCert); err != nil {
-		// Fallback to HTTP pairchallenge for hosts that accept it on HTTP
-		resp5, err2 := doPair("phrase=pairchallenge")
-		if err2 != nil || resp5.Paired != 1 {
-			return fmt.Errorf("pairchallenge failed: %v (http fallback: %v)", err, err2)
+	// 6. pairchallenge: try HTTP first (matching Sunshine), then HTTPS, then mTLS /serverinfo check
+	var errHTTP, errHTTPS error
+	if resp5, err := doPair("phrase=pairchallenge"); err == nil && resp5.Paired == 1 {
+		return s.saveServerCert(ip, serverCert)
+	} else {
+		errHTTP = err
+		if errHTTP == nil {
+			errHTTP = fmt.Errorf("http pairchallenge returned paired=%d", resp5.Paired)
 		}
 	}
 
-	return s.saveServerCert(ip, serverCert)
-}
-
-func (s *authStore) pairChallengeHTTPS(ip string, httpPort int, serverCert *x509.Certificate) error {
-	httpsPort := httpPort - 5
+	httpsPort := port - 5
+	if info, err := fetchServerInfoHTTP(httpClient, ip, port); err == nil && info.HttpsPort > 0 {
+		httpsPort = info.HttpsPort
+	}
 	if httpsPort <= 0 {
 		httpsPort = 47984
 	}
+
+	if err := s.pairChallengeHTTPS(ip, httpsPort, serverCert); err == nil {
+		return s.saveServerCert(ip, serverCert)
+	} else {
+		errHTTPS = err
+	}
+
+	// Verify via mTLS /serverinfo in case the host already finalized pairing on step 5
+	if tlsClient, err := s.httpsClient(serverCert); err == nil {
+		u := fmt.Sprintf("https://%s:%d/serverinfo?uniqueid=%s&uuid=%s", ip, httpsPort, defaultUniqueID, defaultUUID)
+		if resp, err := tlsClient.Get(u); err == nil {
+			body, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			var info serverInfo
+			if xml.Unmarshal(body, &info) == nil && info.PairStatus == 1 {
+				return s.saveServerCert(ip, serverCert)
+			}
+		}
+	}
+
+	return fmt.Errorf("pairchallenge failed (http: %v; https: %v)", errHTTP, errHTTPS)
+}
+
+func (s *authStore) pairChallengeHTTPS(ip string, httpsPort int, serverCert *x509.Certificate) error {
 	client, err := s.httpsClient(serverCert)
 	if err != nil {
 		return err
