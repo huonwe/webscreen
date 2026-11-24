@@ -6,8 +6,10 @@ let audioConfig = null;
 let videoNeedsKeyFrame = true;
 let lastVideoTimestamp = -1;
 let lastAudioTimestamp = -1;
+let upscaleEnabled = false;
 
-async function initialize({ canvas, codec, width, height }) {
+async function initialize({ canvas, codec, width, height, upscalingEnabled }) {
+    upscaleEnabled = Boolean(upscalingEnabled);
     if (!self.VideoDecoder || !self.EncodedVideoChunk || !self.AudioDecoder || !self.EncodedAudioChunk) {
         throw new Error('This worker does not support WebCodecs audio/video decoding');
     }
@@ -43,6 +45,17 @@ async function initialize({ canvas, codec, width, height }) {
 
     videoDecoder = new VideoDecoder({
         output(frame) {
+            if (upscaleEnabled) {
+                try {
+                    if (canvas.width !== frame.displayWidth) canvas.width = frame.displayWidth;
+                    if (canvas.height !== frame.displayHeight) canvas.height = frame.displayHeight;
+                    self.postMessage({ type: 'source-frame', frame }, [frame]);
+                } catch (error) {
+                    frame.close();
+                    reportError(`Failed to transfer decoded video: ${error.message}`);
+                }
+                return;
+            }
             try {
                 if (canvas.width !== frame.displayWidth) canvas.width = frame.displayWidth;
                 if (canvas.height !== frame.displayHeight) canvas.height = frame.displayHeight;
@@ -148,6 +161,8 @@ self.onmessage = async (event) => {
             self.postMessage({ type: 'ready', audioAvailable: Boolean(audioDecoder) });
         } else if (type === 'frame') {
             decodeFrame(event.data.buffer);
+        } else if (type === 'upscaling') {
+            upscaleEnabled = Boolean(event.data.enabled);
         } else if (type === 'close') {
             videoDecoder?.close();
             audioDecoder?.close();

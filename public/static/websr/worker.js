@@ -36,12 +36,12 @@ self.onmessage = async (event) => {
     }
 
     if (type === 'frame') {
-        const bitmap = event.data.frame;
+        const frame = event.data.frame;
         try {
             if (!websr) {
                 throw new Error('WebSR worker is not initialized');
             }
-            await websr.render(bitmap);
+            await websr.render(frame);
             self.postMessage({
                 type: 'done',
                 width: outputCanvas.width,
@@ -50,7 +50,7 @@ self.onmessage = async (event) => {
         } catch (error) {
             self.postMessage({ type: 'error', message: error.message || String(error) });
         } finally {
-            bitmap.close();
+            frame.close();
         }
     }
 };

@@ -1,5 +1,6 @@
 let mediaWorker = null;
 let mediaWorkerReady = false;
+let upscaleEnabled = false;
 let audioContext = null;
 let nextAudioTime = 0;
 let audioQueue = [];
@@ -55,6 +56,12 @@ async function initWebCodecs(mediaMeta, videoCodec) {
                 } finally {
                     event.data.audioData.close();
                 }
+            } else if (event.data.type === 'source-frame') {
+                if (typeof window.handleWebSRSourceFrame === 'function') {
+                    window.handleWebSRSourceFrame(event.data.frame);
+                } else {
+                    event.data.frame.close();
+                }
             } else if (event.data.type === 'warning') {
                 console.warn('WebSocket media worker:', event.data.message);
                 status(event.data.message);
@@ -84,7 +91,8 @@ async function initWebCodecs(mediaMeta, videoCodec) {
                 canvas: offscreen,
                 codec: videoCodec || 'h264',
                 width,
-                height
+                height,
+                upscalingEnabled: upscaleEnabled || window.isWebSRSourceEnabled?.() || false
             }, [offscreen]);
         } catch (error) {
             worker.terminate();
@@ -227,10 +235,18 @@ function stopMediaWorker() {
     mediaWorkerReady = false;
 }
 
+function setUpscaling(enabled) {
+    upscaleEnabled = Boolean(enabled);
+    if (mediaWorker) {
+        mediaWorker.postMessage({ type: 'upscaling', enabled: upscaleEnabled });
+    }
+}
+
 window.WebSocketMedia = {
     initialize: initWebCodecs,
     handleFrame: handleMediaFrame,
     enableAudioStart,
     status,
+    setUpscaling,
     stop: stopMediaWorker
 };

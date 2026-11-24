@@ -6,6 +6,7 @@ let resizeObserver = null;
 let isProcessing = false;
 let isReady = false;
 let isShowingOutput = false;
+let pendingSourceFrame = null;
 
 function getSourceCanvas() {
     return document.getElementById('remoteVideo');
@@ -96,25 +97,35 @@ function failUpscaling(error) {
     }
 }
 
-async function sendFrame(generation) {
-    if (!worker || !outputCanvas || generation !== renderGeneration || isProcessing) return;
-    isProcessing = true;
+function sendFrame(frame, generation) {
+    if (!worker || !outputCanvas || generation !== renderGeneration) {
+        frame.close();
+        return;
+    }
+    if (!isReady || isProcessing) {
+        if (pendingSourceFrame) pendingSourceFrame.close();
+        pendingSourceFrame = frame;
+        return;
+    }
 
-    let bitmap;
+    isProcessing = true;
     try {
-        bitmap = await createImageBitmap(getSourceCanvas());
-        if (generation !== renderGeneration || !worker) {
-            bitmap.close();
-            isProcessing = false;
-            return;
-        }
-        worker.postMessage({ type: 'frame', frame: bitmap }, [bitmap]);
+        worker.postMessage({ type: 'frame', frame }, [frame]);
     } catch (error) {
-        if (bitmap) bitmap.close();
+        frame.close();
         isProcessing = false;
         if (generation === renderGeneration) failUpscaling(error);
     }
 }
+
+window.notifySourceFrameUpdated = function (frame) {
+    if (!frame || typeof frame.close !== 'function') return;
+    if (!worker || !outputCanvas || renderGeneration === 0) {
+        frame.close();
+        return;
+    }
+    sendFrame(frame, renderGeneration);
+};
 
 function enableUpscaling(button) {
     const source = getSourceCanvas();
@@ -127,12 +138,17 @@ function enableUpscaling(button) {
     if (!('transferControlToOffscreen' in HTMLCanvasElement.prototype)) {
         throw new Error('This browser does not support OffscreenCanvas');
     }
+    if (typeof window.setWebSRSourceEnabled !== 'function') {
+        throw new Error('The active video pipeline cannot forward source frames');
+    }
 
     createOutputCanvas();
     const generation = ++renderGeneration;
     isProcessing = false;
     isReady = false;
     isShowingOutput = false;
+    pendingSourceFrame = null;
+    window.setWebSRSourceEnabled(true);
 
     const ready = new Promise((resolve, reject) => {
         worker = new Worker(new URL('../websr/worker.js', import.meta.url), {
@@ -158,13 +174,13 @@ function enableUpscaling(button) {
                     isShowingOutput = true;
                     const renderedSource = getSourceCanvas();
                     renderedSource.style.transition = 'opacity 240ms ease';
-                    requestAnimationFrame(() => {
-                        if (generation === renderGeneration && outputCanvas) {
-                            renderedSource.style.opacity = '0';
-                        }
-                    });
+                    renderedSource.style.opacity = '0';
                 }
-                requestAnimationFrame(() => sendFrame(generation));
+                if (pendingSourceFrame) {
+                    const nextFrame = pendingSourceFrame;
+                    pendingSourceFrame = null;
+                    sendFrame(nextFrame, generation);
+                }
             } else if (type === 'error') {
                 const error = new Error(message || 'Unknown WebSR worker error');
                 if (!isReady) reject(error);
@@ -185,7 +201,13 @@ function enableUpscaling(button) {
         }
     });
 
-    return ready.then(() => sendFrame(generation)).catch((error) => {
+    return ready.then(() => {
+        if (pendingSourceFrame) {
+            const firstFrame = pendingSourceFrame;
+            pendingSourceFrame = null;
+            sendFrame(firstFrame, generation);
+        }
+    }).catch((error) => {
         if (generation === renderGeneration) disableUpscaling();
         throw error;
     });
@@ -193,6 +215,9 @@ function enableUpscaling(button) {
 
 function disableUpscaling() {
     renderGeneration++;
+    window.setWebSRSourceEnabled(false);
+    if (pendingSourceFrame) pendingSourceFrame.close();
+    pendingSourceFrame = null;
     if (worker) worker.terminate();
     worker = null;
     isProcessing = false;

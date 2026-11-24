@@ -64,6 +64,26 @@ if (window.location.pathname.startsWith('/screen-ws')) {
 }
 
 let activeTransportProtocol = 'webrtc';
+let webRtcFrameWorker = null;
+let webSRSourceEnabled = false;
+
+window.isWebSRSourceEnabled = () => webSRSourceEnabled;
+window.setWebSRSourceEnabled = (enabled) => {
+    webSRSourceEnabled = Boolean(enabled);
+    if (webRtcFrameWorker) {
+        webRtcFrameWorker.postMessage({ type: 'upscaling', enabled: webSRSourceEnabled });
+    }
+    if (window.WebSocketMedia) {
+        window.WebSocketMedia.setUpscaling(webSRSourceEnabled);
+    }
+};
+window.handleWebSRSourceFrame = (frame) => {
+    if (webSRSourceEnabled && typeof window.notifySourceFrameUpdated === 'function') {
+        window.notifySourceFrameUpdated(frame);
+    } else {
+        frame.close();
+    }
+};
 
 async function start() {
     console.log("CONFIG:", CONFIG);
@@ -101,8 +121,19 @@ async function start() {
                 const readable = processor.readable;
 
                 const worker = new Worker('/static/canvasWorkerWebRTC.js');
+                webRtcFrameWorker = worker;
+                worker.onmessage = (messageEvent) => {
+                    if (messageEvent.data.type === 'source-frame') {
+                        window.handleWebSRSourceFrame(messageEvent.data.frame);
+                    }
+                };
                 worker.postMessage(
-                    { readable: readable, canvas: offscreen },
+                    {
+                        type: 'init',
+                        readable,
+                        canvas: offscreen,
+                        upscalingEnabled: webSRSourceEnabled
+                    },
                     [readable, offscreen]
                 );
             } else if (event.track.kind === 'audio') {
