@@ -30,13 +30,14 @@ type Driver struct {
 	stopOnce  sync.Once
 	done      chan struct{}
 
-	mu        sync.RWMutex
-	lastVPS   []byte
-	lastSPS   []byte
-	lastPPS   []byte
-	lastIDR   []byte
-	inputMu   sync.Mutex
-	modifiers byte
+	mu         sync.RWMutex
+	lastVPS    []byte
+	lastSPS    []byte
+	lastPPS    []byte
+	lastIDR    []byte
+	lastIDRReq time.Time
+	inputMu    sync.Mutex
+	modifiers  byte
 }
 
 // New initializes a GameStream / Sunshine streaming session (HTTP launch + RTSP handshake).
@@ -120,21 +121,28 @@ func (d *Driver) Start() error {
 func (d *Driver) Pause() {}
 
 func (d *Driver) RequestIDR(force bool) {
-	if force && d.ctrl != nil {
-		_ = d.ctrl.requestIDR()
-		return
-	}
-	d.mu.RLock()
-	for _, nal := range [][]byte{d.lastVPS, d.lastSPS, d.lastPPS, d.lastIDR} {
-		if len(nal) > 0 {
-			select {
-			case d.videoChan <- sdriver.AVBox{Data: append([]byte(nil), nal...), NoDuration: true}:
-			default:
+	if !force {
+		d.mu.RLock()
+		for _, nal := range [][]byte{d.lastVPS, d.lastSPS, d.lastPPS, d.lastIDR} {
+			if len(nal) > 0 {
+				select {
+				case d.videoChan <- sdriver.AVBox{Data: append([]byte(nil), nal...), NoDuration: true}:
+				default:
+				}
 			}
 		}
+		d.mu.RUnlock()
 	}
-	d.mu.RUnlock()
-	if d.ctrl != nil {
+
+	d.mu.Lock()
+	now := time.Now()
+	shouldSend := force || now.Sub(d.lastIDRReq) >= 500*time.Millisecond
+	if shouldSend {
+		d.lastIDRReq = now
+	}
+	d.mu.Unlock()
+
+	if shouldSend && d.ctrl != nil {
 		_ = d.ctrl.requestIDR()
 	}
 }
