@@ -80,6 +80,7 @@ function sendMousePacket(action, dx, dy, buttons, wheelX, wheelY) {
     v.setUint32(10, buttons >>> 0, false);
     v.setInt16(14, Math.round(wheelX), false);
     v.setInt16(16, Math.round(wheelY), false);
+    // console.log("[gamestream] sending mouse packet:", { action, dx, dy, buttons, wheelX, wheelY });
     if (action === MOUSE_MOVE && wheelX === 0 && wheelY === 0) {
         sendUnorderedPacket(buf);
     } else {

@@ -31,6 +31,7 @@ func (d *Driver) SendEvent(event sdriver.Event) error {
 	if d.ctrl == nil {
 		return nil
 	}
+	// log.Println("[gamestream] sending event:", event, "type:", fmt.Sprintf("%T", event))
 
 	switch e := event.(type) {
 	case *sdriver.KeyEvent:
@@ -140,6 +141,7 @@ func (d *Driver) sendMouseEvent(e *sdriver.MouseEvent) error {
 		}
 	}
 
+	// log.Printf("[gamestream] mouse event: action=%d, buttons=%d, wheelX=%d, wheelY=%d, posX=%d, posY=%d", e.Action, e.Buttons, e.WheelDeltaX, e.WheelDeltaY, e.PosX, e.PosY)
 	if e.WheelDeltaY != 0 {
 		if err := d.sendVScroll(-e.WheelDeltaY * 120); err != nil {
 			return err
@@ -168,11 +170,13 @@ func (d *Driver) sendAbsMouse(x, y, width, height int16) error {
 
 func (d *Driver) sendScrollEvent(e *sdriver.ScrollEvent) error {
 	if int16(e.VScroll) != 0 {
+		// log.Println("[gamestream] vertical scroll:", e.VScroll)
 		if err := d.sendVScroll(-int16(e.VScroll) * 120); err != nil {
 			return err
 		}
 	}
 	if int16(e.HScroll) != 0 {
+		// log.Println("[gamestream] horizontal scroll:", e.HScroll)
 		if err := d.sendHScroll(int16(e.HScroll) * 120); err != nil {
 			return err
 		}

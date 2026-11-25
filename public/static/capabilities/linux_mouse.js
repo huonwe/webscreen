@@ -20,6 +20,9 @@ let mouseButtonsMask = 0; // Bitmask: 1=Left, 2=Right, 4=Middle
 let pendingMovement = { x: 0, y: 0, wheelY: 0 };
 let rafScheduled = false;
 
+let accumX = 0;
+let accumY = 0;
+
 function initRemoteControl() {
     if (!remoteVideo) {
         console.error(`Video element not found.`);
@@ -68,10 +71,22 @@ function handlePointerLockChange() {
 
     if (lockedElement === remoteVideo) {
         isPointerLocked = true;
-        console.log(">> Mouse LOCKED <<");
     } else {
         isPointerLocked = false;
-        console.log(">> Mouse UNLOCKED <<");
+        // 退出指针锁定时，若仍有按键未抬起，强制补发 UP 防止远端卡键
+        if (mouseButtonsMask !== 0) {
+            for (const bit of [1, 2, 4]) {
+                if (mouseButtonsMask & bit) {
+                    sendControlPacket(MOUSE_ACTION_UP, 0, 0, bit, 0);
+                }
+            }
+            mouseButtonsMask = 0;
+        }
+        pendingMovement.x = 0;
+        pendingMovement.y = 0;
+        pendingMovement.wheelY = 0;
+        accumX = 0;
+        accumY = 0;
     }
 }
 
@@ -90,44 +105,40 @@ function handleMouseMove(e) {
 
 function handleMouseDown(e) {
     if (!isPointerLocked) return;
-    e.preventDefault(); e.stopPropagation();
+    e.preventDefault();
+    e.stopPropagation();
 
-    // 先发送累计位移，避免点击包携带位移导致跳指针
     flushPendingEvents(MOUSE_ACTION_MOVE);
 
+    let pressingMask = 0;
     switch (e.button) {
-        case 0: mouseButtonsMask |= 1; break; // Left
-        case 2: mouseButtonsMask |= 2; break; // Right (Go端需映射为3)
-        case 1: mouseButtonsMask |= 4; break; // Middle
+        case 0: pressingMask = 1; break; // Left
+        case 2: pressingMask = 2; break; // Right
+        case 1: pressingMask = 4; break; // Middle
     }
+    if (pressingMask === 0) return;
 
-    // 点击包只发送按键信息
-    sendControlPacket(MOUSE_ACTION_DOWN, 0, 0, mouseButtonsMask, 0);
+    mouseButtonsMask |= pressingMask;
+    // 只发送本次新按下的按键掩码，避免多键同时按下时掩码冲突
+    sendControlPacket(MOUSE_ACTION_DOWN, 0, 0, pressingMask, 0);
 }
 
-/**
- * 处理鼠标抬起
- */
 function handleMouseUp(e) {
     if (!isPointerLocked) return;
-    e.preventDefault(); e.stopPropagation();
+    e.preventDefault();
+    e.stopPropagation();
 
-    // 先发送累计位移，避免抬起包携带位移导致跳指针
     flushPendingEvents(MOUSE_ACTION_MOVE);
 
-    // 1. 先计算出当前正在被抬起的按键掩码
     let releasingMask = 0;
     switch (e.button) {
-        case 0: releasingMask = 1; break; // Left
-        case 2: releasingMask = 2; break; // Right
-        case 1: releasingMask = 4; break; // Middle
+        case 0: releasingMask = 1; break;
+        case 2: releasingMask = 2; break;
+        case 1: releasingMask = 4; break;
     }
+    if (releasingMask === 0) return;
 
-    // 2. 发送 UP 事件（只发送按键信息）
-    // 【关键】这里传入 releasingMask，告诉后端是"这个键"抬起了
     sendControlPacket(MOUSE_ACTION_UP, 0, 0, releasingMask, 0);
-
-    // 3. 事件发送后再更新全局状态 (清除对应的位)
     mouseButtonsMask &= ~releasingMask;
 }
 
@@ -135,11 +146,9 @@ function handleWheel(e) {
     if (!isPointerLocked) return;
     e.preventDefault();
 
-    // 归一化滚轮
-    const delta = -Math.sign(e.deltaY);
-
-    pendingMovement.wheelY += delta;
-    scheduleSend(MOUSE_ACTION_MOVE); // 滚轮视为带 Wheel 数据的 Move
+    // 保持原始方向（向下为 +1，向上为 -1），由 Go 后端统一转换为 Windows 符号
+    pendingMovement.wheelY += Math.sign(e.deltaY);
+    scheduleSend(MOUSE_ACTION_MOVE);
 }
 
 
@@ -163,7 +172,6 @@ function scheduleSend(actionType) {
  * @param {number} buttonsOverride - 可选，强制指定发送的按键掩码
  */
 function flushPendingEvents(actionType, buttonsOverride) {
-    // 只有当没有任何数据变化时才跳过
     if (actionType === MOUSE_ACTION_MOVE &&
         pendingMovement.x === 0 &&
         pendingMovement.y === 0 &&
@@ -171,29 +179,30 @@ function flushPendingEvents(actionType, buttonsOverride) {
         return;
     }
 
-    const dx = Math.round(pendingMovement.x * MOUSE_SENSITIVITY);
-    const dy = Math.round(pendingMovement.y * MOUSE_SENSITIVITY);
-    const wheel = pendingMovement.wheelY;
+    accumX += pendingMovement.x * MOUSE_SENSITIVITY;
+    accumY += pendingMovement.y * MOUSE_SENSITIVITY;
+    const dx = Math.trunc(accumX);
+    const dy = Math.trunc(accumY);
+    accumX -= dx;
+    accumY -= dy;
 
-    // 【关键】如果有传入 override (比如 MouseUp 时)，就用传入的，否则用全局状态
-    // 注意检查 undefined，因为 0 也是有效值
+    const wheel = pendingMovement.wheelY;
     const buttons = (buttonsOverride !== undefined) ? buttonsOverride : mouseButtonsMask;
 
-    // 发送
-    sendControlPacket(actionType, dx, dy, buttons, wheel);
-    // 重置累计
+    if (dx !== 0 || dy !== 0 || wheel !== 0 || actionType !== MOUSE_ACTION_MOVE) {
+        sendControlPacket(actionType, dx, dy, buttons, wheel);
+    }
+
     pendingMovement.x = 0;
     pendingMovement.y = 0;
     pendingMovement.wheelY = 0;
 }
-
 /**
  * 实际的网络发送逻辑
  */
 function sendControlPacket(action, dx, dy, buttons, wheel) {
-    // console.log(`Send: Act=${action}, dx=${dx}, dy=${dy}, Btn=${buttons}`);
-    const packet = createMousePacket(action, dx, dy, buttons, 0, -wheel);
-    window.sendDataChannelMessage(window.dataChannelUnordered, packet);
+    const packet = createMousePacket(action, dx, dy, buttons, 0, wheel);
+    sendReliableOrUnreliable(action, packet, wheel !== 0);
 }
 
 
@@ -218,6 +227,17 @@ function createMousePacket(action, deltaX, deltaY, buttons, wheelDeltaX = 0, whe
     view.setInt16(16, wheelDeltaY, false);
 
     return buffer;
+}
+
+function sendReliableOrUnreliable(action, packet, hasWheel) {
+    const isPureMove = (action === MOUSE_ACTION_MOVE && !hasWheel);
+    if (isPureMove && window.dataChannelUnordered) {
+        window.sendDataChannelMessage(window.dataChannelUnordered, packet);
+    } else if (window.dataChannelOrdered) {
+        window.sendDataChannelMessage(window.dataChannelOrdered, packet);
+    } else if (window.ws && window.ws.readyState === WebSocket.OPEN) {
+        window.ws.send(packet);
+    }
 }
 
 // 启动

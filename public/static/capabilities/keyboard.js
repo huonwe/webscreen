@@ -120,6 +120,7 @@ function sendKeyboardEvent(action, keyCode) {
         return;
     }
     const packet = createKeyPacket(action, keyCode);
+    // console.log(`Sending keyboard event: action=${action}, keyCode=${keyCode}`);
     window.sendDataChannelMessage(window.dataChannelOrdered, packet);
 }
 
