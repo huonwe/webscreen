@@ -465,15 +465,27 @@ async function updateUIBasedOnCapabilities(caps) {
                 await loadScript('/static/capabilities/touch.js');
                 await loadScript('/static/capabilities/scroll.js');
                 await loadScript('/static/capabilities/buttons.js');
-
-                await loadScript('/static/capabilities/keep_screen_on.js');
-                await loadScript('/static/capabilities/backlight.js');
-
+                // Handle UHID
+                if (caps.can_uhid) {
+                    try {
+                        await loadScript('/static/capabilities/uhid_mouse.js');
+                        await loadScript('/static/capabilities/uhid_keyboard.js');
+                        await loadScript('/static/capabilities/uhid_gamepad.js');
+                        console.log("UHID scripts loaded");
+                    } catch (e) {
+                        console.error("Failed to load UHID scripts", e);
+                    }
+                }
             }
 
             console.log("Control scripts loaded");
         } catch (e) {
             console.error("Failed to load control scripts", e);
+        }
+
+        if (caps.is_android) {
+            await loadScript('/static/capabilities/keep_screen_on.js');
+            await loadScript('/static/capabilities/backlight.js');
         }
 
         // Handle Clipboard
@@ -485,17 +497,7 @@ async function updateUIBasedOnCapabilities(caps) {
                 console.error("Failed to load clipboard script", e);
             }
         }
-        // Handle UHID
-        if (caps.can_uhid) {
-            try {
-                await loadScript('/static/capabilities/uhid_mouse.js');
-                await loadScript('/static/capabilities/uhid_keyboard.js');
-                await loadScript('/static/capabilities/uhid_gamepad.js');
-                console.log("UHID scripts loaded");
-            } catch (e) {
-                console.error("Failed to load UHID scripts", e);
-            }
-        }
+
 
     }
 
