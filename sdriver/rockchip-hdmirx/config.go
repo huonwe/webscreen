@@ -9,6 +9,6 @@ func ConfigDescription() []sdriver.ConfigParamDescription {
 		{Name: "video_codec", Type: "string", Required: true, Default: "h264", Options: []string{"h264", "h265"}, Badge: true, Description: "hardware video codec"},
 		{Name: "video_bit_rate", Type: "string", Required: true, Default: "8M", Badge: true, Description: "video bit rate, e.g. 8M"},
 		{Name: "frame_rate", Type: "integer", Required: false, Default: 60, Description: "capture frame rate"},
-		{Name: "resolution", Type: "string", Required: true, Default: "1920x1080", Badge: true, Description: "capture resolution (might not work)"},
+		{Name: "resolution", Type: "string", Required: true, Default: "1920x1080", Options: []string{"3840x2160", "2560x1600", "2560x1440", "1920x1080", "1280x720"}, Badge: true, Description: "resolution (might not work)"},
 	}
 }

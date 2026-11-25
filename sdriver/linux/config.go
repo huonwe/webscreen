@@ -47,7 +47,8 @@ func ConfigDescription() []sdriver.ConfigParamDescription {
 			Required:    true,
 			Default:     "1920x1080",
 			Badge:       true,
-			Description: "video resolution, e.g. 1920x1080",
+			Options:     []string{"3840x2160", "2560x1600", "2560x1440", "1920x1080", "1280x720"},
+			Description: "video resolution",
 		},
 	}
 }
