@@ -118,7 +118,7 @@ func ConfigDescription(opt string) []sdriver.ConfigParamDescription {
 			Required:    true,
 			Default:     "1920x1080",
 			Options:     []string{"3840x2160", "2560x1600", "2560x1440", "1920x1080", "1280x720"},
-			Description: "new display resolution WidthxHeight/DPI, e.g. 1920x1080/192",
+			Description: "new display resolution",
 		},
 		// {
 		// 	Name:        "start_app",

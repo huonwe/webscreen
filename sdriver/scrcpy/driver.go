@@ -270,12 +270,12 @@ func New(config map[string]string) (*ScrcpyDriver, error) {
 		log.Println("User requested to disable video codec options, ignoring all codec options.")
 	}
 	if config["new_display"] == "true" {
-		options["new_display"] = fmt.Sprintf("%s/%d", config["resolution"], max_fps)
-		if config["start_app"] != "" {
-			options["start_app"] = config["start_app"]
-		}
-		log.Printf("Using new virtual display with resolution %s and max_fps %d", config["resolution"], max_fps)
-		log.Printf("start_app: %s", config["start_app"])
+		options["new_display"] = config["resolution"]
+		// if config["start_app"] != "" {
+		// 	options["start_app"] = config["start_app"]
+		// }
+		// log.Printf("Using new virtual display with resolution %s and max_fps %d", config["resolution"], max_fps)
+		// log.Printf("start_app: %s", config["start_app"])
 	}
 
 	da.adbClient.StartScrcpyServer(options)
