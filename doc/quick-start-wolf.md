@@ -28,3 +28,24 @@ services:
     depends_on:
       - wolf
 ```
+## How to enable gamepad?
+1. Configure host udev rule
+```bash
+sudo curl -fsSL https://raw.githubusercontent.com/games-on-whales/wolf/stable/85-wolf.rules -o /etc/udev/rules.d/85-wolf.rules
+sudo udevadm control --reload-rules && sudo udevadm trigger
+
+```
+
+2. Mount device to Wolf Container
+```yml
+volumes:
+  - /etc/wolf:/etc/wolf
+  - /var/run/docker.sock:/var/run/docker.sock
+  - /dev/:/dev/
+devices:
+  - /dev/uinput # ADD THIS
+  - /dev/uhid # ADD THIS
+device_cgroup_rules:
+  - 'c 13:* rmw' # ADD THIS
+
+```
