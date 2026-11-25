@@ -64,16 +64,17 @@ func newHTTPSession(cfg *streamConfig, store *authStore) (*httpSession, error) {
 
 	serverCert, certErr := store.loadServerCert(cfg.ip)
 	if certErr != nil {
-		if cfg.pin == "" {
-			return nil, fmt.Errorf("gamestream: host %s is not paired (missing server cert; pair via console or provide pin)", cfg.ip)
-		}
-		if err := store.pair(cfg.ip, cfg.port, cfg.pin); err != nil {
-			return nil, fmt.Errorf("gamestream: pairing failed: %w", err)
-		}
-		serverCert, err = store.loadServerCert(cfg.ip)
-		if err != nil {
-			return nil, err
-		}
+		return nil, fmt.Errorf("gamestream: host %s is not paired (missing server cert; pair via console)", cfg.ip)
+		// if cfg.pin == "" {
+		// 	return nil, fmt.Errorf("gamestream: host %s is not paired (missing server cert; pair via console or provide pin)", cfg.ip)
+		// }
+		// if err := store.pair(cfg.ip, cfg.port, cfg.pin); err != nil {
+		// 	return nil, fmt.Errorf("gamestream: pairing failed: %w", err)
+		// }
+		// serverCert, err = store.loadServerCert(cfg.ip)
+		// if err != nil {
+		// 	return nil, err
+		// }
 	}
 
 	httpsPort := info.HttpsPort
@@ -104,28 +105,29 @@ func newHTTPSession(cfg *streamConfig, store *authStore) (*httpSession, error) {
 		return nil, fmt.Errorf("gamestream: https serverinfo failed: %w", err)
 	}
 	if secInfo.PairStatus != 1 {
-		if cfg.pin == "" {
-			return nil, fmt.Errorf("gamestream: host %s reports PairStatus=%d over mTLS (re-pair required)", cfg.ip, secInfo.PairStatus)
-		}
-		if err := store.pair(cfg.ip, cfg.port, cfg.pin); err != nil {
-			return nil, fmt.Errorf("gamestream: re-pair failed: %w", err)
-		}
-		serverCert, err = store.loadServerCert(cfg.ip)
-		if err != nil {
-			return nil, err
-		}
-		tlsClient, err = store.httpsClient(serverCert)
-		if err != nil {
-			return nil, err
-		}
-		hs.client = tlsClient
-		secInfo, err = hs.getServerInfoHTTPS()
-		if err != nil {
-			return nil, fmt.Errorf("gamestream: https serverinfo after re-pair failed: %w", err)
-		}
-		if secInfo.PairStatus != 1 {
-			return nil, fmt.Errorf("gamestream: host %s still reports PairStatus=%d after pairing", cfg.ip, secInfo.PairStatus)
-		}
+		return nil, fmt.Errorf("gamestream: host %s reports PairStatus=%d over mTLS (re-pair required)", cfg.ip, secInfo.PairStatus)
+		// if cfg.pin == "" {
+		// 	return nil, fmt.Errorf("gamestream: host %s reports PairStatus=%d over mTLS (re-pair required)", cfg.ip, secInfo.PairStatus)
+		// }
+		// if err := store.pair(cfg.ip, cfg.port, cfg.pin); err != nil {
+		// 	return nil, fmt.Errorf("gamestream: re-pair failed: %w", err)
+		// }
+		// serverCert, err = store.loadServerCert(cfg.ip)
+		// if err != nil {
+		// 	return nil, err
+		// }
+		// tlsClient, err = store.httpsClient(serverCert)
+		// if err != nil {
+		// 	return nil, err
+		// }
+		// hs.client = tlsClient
+		// secInfo, err = hs.getServerInfoHTTPS()
+		// if err != nil {
+		// 	return nil, fmt.Errorf("gamestream: https serverinfo after re-pair failed: %w", err)
+		// }
+		// if secInfo.PairStatus != 1 {
+		// 	return nil, fmt.Errorf("gamestream: host %s still reports PairStatus=%d after pairing", cfg.ip, secInfo.PairStatus)
+		// }
 	}
 
 	if secInfo.AppVersion != "" {

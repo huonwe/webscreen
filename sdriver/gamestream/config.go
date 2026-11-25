@@ -19,7 +19,7 @@ func ConfigDescription() []sdriver.ConfigParamDescription {
 		{Name: "video_bit_rate", Type: "string", Required: true, Default: "10M", Badge: true, Description: "video bit rate, e.g. 10M"},
 		{Name: "frame_rate", Type: "integer", Required: false, Default: 60, Description: "stream frame rate"},
 		{Name: "resolution", Type: "string", Required: true, Default: "1920x1080", Badge: true, Description: "stream resolution"},
-		{Name: "pin", Type: "string", Required: false, Description: "4-digit PIN for first-time pairing; enter the same PIN on the host (Sunshine web UI) while connecting"},
+		// {Name: "pin", Type: "string", Required: false, Description: "4-digit PIN for first-time pairing; enter the same PIN on the host (Sunshine web UI) while connecting"},
 		{Name: "port", Type: "integer", Required: false, Default: defaultHTTPPort, Description: "host HTTP port"},
 		{Name: "sops", Type: "boolean", Required: false, Default: false, Description: "let the host optimize game settings (changes host resolution)"},
 		{Name: "host_audio", Type: "boolean", Required: false, Default: false, Description: "also play audio on the host"},
@@ -28,10 +28,10 @@ func ConfigDescription() []sdriver.ConfigParamDescription {
 }
 
 type streamConfig struct {
-	ip        string
-	port      int
-	app       string
-	pin       string
+	ip   string
+	port int
+	app  string
+	// pin       string
 	codec     string
 	width     int
 	height    int
@@ -44,9 +44,9 @@ type streamConfig struct {
 
 func parseConfig(cfg map[string]string) (*streamConfig, error) {
 	c := &streamConfig{
-		ip:        strings.TrimSpace(cfg["ip"]),
-		app:       strings.TrimSpace(cfg["app"]),
-		pin:       strings.TrimSpace(cfg["pin"]),
+		ip:  strings.TrimSpace(cfg["ip"]),
+		app: strings.TrimSpace(cfg["app"]),
+		// pin:       strings.TrimSpace(cfg["pin"]),
 		codec:     strings.ToLower(cfg["video_codec"]),
 		sops:      isTrue(cfg["sops"]),
 		hostAudio: isTrue(cfg["host_audio"]),
