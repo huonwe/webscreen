@@ -20,7 +20,7 @@
 
 </div>
 
-![screenshot](doc/assets/screenshot-wolf-c6.png)
+![screenshot](doc/assets/screenshot-wolf.png)
 ![timer](doc/assets/timer-difference.png)
 
 ## ✨ 功能特性

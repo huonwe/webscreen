@@ -19,7 +19,7 @@ A self-hosted screen streaming web application for Android, Linux, and GameStrea
 
 </div>
 
-![screenshot](doc/assets/screenshot-wolf-c6.png)
+![screenshot](doc/assets/screenshot-wolf.png)
 ![timer](doc/assets/timer-difference.png)
 
 ## ✨ Features
