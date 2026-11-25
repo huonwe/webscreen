@@ -141,7 +141,7 @@ func (d *Driver) sendMouseEvent(e *sdriver.MouseEvent) error {
 	}
 
 	if e.WheelDeltaY != 0 {
-		if err := d.sendVScroll(e.WheelDeltaY * 120); err != nil {
+		if err := d.sendVScroll(-e.WheelDeltaY * 120); err != nil {
 			return err
 		}
 	}
@@ -153,9 +153,22 @@ func (d *Driver) sendMouseEvent(e *sdriver.MouseEvent) error {
 	return nil
 }
 
+func (d *Driver) sendAbsMouse(x, y, width, height int16) error {
+	// NV_ABS_MOUSE_MOVE_PACKET: size(4 BE=14) + magic(4 LE=0x05) + x(2 BE) + y(2 BE) + unused(2) + width(2 BE) + height(2 BE) = 18 bytes
+	pkt := make([]byte, 18)
+	binary.BigEndian.PutUint32(pkt[0:4], 14)
+	binary.LittleEndian.PutUint32(pkt[4:8], magicMouseAbs)
+	binary.BigEndian.PutUint16(pkt[8:10], uint16(x))
+	binary.BigEndian.PutUint16(pkt[10:12], uint16(y))
+	// pkt[12:14] = 0 (unused)
+	binary.BigEndian.PutUint16(pkt[14:16], uint16(width))
+	binary.BigEndian.PutUint16(pkt[16:18], uint16(height))
+	return d.ctrl.send(ctrlTypeInputData, pkt, ctrlChannelMouse, true)
+}
+
 func (d *Driver) sendScrollEvent(e *sdriver.ScrollEvent) error {
 	if int16(e.VScroll) != 0 {
-		if err := d.sendVScroll(int16(e.VScroll) * 120); err != nil {
+		if err := d.sendVScroll(-int16(e.VScroll) * 120); err != nil {
 			return err
 		}
 	}
@@ -200,8 +213,8 @@ func (d *Driver) sendTouchEvent(e *sdriver.TouchEvent) error {
 	if h <= 0 {
 		h = float32(d.meta.Height)
 	}
-	nx := float32(e.PosX) / w
-	ny := float32(e.PosY) / h
+	nx := float32(e.PosX) / 65535.0
+	ny := float32(e.PosY) / 65535.0
 
 	// SS_TOUCH_PACKET: size(4) + magic(4) + eventType(1) + zero(1) + rotation(2) + pointerId(4) + x(4) + y(4) + pressureOrDistance(4) + contactAreaMajor(4) + contactAreaMinor(4) = 36 bytes
 	pkt := make([]byte, 36)
