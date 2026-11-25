@@ -25,30 +25,35 @@ A self-hosted screen streaming web application for Android and Linux devices.
 
 Webscreen can run on **Android Termux**, **Linux**, **Windows**, and **MacOS** (both `amd64` and `arm64`). It might support more devices in the future!
 
+### Universal
+- Super Resolution (HTTPS required)
+- H.264 / H.265
+- Multi-Connection
+- WebRTC / WebSocket Streaming
+> **Note**: If you choose WebSocket, HTTPS is required.
+
+### GameStream ([Sunshine](https://github.com/SunshineStream/Sunshine) / [Wolf](https://github.com/games-on-whales/wolf))
+- Video, Audio, Control
+- H.264 / H.265
+- Touch, Mouse, Keyboard
+
 ### 📱 Android (via [scrcpy](https://github.com/Genymobile/scrcpy))
 - Video, Audio, Control
 - UHID Devices (Mouse, Keyboard, Gamepad)
 - Clipboard Sync (HTTPS required)
 - Touch (Multi-finger, pressure)
-- H.264 / H.265 Hardware Encoding
-- Multi-Connection
 
 > **Note**: For Android apk (rooted) and FnOS fpk, you might see [youyoudezhuzhu/webscreen](https://github.com/youyoudezhuzhu/webscreen).
-
 
 ### 🐧 Linux (Xvfb / Xorg / Sway)
 - Video, Control
 - Touch
-- H.264 / H.265
 - GPU support (Xorg/Sway)
 
 ### 🛹 rk3588-hdmirx (OrangePi 5 Plus Armbian vendor kernel tested)
 - HDMI-in video streaming
 - H.264 / H.265 with RKMPP hardware encoding
 - *Note: Audio is not supported yet.*
-
-### Universal
-- Super Resolution (HTTPS required)
 
 ---
 
@@ -128,32 +133,6 @@ services:
 
 ```
 
-For the desktop embedded version,copy the sample env file first: `cp .env.sample .env`
-
-```yaml
-services:
-  webscreen-full:
-    user: appuser
-    image: dukihiroi/webscreen-full:latest
-    container_name: webscreen-full
-    network_mode: host
-    restart: unless-stopped
-    volumes:
-      - /dev/bus/usb:/dev/bus/usb
-      - /dev/input:/dev/input
-      - /run/udev:/run/udev:ro
-    devices:
-      - /dev/uinput:/dev/uinput
-      - /dev/dri:/dev/dri
-    group_add:
-      - ${UINPUT_GID}
-    privileged: true
-    environment:
-      - GIN_MODE=release
-      - PORT=8081
-      - PIN=123456
-
-```
 
 > 💡 **Tip:** `host` network mode is highly recommended due to WebRTC UDP traffic and USB device connection stability.
 

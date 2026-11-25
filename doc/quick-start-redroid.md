@@ -53,7 +53,7 @@ docker compose up -d
 - **Redroid keeps restarting or fails to start**:
   Check if kernel modules are loaded correctly: `lsmod | grep -E 'binder|ashmem'`.
   
-- **WebScreen cannot connect**:
+- **Webwcreen cannot connect**:
   Ensure both containers are on the same network (docker-compose creates a default network automatically).
   You can manually connect by entering the webscreen container:
   ```bash
