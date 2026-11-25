@@ -18,12 +18,12 @@ func ConfigDescription() []sdriver.ConfigParamDescription {
 		{Name: "video_codec", Type: "string", Required: true, Default: "h264", Options: []string{"h264", "h265"}, Badge: true, Description: "video codec"},
 		{Name: "video_bit_rate", Type: "string", Required: true, Default: "10M", Badge: true, Description: "video bit rate, e.g. 10M"},
 		{Name: "frame_rate", Type: "integer", Required: false, Default: 60, Description: "stream frame rate"},
-		{Name: "resolution", Type: "string", Required: true, Default: "1920x1080", Badge: true, Description: "stream resolution"},
+		{Name: "resolution", Type: "string", Required: true, Default: "1920x1080", Options: []string{"3840x2160", "2560x1600", "2560x1440", "1920x1080", "1280x720"}, Badge: true, Description: "stream resolution"},
 		// {Name: "pin", Type: "string", Required: false, Description: "4-digit PIN for first-time pairing; enter the same PIN on the host (Sunshine web UI) while connecting"},
 		{Name: "port", Type: "integer", Required: false, Default: defaultHTTPPort, Description: "host HTTP port"},
 		{Name: "sops", Type: "boolean", Required: false, Default: false, Description: "let the host optimize game settings (changes host resolution)"},
 		{Name: "host_audio", Type: "boolean", Required: false, Default: false, Description: "also play audio on the host"},
-		{Name: "auth_dir", Type: "string", Required: false, Default: defaultAuthDir, Description: "local directory used to store the client key, certificate and paired server certificates"},
+		// {Name: "auth_dir", Type: "string", Required: false, Default: defaultAuthDir, Description: "local directory used to store the client key, certificate and paired server certificates"},
 	}
 }
 
@@ -39,7 +39,7 @@ type streamConfig struct {
 	bitrate   int // kbps
 	sops      bool
 	hostAudio bool
-	authDir   string
+	// authDir   string
 }
 
 func parseConfig(cfg map[string]string) (*streamConfig, error) {
@@ -50,7 +50,7 @@ func parseConfig(cfg map[string]string) (*streamConfig, error) {
 		codec:     strings.ToLower(cfg["video_codec"]),
 		sops:      isTrue(cfg["sops"]),
 		hostAudio: isTrue(cfg["host_audio"]),
-		authDir:   cfg["auth_dir"],
+		// authDir:   cfg["auth_dir"],
 	}
 	if c.ip == "" {
 		return nil, fmt.Errorf("gamestream: host ip is required")
@@ -58,9 +58,9 @@ func parseConfig(cfg map[string]string) (*streamConfig, error) {
 	if c.app == "" {
 		c.app = "Desktop"
 	}
-	if c.authDir == "" {
-		c.authDir = defaultAuthDir
-	}
+	// if c.authDir == "" {
+	// 	c.authDir = defaultAuthDir
+	// }
 	if c.codec == "" {
 		c.codec = "h264"
 	}
