@@ -34,7 +34,7 @@ self.onmessage = async (event) => {
             // const weights = await (await fetch('./cnn-2x-s-an.json')).json()
             let network_name, weights;
             if (isMobile()) {
-                network_name = "animate4k/cnn-2x-s";
+                network_name = "anime4k/cnn-2x-s";
                 weights = await (await fetch('./cnn-2x-s-an.json')).json();
             } else if (isLowerThan1080P(resolution_width, resolution_height)) {
                 network_name = "websr/cnn-s";

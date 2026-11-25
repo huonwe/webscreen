@@ -26,8 +26,9 @@ function getFullscreenElement() {
 function fullscreenPlayer() {
     console.log("Attempting to toggle fullscreen");
     // const remoteCanvas = document.getElementById('remoteCanvas');
+    const canvasContainer = document.getElementById('canvasContainer');
     if (!remoteCanvas) return;
-    const target = remoteCanvas;
+    const target = canvasContainer || remoteCanvas;
 
     if (!getFullscreenElement()) {
         const requestMethod = target.requestFullscreen ||

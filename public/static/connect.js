@@ -245,6 +245,9 @@ async function start() {
         }
 
         if (message.stage === 'metainfo_remote') {
+            if (message.media_meta.height != 0 && message.media_meta.width != 0) {
+                window.videoResolution = { width: message.media_meta.width, height: message.media_meta.height };
+            }
             if (usesWebSocket && message.media_meta) {
                 try {
                     const audioAvailable = await window.WebSocketMedia.initialize(
