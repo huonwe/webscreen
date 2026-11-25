@@ -34,7 +34,7 @@ Webscreen は **Android Termux**、**Linux**、**Windows**、および **MacOS**
 - WebRTC / WebSocket ストリーミング
 > **注意**：WebSocket を選択する場合は HTTPS が必須となります。
 
-### GameStream（[Sunshine](https://github.com/SunshineStream/Sunshine) / [Wolf](https://github.com/games-on-whales/wolf)）
+### ☀️ GameStream ([Sunshine](https://github.com/SunshineStream/Sunshine) / [Wolf](https://github.com/games-on-whales/wolf))
 - 映像、音声、操作
 - H.264 / H.265
 - タッチ、マウス、キーボード対応

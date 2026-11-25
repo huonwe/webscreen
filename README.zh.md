@@ -34,7 +34,7 @@ Webscreen 可在 **Android Termux**、**Linux**、**Windows** 和 **MacOS**（�
 - WebRTC / WebSocket 串流
 > **注意**：如果选择 WebSocket，则必须使用 HTTPS。
 
-### GameStream（[Sunshine](https://github.com/SunshineStream/Sunshine) / [Wolf](https://github.com/games-on-whales/wolf)）
+### ☀️ GameStream ([Sunshine](https://github.com/SunshineStream/Sunshine) / [Wolf](https://github.com/games-on-whales/wolf))
 - 视频、音频与控制
 - H.264 / H.265 编码
 - 触控、鼠标、键盘支持
