@@ -35,7 +35,6 @@ Webscreen can run on **Android Termux**, **Linux**, **Windows**, and **MacOS** (
 
 ### ☀️ GameStream ([Sunshine](https://github.com/SunshineStream/Sunshine) / [Wolf](https://github.com/games-on-whales/wolf))
 - Video, Audio, Control
-- H.264 / H.265
 - Touch, Mouse, Keyboard
 > [Quickstart with Wolf](doc/quick-start-wolf.md)
 
