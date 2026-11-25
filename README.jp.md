@@ -38,6 +38,7 @@ Webscreen は **Android Termux**、**Linux**、**Windows**、および **MacOS**
 - 映像、音声、操作
 - H.264 / H.265
 - タッチ、マウス、キーボード対応
+> [Quickstart with Wolf](https://www.google.com/search?q=doc/quick-start-wolf.md)
 
 ### 📱 Android（[scrcpy](https://github.com/Genymobile/scrcpy) 経由）
 - 映像、音声、操作
@@ -147,8 +148,8 @@ services:
 
 ## 📖 ドキュメント
 
-* [Redroid クイックスタート](https://www.google.com/search?q=doc/quick-start-redroid.md)
-* [開発者向けドキュメント](https://www.google.com/search?q=doc/dev)
+* [Redroid クイックスタート](doc/quick-start-redroid.md)
+* [開発者向けドキュメント](doc/dev)
 
 ---
 
