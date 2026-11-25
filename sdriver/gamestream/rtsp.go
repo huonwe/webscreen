@@ -293,23 +293,28 @@ func (rc *rtspClient) do(method, target string, headers []rtspHeader, body strin
 		return nil, err
 	}
 
-	raw, err := io.ReadAll(conn)
-	if err != nil && len(raw) == 0 {
-		return nil, err
-	}
-	if len(raw) == 0 {
-		log.Printf("[gamestream] RTSP %s %s returned 0 bytes (readErr=%v)", method, target, err)
-	}
-	if rc.encrypted && len(raw) > 0 {
+	// 1. 加密模式：先按 4 字节长度头精确读满整帧密文，解密后再解析
+	if rc.encrypted {
+		raw, err := readEncryptedRTSPFrame(conn)
+		if err != nil {
+			log.Printf("[gamestream] RTSP %s %s read encrypted failed: %v", method, target, err)
+			return nil, err
+		}
 		plain, err := unsealRTSPMessage(rc.aead, raw)
 		if err != nil {
 			return nil, err
 		}
-		raw = plain
+		return parseRTSPResponse(bytes.NewReader(plain))
 	}
-	return parseRTSPResponse(raw)
-}
 
+	// 2. 明文模式：直接从 conn 流式读取 Header + Content-Length Body，不等待 EOF
+	resp, err := parseRTSPResponse(conn)
+	if err != nil {
+		log.Printf("[gamestream] RTSP %s %s read failed: %v", method, target, err)
+		return nil, err
+	}
+	return resp, nil
+}
 func sealRTSPMessage(aead cipher.AEAD, seq uint32, plaintext []byte) []byte {
 	var iv [12]byte
 	binary.LittleEndian.PutUint32(iv[0:4], seq)
@@ -352,21 +357,36 @@ func unsealRTSPMessage(aead cipher.AEAD, raw []byte) ([]byte, error) {
 	return aead.Open(nil, iv[:], sealed, nil)
 }
 
-func parseRTSPResponse(raw []byte) (*rtspMessage, error) {
-	idx := bytes.Index(raw, []byte("\r\n\r\n"))
-	var headerPart, bodyPart []byte
-	if idx >= 0 {
-		headerPart = raw[:idx]
-		bodyPart = raw[idx+4:]
-	} else {
-		headerPart = raw
+func readEncryptedRTSPFrame(r io.Reader) ([]byte, error) {
+	var hdr [4]byte
+	if _, err := io.ReadFull(r, hdr[:]); err != nil {
+		return nil, err
+	}
+	typeAndLen := binary.BigEndian.Uint32(hdr[:])
+	if typeAndLen&encryptedRTSPBit == 0 {
+		return nil, fmt.Errorf("expected encrypted rtsp response, got header 0x%08x", typeAndLen)
+	}
+	ctLen := int(typeAndLen &^ encryptedRTSPBit)
+	if ctLen <= 0 || ctLen > 1024*1024 {
+		return nil, fmt.Errorf("invalid encrypted rtsp payload length: %d", ctLen)
 	}
 
-	scanner := bufio.NewScanner(bytes.NewReader(headerPart))
-	if !scanner.Scan() {
-		return nil, fmt.Errorf("empty rtsp response")
+	raw := make([]byte, encRTSPHeaderLength+ctLen)
+	copy(raw[:4], hdr[:])
+	if _, err := io.ReadFull(r, raw[4:]); err != nil {
+		return nil, err
 	}
-	statusLine := scanner.Text()
+	return raw, nil
+}
+
+func parseRTSPResponse(r io.Reader) (*rtspMessage, error) {
+	br := bufio.NewReader(r)
+
+	statusLine, err := br.ReadString('\n')
+	if err != nil {
+		return nil, fmt.Errorf("read rtsp status line: %w", err)
+	}
+	statusLine = strings.TrimRight(statusLine, "\r\n")
 	parts := strings.SplitN(statusLine, " ", 3)
 	if len(parts) < 2 {
 		return nil, fmt.Errorf("invalid rtsp status line: %q", statusLine)
@@ -377,18 +397,42 @@ func parseRTSPResponse(raw []byte) (*rtspMessage, error) {
 	}
 
 	hdrs := make(map[string]string)
-	for scanner.Scan() {
-		line := scanner.Text()
+	for {
+		line, err := br.ReadString('\n')
+		if err != nil {
+			return nil, fmt.Errorf("read rtsp header: %w", err)
+		}
+		line = strings.TrimRight(line, "\r\n")
+		if line == "" {
+			// 读到空行 \r\n\r\n，Header 结束
+			break
+		}
 		if colon := strings.IndexByte(line, ':'); colon > 0 {
 			k := strings.ToLower(strings.TrimSpace(line[:colon]))
 			v := strings.TrimSpace(line[colon+1:])
 			hdrs[k] = v
 		}
 	}
+
+	var bodyStr string
+	if clStr, ok := hdrs["content-length"]; ok {
+		cl, err := strconv.Atoi(clStr)
+		if err != nil || cl < 0 {
+			return nil, fmt.Errorf("invalid Content-Length %q: %w", clStr, err)
+		}
+		if cl > 0 {
+			bodyBuf := make([]byte, cl)
+			if _, err := io.ReadFull(br, bodyBuf); err != nil {
+				return nil, fmt.Errorf("read rtsp body (%d bytes): %w", cl, err)
+			}
+			bodyStr = string(bodyBuf)
+		}
+	}
+
 	return &rtspMessage{
 		statusCode: code,
 		headers:    hdrs,
-		body:       string(bodyPart),
+		body:       bodyStr,
 	}, nil
 }
 
@@ -452,6 +496,8 @@ func buildAnnounceSDP(hs *httpSession, cfg *streamConfig, res *rtspResult) strin
 	attr("x-nv-video[0].timeoutLengthMs", "7000")
 	attr("x-nv-video[0].framesWithInvalidRefThreshold", "0")
 
+	// Print width and height for debugging
+	fmt.Printf("[gamestream] client viewport: %dx%d\n", cfg.width, cfg.height)
 	adjBitrate := int(float64(cfg.bitrate) * 0.80)
 	if adjBitrate > 100000 {
 		adjBitrate = 100000
