@@ -3,7 +3,7 @@ ARG BINARY_PATH=dist/webscreen-linux-${TARGETARCH}
 
 FROM alpine:latest
 
-RUN apk add --no-cache android-tools
+RUN apk add --no-cache android-tools v4l-utils
 
 WORKDIR /app
 ARG BINARY_PATH

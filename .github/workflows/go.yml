@@ -133,24 +133,24 @@ jobs:
           tags: ${{ steps.meta-lite.outputs.tags }}
           labels: ${{ steps.meta-lite.outputs.labels }}
 
-      # ==========================================
-      # [Full 版本] 构建与推送
-      # ==========================================
-      - name: Extract Docker metadata (Full)
-        id: meta-full
-        uses: docker/metadata-action@v6
-        with:
-          images: ${{ secrets.DOCKERHUB_USERNAME }}/webscreen-full
-          tags: |
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
-            type=semver,pattern={{version}}
+      # # ==========================================
+      # # [Full 版本] 构建与推送
+      # # ==========================================
+      # - name: Extract Docker metadata (Full)
+      #   id: meta-full
+      #   uses: docker/metadata-action@v6
+      #   with:
+      #     images: ${{ secrets.DOCKERHUB_USERNAME }}/webscreen-full
+      #     tags: |
+      #       type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+      #       type=semver,pattern={{version}}
 
-      - name: Build and push Docker image (Full)
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: ./docker/full/Dockerfile
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta-full.outputs.tags }}
-          labels: ${{ steps.meta-full.outputs.labels }}
+      # - name: Build and push Docker image (Full)
+      #   uses: docker/build-push-action@v7
+      #   with:
+      #     context: .
+      #     file: ./docker/full/Dockerfile
+      #     platforms: linux/amd64,linux/arm64
+      #     push: true
+      #     tags: ${{ steps.meta-full.outputs.tags }}
+      #     labels: ${{ steps.meta-full.outputs.labels }}

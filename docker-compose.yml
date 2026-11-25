@@ -1,23 +1,20 @@
 services:
-  webscreen-full:
+  webscreen:
     build:
       context: .
-      dockerfile: docker/full/Dockerfile
+      dockerfile: docker/lite/Dockerfile
     user: appuser
-    image: dukihiroi/webscreen-full:latest
-    container_name: webscreen-full
+    image: dukihiroi/webscreen:latest
+    container_name: webscreen
     network_mode: host
-    # If you want to use bridge network:
-    # You need to ensure that your device is accessible from the container
-    # You also need to forward the necessary UDP traffic. If you face problems on it, please use host network mode.
-    # ports:
-    #   - "8079:8079"
-    #   - "51200-51299:51200-51299/udp"
+
     restart: unless-stopped
     volumes:
       - /dev/bus/usb:/dev/bus/usb
       - /dev/input:/dev/input
       - /run/udev:/run/udev:ro
+
+      - ./config.yml:/app/webscreen/config.yml
     devices:
       - /dev/uinput:/dev/uinput
       - /dev/dri:/dev/dri
