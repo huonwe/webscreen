@@ -342,7 +342,7 @@ func androidKeyToVK(code uint32) uint16 {
 	case 59:
 		return 0xA0 // LShift
 	case 60:
-		return 0xA1 // RShift
+		return 0xA0 // RShift -> LShift
 	case 113:
 		return 0xA2 // LCtrl
 	case 114:

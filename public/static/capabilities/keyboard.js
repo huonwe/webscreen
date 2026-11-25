@@ -1,18 +1,14 @@
-const TYPE_KEY = 0x00; // key event
-// Key Packet Structure:
-// 偏移,长度,类型,字段名,说明
-// 0,1,uint8,Type,固定 0x02 (KeyEvent)
-// 1,1,uint8,Action,"0: Down, 1: Up"
-// 2,2,uint16,KeyCode,Android KeyCode (如 Power=26)
+const TYPE_KEY = 0x00;
 const TYPE_KEY_ACTION_DOWN = 0;
 const TYPE_KEY_ACTION_UP = 1;
 
-const ANDROID_KEYCODES = {
+// 物理键位 (e.code) -> 协议键值映射表
+const KEY_CODE_MAP = {
     "Enter": 66,
     "Backspace": 67,
     "Delete": 112,
     "Escape": 111,
-    "Home": 3,
+    "Home": 122,
     "ArrowUp": 19,
     "ArrowDown": 20,
     "ArrowLeft": 21,
@@ -32,7 +28,6 @@ const ANDROID_KEYCODES = {
     "PageDown": 93,
     "End": 123,
     "Insert": 124,
-    // 映射符号键
     "Minus": 69,
     "Equal": 70,
     "BracketLeft": 71,
@@ -46,82 +41,128 @@ const ANDROID_KEYCODES = {
     "Slash": 76,
 };
 
-// Map A-Z
 for (let i = 0; i < 26; i++) {
-    const char = String.fromCharCode(65 + i); // A-Z
-    const code = "Key" + char;
-    ANDROID_KEYCODES[code] = 29 + i; // AKEYCODE_A starts at 29
+    KEY_CODE_MAP["Key" + String.fromCharCode(65 + i)] = 29 + i;
 }
-
-// Map 0-9
 for (let i = 0; i < 10; i++) {
-    const code = "Digit" + i;
-    ANDROID_KEYCODES[code] = 7 + i; // AKEYCODE_0 starts at 7
+    KEY_CODE_MAP["Digit" + i] = 7 + i;
 }
-
-// if not UHID, don't map F1-F12
-// Map F1-F12
-// for (let i = 1; i <= 12; i++) {
-//     const code = "F" + i;
-//     ANDROID_KEYCODES[code] = 130 + i; // AKEYCODE_F1 starts at 131
-// }
-
-function getAndroidKeyCode(e) {
-    if (ANDROID_KEYCODES[e.code]) {
-        return ANDROID_KEYCODES[e.code];
-    }
-    // Fallback for some keys that might not match e.code exactly or need special handling
-    return null;
+// 启用 F1-F12 映射（与 Go 后端 131..142 对齐）
+for (let i = 1; i <= 12; i++) {
+    KEY_CODE_MAP["F" + i] = 130 + i;
 }
+// 需要阻止浏览器默认行为的键位集合
+const INTERCEPT_CODES = new Set([
+    "Escape",
+    "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight",
+    "Space", "Tab", "Backspace",
+    "F1", "F2", "F3", "F4", "F5", "F6",
+    "F7", "F8", "F9", "F10", "F11", "F12",
+]);
 
 document.addEventListener('keydown', (e) => {
-    // Check if UHID keyboard is enabled
-    if (typeof uhidKeyboardEnabled !== 'undefined' && uhidKeyboardEnabled) {
+    // 仅在存在远程视频容器的页面生效，避免全局加载影响其他页面
+    if (!document.getElementById('remoteVideo')) return;
+
+    if (typeof window.uhidKeyboardEnabled !== 'undefined' && window.uhidKeyboardEnabled) {
         return;
     }
-
-    // Ignore if typing in an input field (if we had any)
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
         return;
     }
 
-    const keyCode = getAndroidKeyCode(e);
-    if (keyCode !== null) {
-        // Prevent default behavior for some keys to avoid browser scrolling/shortcuts
-        if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space", "Tab", "Backspace"].includes(e.code)) {
-            e.preventDefault();
-        }
-        // Repeat handling? Scrcpy protocol has repeat field but we are sending down/up.
-        // If we hold a key, browser sends multiple keydowns.
-        // We can just forward them.
-        sendKeyboardEvent(TYPE_KEY_ACTION_DOWN, keyCode);
-    }
-});
+    const keyCode = getKeyCode(e);
+    if (keyCode === null) return;
 
-document.addEventListener('keyup', (e) => {
-    // Check if UHID keyboard is enabled
-    if (typeof uhidKeyboardEnabled !== 'undefined' && uhidKeyboardEnabled) {
+    // 拦截 ESC、F1-F12、方向键及 Ctrl/Alt 组合键
+    if (INTERCEPT_CODES.has(e.code) || e.ctrlKey || e.altKey) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+
+    if (e.repeat || pressedKeyCodes.has(keyCode)) return;
+
+    pressedKeyCodes.add(keyCode);
+    sendKeyboardEvent(TYPE_KEY_ACTION_DOWN, keyCode);
+}, true); // 使用捕获阶段 (true)，优先于页面其他监听拿到按键
+
+const pressedKeyCodes = new Set();
+
+function getKeyCode(e) {
+    if (e.code && KEY_CODE_MAP[e.code] !== undefined) {
+        return KEY_CODE_MAP[e.code];
+    }
+    // 兜底：部分 Linux X11 / 特殊键盘布局下右 Shift 的 e.code 可能不是 "ShiftRight"
+    if (e.key === "Shift") {
+        return e.location === KeyboardEvent.DOM_KEY_LOCATION_RIGHT ? 60 : 59;
+    }
+    return null;
+}
+
+function releaseAllKeys() {
+    if (pressedKeyCodes.size === 0) return;
+    for (const keyCode of pressedKeyCodes) {
+        sendKeyboardEvent(TYPE_KEY_ACTION_UP, keyCode);
+    }
+    pressedKeyCodes.clear();
+}
+
+document.addEventListener('keydown', (e) => {
+    if (typeof window.uhidKeyboardEnabled !== 'undefined' && window.uhidKeyboardEnabled) {
+        return;
+    }
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
         return;
     }
 
-    const keyCode = getAndroidKeyCode(e);
-    if (keyCode !== null) {
-        sendKeyboardEvent(TYPE_KEY_ACTION_UP, keyCode);
+    const keyCode = getKeyCode(e);
+    if (keyCode === null) return;
+
+    if (
+        ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space", "Tab", "Backspace"].includes(e.code) ||
+        e.ctrlKey || e.altKey
+    ) {
+        e.preventDefault();
     }
+
+    // 过滤长按自动重复，仅在首次按下时发送 DOWN
+    if (e.repeat || pressedKeyCodes.has(keyCode)) return;
+
+    pressedKeyCodes.add(keyCode);
+    sendKeyboardEvent(TYPE_KEY_ACTION_DOWN, keyCode);
+});
+
+document.addEventListener('keyup', (e) => {
+    if (typeof window.uhidKeyboardEnabled !== 'undefined' && window.uhidKeyboardEnabled) {
+        return;
+    }
+
+    const keyCode = getKeyCode(e);
+    if (keyCode === null) return;
+
+    e.preventDefault();
+    pressedKeyCodes.delete(keyCode);
+    sendKeyboardEvent(TYPE_KEY_ACTION_UP, keyCode);
+});
+
+window.addEventListener('blur', releaseAllKeys);
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) releaseAllKeys();
+});
+document.addEventListener('pointerlockchange', () => {
+    if (!document.pointerLockElement) releaseAllKeys();
 });
 
 function sendKeyboardEvent(action, keyCode) {
-    // console.log(`Sending keyboard event: action=${action}, keyCode=${keyCode}`);
-    // if (window.ws && window.ws.readyState === WebSocket.OPEN) {
-    //     const packet = createKeyPacket(action, keyCode);
-    //     window.ws.send(packet);
-    // }
     if (typeof window.uhidKeyboardEnabled !== 'undefined' && window.uhidKeyboardEnabled) {
         return;
     }
     const packet = createKeyPacket(action, keyCode);
-    // console.log(`Sending keyboard event: action=${action}, keyCode=${keyCode}`);
-    window.sendDataChannelMessage(window.dataChannelOrdered, packet);
+    if (typeof window.sendDataChannelMessage === 'function' && window.dataChannelOrdered) {
+        window.sendDataChannelMessage(window.dataChannelOrdered, packet);
+    } else if (window.ws && window.ws.readyState === WebSocket.OPEN) {
+        window.ws.send(packet);
+    }
 }
 
 function createKeyPacket(action, keyCode) {
@@ -129,6 +170,6 @@ function createKeyPacket(action, keyCode) {
     const view = new DataView(buffer);
     view.setUint8(0, TYPE_KEY);
     view.setUint8(1, action);
-    view.setUint16(2, keyCode);
+    view.setUint16(2, keyCode, false);
     return buffer;
 }

@@ -240,5 +240,21 @@ function sendReliableOrUnreliable(action, packet, hasWheel) {
     }
 }
 
+// 如果在全屏模式下，尝试锁定键盘以拦截 Escape 和 F11，防止意外退出全屏或打断指针锁定
+document.addEventListener('fullscreenchange', async () => {
+    if (!navigator.keyboard || typeof navigator.keyboard.lock !== 'function') return;
+
+    if (document.fullscreenElement) {
+        try {
+            // 全屏时接管 Escape 和 F11，防止单按 Esc 退出全屏或打断指针锁定
+            await navigator.keyboard.lock(["Escape", "F11"]);
+        } catch (err) {
+            console.warn("Keyboard lock failed:", err);
+        }
+    } else {
+        navigator.keyboard.unlock();
+    }
+});
+
 // 启动
 initRemoteControl();
