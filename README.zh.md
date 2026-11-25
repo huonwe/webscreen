@@ -27,7 +27,7 @@
 
 Webscreen 可在 **Android Termux**、**Linux**、**Windows** 和 **MacOS**（同时支持 `amd64` 和 `arm64` 架构）上运行，未来可能会支持更多设备！
 
-### 通用功能
+### 🌟 通用功能
 - 超分辨率（需要 HTTPS）
 - H.264 / H.265 编码
 - 多连接支持

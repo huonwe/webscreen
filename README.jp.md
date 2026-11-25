@@ -27,7 +27,7 @@ Android、Linux および GameStream デバイス向けのセルフホスト型�
 
 Webscreen は **Android Termux**、**Linux**、**Windows**、および **MacOS**（`amd64` と `arm64` の両方）で動作します。今後さらに多くのデバイスに対応する予定です！
 
-### 共通機能
+### 🌟 共通機能
 - 超解像（Super Resolution / HTTPS が必要）
 - H.264 / H.265
 - マルチ接続

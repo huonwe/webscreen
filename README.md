@@ -26,7 +26,7 @@ A self-hosted screen streaming web application for Android, Linux, and GameStrea
 
 Webscreen can run on **Android Termux**, **Linux**, **Windows**, and **MacOS** (both `amd64` and `arm64`). It might support more devices in the future!
 
-### Universal
+### 🌟 Universal
 - Super Resolution (HTTPS required)
 - H.264 / H.265
 - Multi-Connection
