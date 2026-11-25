@@ -119,13 +119,13 @@ function scheduleMouseSend() {
 
 // ========== UHID 鼠标事件处理 ==========
 
-remoteVideo.addEventListener('mousedown', (event) => {
+remoteCanvas.addEventListener('mousedown', (event) => {
     if (!uhidMouseEnabled) return;
 
     // 如果未锁定，点击时自动请求锁定
-    if (document.pointerLockElement !== remoteVideo &&
-        document.mozPointerLockElement !== remoteVideo &&
-        document.webkitPointerLockElement !== remoteVideo) {
+    if (document.pointerLockElement !== remoteCanvas &&
+        document.mozPointerLockElement !== remoteCanvas &&
+        document.webkitPointerLockElement !== remoteCanvas) {
         requestPointerLock();
     }
 
@@ -145,7 +145,7 @@ remoteVideo.addEventListener('mousedown', (event) => {
     window.sendDataChannelMessage(window.dataChannelUnordered, packet);
 });
 
-remoteVideo.addEventListener('mouseup', (event) => {
+remoteCanvas.addEventListener('mouseup', (event) => {
     if (!uhidMouseEnabled) return;
 
     event.preventDefault();
@@ -164,7 +164,7 @@ remoteVideo.addEventListener('mouseup', (event) => {
     window.sendDataChannelMessage(window.dataChannelUnordered, packet);
 });
 
-remoteVideo.addEventListener('mousemove', (event) => {
+remoteCanvas.addEventListener('mousemove', (event) => {
     if (!uhidMouseEnabled) return;
 
     // 锁定模式下只信赖 movementX/Y
@@ -182,7 +182,7 @@ remoteVideo.addEventListener('mousemove', (event) => {
 });
 
 // 右键菜单拦截（在 UHID 模式下）
-remoteVideo.addEventListener('contextmenu', (event) => {
+remoteCanvas.addEventListener('contextmenu', (event) => {
     if (uhidMouseEnabled) {
         event.preventDefault();
         event.stopPropagation();
@@ -191,7 +191,7 @@ remoteVideo.addEventListener('contextmenu', (event) => {
 
 // 滚轮事件已经在 scroll.js 中处理，但我们也可以在 UHID 模式下捕获
 // 注意：需要根据模式选择使用哪种滚轮处理方式
-remoteVideo.addEventListener('wheel', (event) => {
+remoteCanvas.addEventListener('wheel', (event) => {
     if (!uhidMouseEnabled) return; // 让 scroll.js 处理
 
     event.preventDefault();
@@ -207,7 +207,7 @@ remoteVideo.addEventListener('wheel', (event) => {
 
 // 监听指针锁定状态变化
 document.addEventListener('pointerlockchange', () => {
-    if (document.pointerLockElement === remoteVideo) {
+    if (document.pointerLockElement === remoteCanvas) {
         console.log("Pointer locked - relative mouse mode active");
     } else {
         console.log("Pointer unlocked");

@@ -1,4 +1,4 @@
-const canvasElementFs = document.getElementById('remoteVideo');
+const canvasElementFs = document.getElementById('remoteCanvas');
 const canvasContainer = document.querySelector('.video-container');
 
 if (canvasElementFs) {

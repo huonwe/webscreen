@@ -27,7 +27,7 @@ function sendPendingScroll() {
 }
 
 function getScreenCoordinates(clientX, clientY) {
-    const dimensions = getMediaDimensions(remoteVideo);
+    const dimensions = getMediaDimensions(remoteCanvas);
     if (!dimensions.width || !dimensions.height) {
         return null;
     }
@@ -86,7 +86,7 @@ const handleWheel = (event) => {
     }
 };
 
-remoteVideo.addEventListener('wheel', handleWheel, { passive: false });
+remoteCanvas.addEventListener('wheel', handleWheel, { passive: false });
 
 
 function createScrollPacket(x, y, hScroll, vScroll) {

@@ -1,4 +1,4 @@
-const remoteVideo = document.getElementById('remoteVideo');
+const remoteCanvas = document.getElementById('remoteCanvas');
 
 window.isUHIDMouseEnabled = false;
 // 缓存视频元素的位置和尺寸，避免频繁调用 getBoundingClientRect
@@ -27,13 +27,13 @@ function getMediaDimensions(element) {
 }
 // 更新缓存的视频尺寸和位置
 function updateVideoCache() {
-    const dimensions = getMediaDimensions(remoteVideo);
+    const dimensions = getMediaDimensions(remoteCanvas);
     const vidWidth = dimensions.width;
     const vidHeight = dimensions.height;
 
     if (vidWidth && vidHeight) {
         window.cachedRect.VideoRect =
-            remoteVideo.getBoundingClientRect();
+            remoteCanvas.getBoundingClientRect();
 
         const elWidth = window.cachedRect.VideoRect.width;
         const elHeight = window.cachedRect.VideoRect.height;
@@ -76,8 +76,8 @@ function updateVideoCache() {
  * 代替 window.resize，能捕捉 CSS 旋转、缩放等引起的尺寸改变
  */
 function initVideoObserver() {
-    const remoteVideo = document.getElementById('remoteVideo');
-    if (!remoteVideo) return;
+    const remoteCanvas = document.getElementById('remoteCanvas');
+    if (!remoteCanvas) return;
 
     const observer = new ResizeObserver(entries => {
         for (let entry of entries) {
@@ -94,12 +94,12 @@ function initVideoObserver() {
     });
 
     // 开始观察视频元素
-    observer.observe(remoteVideo);
+    observer.observe(remoteCanvas);
 }
 initVideoObserver();
 
 // 监听视频尺寸变化
-// remoteVideo.addEventListener('loadedmetadata', updateVideoCache);
+// remoteCanvas.addEventListener('loadedmetadata', updateVideoCache);
 // window.addEventListener('resize', ()=> {
 //     setTimeout(() => {
 //         updateVideoCache();
@@ -110,12 +110,12 @@ initVideoObserver();
 function requestPointerLock() {
     // if (!uhidMouseEnabled) return;
 
-    const requestMethod = remoteVideo.requestPointerLock ||
-        remoteVideo.mozRequestPointerLock ||
-        remoteVideo.webkitRequestPointerLock;
+    const requestMethod = remoteCanvas.requestPointerLock ||
+        remoteCanvas.mozRequestPointerLock ||
+        remoteCanvas.webkitRequestPointerLock;
 
     if (requestMethod) {
-        requestMethod.call(remoteVideo);
+        requestMethod.call(remoteCanvas);
     }
 }
 

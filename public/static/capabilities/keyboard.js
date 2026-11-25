@@ -62,7 +62,7 @@ const INTERCEPT_CODES = new Set([
 
 document.addEventListener('keydown', (e) => {
     // 仅在存在远程视频容器的页面生效，避免全局加载影响其他页面
-    if (!document.getElementById('remoteVideo')) return;
+    if (!document.getElementById('remoteCanvas')) return;
 
     if (typeof window.uhidKeyboardEnabled !== 'undefined' && window.uhidKeyboardEnabled) {
         return;

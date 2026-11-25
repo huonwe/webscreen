@@ -28,7 +28,7 @@
 <body>
     <div class="main-container">
         <div class="video-container">
-            <canvas id="remoteVideo"></canvas>
+            <canvas id="remoteCanvas"></canvas>
         </div>
         <div class="controls-container">
             <a href="/console" class="control-btn" data-i18n-title="device_manager" title="设备管理"
@@ -51,6 +51,7 @@
     </div>
     <script>
         window.MANNUAL_ROTATE = false;
+        const remoteCanvas = document.getElementById('remoteCanvas');
         let checkTimeout;
 
         function triggerCheck() {
@@ -62,7 +63,7 @@
 
         function checkOrientation() {
             if (window.MANNUAL_ROTATE) return;
-            const video = document.getElementById('remoteVideo');
+            const video = document.getElementById('remoteCanvas');
             if (!video.width || !video.height) return;
 
             const isPagePortrait = window.innerHeight > window.innerWidth;

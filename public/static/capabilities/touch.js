@@ -33,7 +33,7 @@ function scheduleMoveSend() {
 }
 
 function getScreenCoordinates(clientX, clientY) {
-    const dimensions = getMediaDimensions(remoteVideo);
+    const dimensions = getMediaDimensions(remoteCanvas);
     if (!dimensions.width || !dimensions.height) {
         return null;
     }
@@ -82,9 +82,9 @@ function getTouchPressure(touch) {
 // ========== 鼠标事件处理 (单点) ==========
 let activeMousePointer = null;
 
-remoteVideo.addEventListener('mousedown', (event) => {
+remoteCanvas.addEventListener('mousedown', (event) => {
     // console.log("Mouse down event:", event);
-    if (document.pointerLockElement === remoteVideo) return;
+    if (document.pointerLockElement === remoteCanvas) return;
     if (event.button !== 0 || window.isUHIDMouseEnabled) return; // Only Left Click
     activeMousePointer = 0; // 使用 pointerId 0 表示鼠标
     const coords = getScreenCoordinates(event.clientX, event.clientY);
@@ -93,8 +93,8 @@ remoteVideo.addEventListener('mousedown', (event) => {
     }
 });
 
-remoteVideo.addEventListener('mouseup', (event) => {
-    if (document.pointerLockElement === remoteVideo) return;
+remoteCanvas.addEventListener('mouseup', (event) => {
+    if (document.pointerLockElement === remoteCanvas) return;
     if (window.isUHIDMouseEnabled) return;
     if (activeMousePointer !== null) {
         const coords = getScreenCoordinates(event.clientX, event.clientY);
@@ -105,8 +105,8 @@ remoteVideo.addEventListener('mouseup', (event) => {
     }
 });
 
-remoteVideo.addEventListener('mousemove', (event) => {
-    if (document.pointerLockElement === remoteVideo) return;
+remoteCanvas.addEventListener('mousemove', (event) => {
+    if (document.pointerLockElement === remoteCanvas) return;
     if (window.isUHIDMouseEnabled) return;
     if (activeMousePointer !== null && event.buttons === 1) {
         // console.log("Mouse move event:", event);
@@ -119,8 +119,8 @@ remoteVideo.addEventListener('mousemove', (event) => {
 });
 
 // 处理鼠标移出视频区域后释放的情况
-remoteVideo.addEventListener('mouseleave', (event) => {
-    if (document.pointerLockElement === remoteVideo) return;
+remoteCanvas.addEventListener('mouseleave', (event) => {
+    if (document.pointerLockElement === remoteCanvas) return;
     if (activeMousePointer !== null && event.buttons !== 1) {
         const coords = getScreenCoordinates(event.clientX, event.clientY);
         if (coords) {
@@ -133,7 +133,7 @@ remoteVideo.addEventListener('mouseleave', (event) => {
 // ========== 触摸事件处理 (多点触控) ==========
 const activeTouches = new Map(); // touchIdentifier -> pointerId
 
-remoteVideo.addEventListener('touchstart', (event) => {
+remoteCanvas.addEventListener('touchstart', (event) => {
     event.preventDefault();
     updateVideoCache(); // 触摸开始时更新缓存
 
@@ -150,7 +150,7 @@ remoteVideo.addEventListener('touchstart', (event) => {
     }
 }, { passive: false });
 
-remoteVideo.addEventListener('touchend', (event) => {
+remoteCanvas.addEventListener('touchend', (event) => {
     event.preventDefault();
 
     for (let i = 0; i < event.changedTouches.length; i++) {
@@ -167,7 +167,7 @@ remoteVideo.addEventListener('touchend', (event) => {
     }
 }, { passive: false });
 
-remoteVideo.addEventListener('touchmove', (event) => {
+remoteCanvas.addEventListener('touchmove', (event) => {
     event.preventDefault();
 
     for (let i = 0; i < event.changedTouches.length; i++) {
@@ -185,7 +185,7 @@ remoteVideo.addEventListener('touchmove', (event) => {
     scheduleMoveSend();
 }, { passive: false });
 
-remoteVideo.addEventListener('touchcancel', (event) => {
+remoteCanvas.addEventListener('touchcancel', (event) => {
     event.preventDefault();
 
     for (let i = 0; i < event.changedTouches.length; i++) {

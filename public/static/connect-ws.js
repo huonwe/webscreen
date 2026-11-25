@@ -22,7 +22,7 @@ async function initWebCodecs(mediaMeta, videoCodec) {
     if (!window.Worker || !HTMLCanvasElement.prototype.transferControlToOffscreen) {
         throw new Error('This browser does not support OffscreenCanvas workers');
     }
-    const canvas = document.getElementById('remoteVideo');
+    const canvas = document.getElementById('remoteCanvas');
     if (!(canvas instanceof HTMLCanvasElement)) {
         throw new Error('WebSocket media output canvas was not found');
     }

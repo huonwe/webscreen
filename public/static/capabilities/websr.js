@@ -9,7 +9,7 @@ let isShowingOutput = false;
 let pendingSourceFrame = null;
 
 function getSourceCanvas() {
-    return document.getElementById('remoteVideo');
+    return document.getElementById('remoteCanvas');
 }
 
 function getVideoContainer() {
@@ -130,7 +130,7 @@ window.notifySourceFrameUpdated = function (frame) {
 function enableUpscaling(button) {
     const source = getSourceCanvas();
     if (!(source instanceof HTMLCanvasElement)) {
-        throw new Error('WebSR requires remoteVideo to be a canvas');
+        throw new Error('WebSR requires remoteCanvas to be a canvas');
     }
     if (!source.width || !source.height) {
         throw new Error('WebSR cannot start before the canvas has a frame');

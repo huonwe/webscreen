@@ -92,17 +92,17 @@ function sendMousePacket(action, dx, dy, buttons, wheelX, wheelY) {
 //     if (typeof window.getScreenCoordinates === 'function') {
 //         return window.getScreenCoordinates(clientX, clientY);
 //     }
-//     const video = document.getElementById('remoteVideo');
-//     if (!video) return null;
+//     const canvas = document.getElementById('remoteCanvas');
+//     if (!canvas) return null;
 //     if ((!window.cachedRect || !window.cachedRect.MediaWidth) && typeof window.updateVideoCache === 'function') {
 //         window.updateVideoCache();
 //     }
-//     const rect = video.getBoundingClientRect();
+//     const rect = canvas.getBoundingClientRect();
 //     const content = window.cachedRect && window.cachedRect.ContentRect && window.cachedRect.ContentRect.width > 0
 //         ? window.cachedRect.ContentRect
 //         : { left: 0, top: 0, width: rect.width, height: rect.height };
-//     const mediaW = (window.cachedRect && window.cachedRect.MediaWidth) || video.width || video.videoWidth || 1920;
-//     const mediaH = (window.cachedRect && window.cachedRect.MediaHeight) || video.height || video.videoHeight || 1080;
+//     const mediaW = (window.cachedRect && window.cachedRect.MediaWidth) || canvas.width || canvas.videoWidth || 1920;
+//     const mediaH = (window.cachedRect && window.cachedRect.MediaHeight) || canvas.height || canvas.videoHeight || 1080;
 
 //     const relX = clientX - rect.left - content.left;
 //     const relY = clientY - rect.top - content.top;
@@ -116,12 +116,12 @@ function sendMousePacket(action, dx, dy, buttons, wheelX, wheelY) {
 
 // 前端：直接返回 0 ~ 65535 的归一化坐标，彻底免疫分辨率切换和 CSS 缩放
 function getNormalizedTouchCoords(clientX, clientY) {
-    const video = document.getElementById('remoteVideo');
-    if (!video) return null;
+    const canvas = document.getElementById('remoteCanvas');
+    if (!canvas) return null;
     if ((!window.cachedRect || !window.cachedRect.ContentRect) && typeof window.updateVideoCache === 'function') {
         window.updateVideoCache();
     }
-    const rect = video.getBoundingClientRect();
+    const rect = canvas.getBoundingClientRect();
     const content = (window.cachedRect && window.cachedRect.ContentRect && window.cachedRect.ContentRect.width > 0)
         ? window.cachedRect.ContentRect
         : { left: 0, top: 0, width: rect.width, height: rect.height };
@@ -156,8 +156,8 @@ function sendTouchPacket(action, ptrId, x, y, pressure) {
 const activeTouches = new Map();
 
 function initGameStreamTouchAndTrackpad() {
-    const video = document.getElementById('remoteVideo');
-    if (!video) return;
+    const canvas = document.getElementById('remoteCanvas');
+    if (!canvas) return;
 
     // --- Trackpad state (active when !gsTouchEnabled) ---
     const TRACKPAD_SENSITIVITY = 1.5;
@@ -199,7 +199,7 @@ function initGameStreamTouchAndTrackpad() {
         }
     };
 
-    video.addEventListener('touchstart', (e) => {
+    canvas.addEventListener('touchstart', (e) => {
         if (gsTouchEnabled) {
             handleDirectTouch(e, TOUCH_DOWN);
             return;
@@ -225,7 +225,7 @@ function initGameStreamTouchAndTrackpad() {
         }
     }, { passive: false });
 
-    video.addEventListener('touchmove', (e) => {
+    canvas.addEventListener('touchmove', (e) => {
         if (gsTouchEnabled) {
             handleDirectTouch(e, TOUCH_MOVE);
             return;
@@ -288,8 +288,8 @@ function initGameStreamTouchAndTrackpad() {
         }
     };
 
-    video.addEventListener('touchend', endTrackpadOrTouch, { passive: false });
-    video.addEventListener('touchcancel', endTrackpadOrTouch, { passive: false });
+    canvas.addEventListener('touchend', endTrackpadOrTouch, { passive: false });
+    canvas.addEventListener('touchcancel', endTrackpadOrTouch, { passive: false });
 }
 
 // =========================================================================

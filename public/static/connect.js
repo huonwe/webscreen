@@ -75,7 +75,7 @@ async function start() {
         pc.ontrack = function (event) {
             if (event.track.kind === 'video') {
                 console.log("Received remote video track:", event.track);
-                const canvas = document.getElementById('remoteVideo');
+                const canvas = document.getElementById('remoteCanvas');
                 canvas.addEventListener('loadedmetadata', triggerCheck);
                 canvas.addEventListener('resize', triggerCheck);
                 const offscreen = canvas.transferControlToOffscreen();
@@ -368,7 +368,7 @@ function sendDataChannelMessage(channel, msg) {
 //             //     console.log(`WebRTC Internal Delay: ${delay_ms} ms`);
 //             // }
 
-//             const videoEl = document.getElementById('remoteVideo');
+//             const videoEl = document.getElementById('remoteCanvas');
 //             if (!videoEl) return;
 
 //             if (currentDelay > 0.1) {

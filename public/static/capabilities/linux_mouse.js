@@ -23,8 +23,19 @@ let rafScheduled = false;
 let accumX = 0;
 let accumY = 0;
 
+function getMouseButtonMask(button) {
+    switch (button) {
+        case 0: return 1;  // Left
+        case 2: return 2;  // Right
+        case 1: return 4;  // Middle
+        case 3: return 8;  // Side Back (X1)
+        case 4: return 16; // Side Forward (X2)
+        default: return 0;
+    }
+}
+
 function initRemoteControl() {
-    if (!remoteVideo) {
+    if (!remoteCanvas) {
         console.error(`Video element not found.`);
         return;
     }
@@ -34,7 +45,7 @@ function initRemoteControl() {
     window.mouseControlInitialized = true;
 
     // 1. 点击视频区域请求锁定鼠标
-    remoteVideo.addEventListener('mousedown', (e) => {
+    remoteCanvas.addEventListener('mousedown', (e) => {
         if (!isPointerLocked) {
             console.log("Requesting pointer lock...");
             requestPointerLock();
@@ -51,6 +62,13 @@ function initRemoteControl() {
     document.addEventListener('mousedown', handleMouseDown);
     document.addEventListener('mouseup', handleMouseUp);
     document.addEventListener('wheel', handleWheel, { passive: false });
+    // 鼠标侧键
+    document.addEventListener('auxclick', (e) => {
+    if (isPointerLocked) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+});
 
     // 4. 阻止右键菜单
     document.addEventListener('contextmenu', (e) => {
@@ -69,13 +87,13 @@ function handlePointerLockChange() {
         document.mozPointerLockElement ||
         document.webkitPointerLockElement;
 
-    if (lockedElement === remoteVideo) {
+    if (lockedElement === remoteCanvas) {
         isPointerLocked = true;
     } else {
         isPointerLocked = false;
         // 退出指针锁定时，若仍有按键未抬起，强制补发 UP 防止远端卡键
         if (mouseButtonsMask !== 0) {
-            for (const bit of [1, 2, 4]) {
+            for (const bit of [1, 2, 4, 8, 16]) {
                 if (mouseButtonsMask & bit) {
                     sendControlPacket(MOUSE_ACTION_UP, 0, 0, bit, 0);
                 }
@@ -110,16 +128,10 @@ function handleMouseDown(e) {
 
     flushPendingEvents(MOUSE_ACTION_MOVE);
 
-    let pressingMask = 0;
-    switch (e.button) {
-        case 0: pressingMask = 1; break; // Left
-        case 2: pressingMask = 2; break; // Right
-        case 1: pressingMask = 4; break; // Middle
-    }
+    const pressingMask = getMouseButtonMask(e.button);
     if (pressingMask === 0) return;
 
     mouseButtonsMask |= pressingMask;
-    // 只发送本次新按下的按键掩码，避免多键同时按下时掩码冲突
     sendControlPacket(MOUSE_ACTION_DOWN, 0, 0, pressingMask, 0);
 }
 
@@ -130,12 +142,7 @@ function handleMouseUp(e) {
 
     flushPendingEvents(MOUSE_ACTION_MOVE);
 
-    let releasingMask = 0;
-    switch (e.button) {
-        case 0: releasingMask = 1; break;
-        case 2: releasingMask = 2; break;
-        case 1: releasingMask = 4; break;
-    }
+    const releasingMask = getMouseButtonMask(e.button);
     if (releasingMask === 0) return;
 
     sendControlPacket(MOUSE_ACTION_UP, 0, 0, releasingMask, 0);

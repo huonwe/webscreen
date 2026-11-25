@@ -6,7 +6,7 @@
 (function() {
     // --- 配置项 ---
     const CONFIG = {
-        videoElementId: 'remoteVideo',
+        videoElementId: 'remoteCanvas',
         ocrLanguage: 'jpn', // 源语言: 'eng' (英语), 'chi_sim' (简体中文), 'jpn' (日语)等
         interval: 3000,     // OCR 采样间隔 (毫秒)，太快会卡顿
         confidenceThreshold: 70, // 置信度阈值，低于此值的文字不显示
