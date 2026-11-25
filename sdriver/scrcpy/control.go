@@ -259,11 +259,10 @@ func (da *ScrcpyDriver) SendUHIDDestroyEvent(e *sdriver.UHIDDestroyEvent) {
 	}
 }
 
-func (da *ScrcpyDriver) KeyFrameRequest() error {
+func (da *ScrcpyDriver) sendKeyFrameRequest() error {
 	if da.controlConn == nil {
 		return nil
 	}
-	log.Println("⚡ Request KeyFrame via Control Conn...")
 	msg := []byte{TYPE_REQUEST_IDR}
 	//<-da.VideoChan
 	_, err := da.controlConn.Write(msg)

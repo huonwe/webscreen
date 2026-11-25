@@ -420,9 +420,17 @@ func (da *ScrcpyDriver) updateVideoMetaFromSPS(sps []byte, codec string) {
 }
 
 func (da *ScrcpyDriver) updateSize(width, height uint32) {
+	if da.mediaMeta.Width == width && da.mediaMeta.Height == height {
+		return
+	}
 	da.mediaMeta.Width = width
 	da.mediaMeta.Height = height
-	log.Printf("[scrcpy] Updated Video Meta from session packet: Width=%d, Height=%d", da.mediaMeta.Width, da.mediaMeta.Height)
+	select {
+	case da.MsgChan <- sdriver.UpdateVideoMetaEvent{Width: width, Height: height}:
+	default:
+		log.Printf("[scrcpy] Failed to send UpdateVideoMetaEvent, channel full")
+	}
+	// log.Printf("[scrcpy] Updated Video Meta from session packet: Width=%d, Height=%d", da.mediaMeta.Width, da.mediaMeta.Height)
 }
 
 func readScrcpyFrameHeader(headerBuf []byte, header *ScrcpyFrameHeader) error {

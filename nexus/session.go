@@ -228,14 +228,27 @@ func (v *ViewSession) HandleMsg(event sdriver.Event) error {
 		// if !yield(msg) {
 		// 	return
 		// }
+	case sdriver.EVENT_TYPE_UPDATE_VIDEO_META:
+		event := event.(sdriver.UpdateVideoMetaEvent)
+		content := make([]byte, 8)
+		binary.BigEndian.PutUint32(content[0:4], event.Width)
+		binary.BigEndian.PutUint32(content[4:8], event.Height)
+		msg = make([]byte, 1+len(content))
+		copy(msg[1:], content)
+		msg[0] = byte(sdriver.EVENT_TYPE_UPDATE_VIDEO_META)
+		// if !yield(msg) {
+		// 	return
+		// }
 	default:
 		return fmt.Errorf("Unhandled event type in HandleMsg: %d", eType)
 	}
+	log.Printf("[nexus] Handling message of type: %d", eType)
 	switch v.ConnectionConfig.Protocol {
 	case "websocket":
 		v.WSConn.WriteMessage(websocket.BinaryMessage, msg)
 	case "webrtc":
 		if v.dataChannelUnordered != nil {
+			log.Printf("[nexus] Sending message of type: %d over WebRTC data channel", eType)
 			v.dataChannelUnordered.Send(msg)
 		}
 	}

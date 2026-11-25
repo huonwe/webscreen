@@ -27,7 +27,7 @@ func (da *ScrcpyDriver) convertVideoFrame() {
 		if (headerBuf[0] & 0x80) != 0 {
 			width := binary.BigEndian.Uint32(headerBuf[4:8])
 			height := binary.BigEndian.Uint32(headerBuf[8:12])
-			log.Printf("Received session packet, new size: %dx%d", width, height)
+			// log.Printf("Received session packet, new size: %dx%d", width, height)
 			da.updateSize(width, height)
 			continue
 		}

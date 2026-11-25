@@ -195,7 +195,9 @@ function enableUpscaling(button) {
 
         try {
             const offscreen = outputCanvas.transferControlToOffscreen();
-            worker.postMessage({ type: 'init', canvas: offscreen }, [offscreen]);
+            const resolution_width = window.videoResolution?.width || 0;
+            const resolution_height = window.videoResolution?.height || 0;
+            worker.postMessage({ type: 'init', canvas: offscreen, resolution_width, resolution_height }, [offscreen]);
         } catch (error) {
             reject(error);
         }

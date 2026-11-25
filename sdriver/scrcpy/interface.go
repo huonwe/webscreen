@@ -75,25 +75,29 @@ func (sd *ScrcpyDriver) SendEvent(event sdriver.Event) error {
 	return nil
 }
 
-func (sd *ScrcpyDriver) RequestIDR(firstFrame bool) {
+func (sd *ScrcpyDriver) RequestIDR(firstTime bool) {
 	if len(sd.LastSPS) == 0 && len(sd.LastPPS) == 0 && len(sd.LastVPS) == 0 && len(sd.LastIDR) == 0 {
-		sd.KeyFrameRequest()
+		sd.sendKeyFrameRequest()
 		return
 	}
 
-	if firstFrame {
-		log.Println("First frame IDR request, sending cached key frame")
+	if firstTime {
+		log.Println("Force IDR request, sending cached key frame and video info")
 		sd.sendCachedKeyFrame()
-		sd.KeyFrameRequest()
+		// sd.sendKeyFrameRequest()
+		select {
+		case sd.MsgChan <- sdriver.UpdateVideoMetaEvent{Width: sd.mediaMeta.Width, Height: sd.mediaMeta.Height}:
+		default:
+		}
 		return
-	} else if time.Since(sd.LastIDRRequestTime) < 2*time.Second {
+	}
+	if time.Since(sd.LastIDRRequestTime) < 2*time.Second {
 		// log.Printf("last IDR time request was %.1f seconds ago, sending cached key frame", time.Since(sd.LastIDRRequestTime).Seconds())
-		sd.sendCachedKeyFrame()
+		// sd.sendCachedKeyFrame()
 		return
 	}
-
-	sd.KeyFrameRequest()
-	// sd.LastIDRRequestTime = time.Now()
+	log.Println("Request KeyFrame...")
+	sd.sendKeyFrameRequest()
 }
 
 func (sd *ScrcpyDriver) Capabilities() sdriver.DriverCaps {

@@ -127,7 +127,7 @@ async function start() {
         window.dataChannelOrdered = dataChannelOrdered;
         window.dataChannelUnordered = dataChannelUnordered;
         dataChannelUnordered.addEventListener('message', (event) => {
-            console.log("DataChannel Unordered Message:", event.data);
+            // console.log("DataChannel Unordered Message:", event.data);
             const view = new Uint8Array(event.data);
             const decoder = new TextDecoder();
             switch (view[0]) {
@@ -147,6 +147,13 @@ async function start() {
                     const textMsg = decoder.decode(view.slice(1));
                     console.log("Text message from agent:", textMsg);
                     showToast(textMsg, 3000);
+                    break;
+                }
+                case 0x65: {
+                    const width = (view[1] << 24) | (view[2] << 16) | (view[3] << 8) | view[4];
+                    const height = (view[5] << 24) | (view[6] << 16) | (view[7] << 8) | view[8];
+                    console.log("Video meta updated from agent: Width=" + width + ", Height=" + height);
+                    window.videoResolution = { width, height };
                     break;
                 }
                 default:
@@ -283,6 +290,7 @@ async function start() {
 
         if (message.status !== 'ok' || message.stage !== 'connection_view_session') {
             return;
+            //TODO: WebSocket Msg Handle (Currently, only msg from webrtc channel is handled)
         }
 
         if (pc) {

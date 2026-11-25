@@ -40,6 +40,8 @@ const (
 	EVENT_TYPE_REQ_IDR EventType = EVENT_TYPE_RESET_VIDEO
 	// -> Web Toast Message
 	EVENT_TYPE_TEXT_MSG EventType = 0x64
+	// When resolution changes
+	EVENT_TYPE_UPDATE_VIDEO_META EventType = 0x65
 )
 
 // 鼠标动作枚举
@@ -215,4 +217,13 @@ type TextMsgEvent struct {
 
 func (e TextMsgEvent) Type() EventType {
 	return EVENT_TYPE_TEXT_MSG
+}
+
+type UpdateVideoMetaEvent struct {
+	Width  uint32
+	Height uint32
+}
+
+func (e UpdateVideoMetaEvent) Type() EventType {
+	return EVENT_TYPE_UPDATE_VIDEO_META
 }

@@ -148,18 +148,22 @@ func (n *Nexus) pumpRemoteAV(b *remoteBinding) {
 // SDriver -> Remote -> Nexus  -> 前端
 func (n *Nexus) pumpRemoteMsg(bind *remoteBinding) {
 	_, _, msgCh, _ := bind.remote.sdriver.GetReceivers()
-	select {
-	case <-bind.stopCh:
-		return
-	case event, ok := <-msgCh:
-		if !ok {
+	log.Printf("[nexus] Starting message pump for remote %s", bind.remote.RemoteUUID)
+	for {
+		select {
+		case <-bind.stopCh:
 			return
-		}
-		if snap := bind.viewersSnap.Load(); snap != nil {
-			for _, viewer := range *snap {
-				err := viewer.HandleMsg(event)
-				if err != nil {
-					log.Printf("[nexus] Error handling message for viewer %s: %v", viewer.SessionID, err)
+		case event, ok := <-msgCh:
+			if !ok {
+				return
+			}
+			log.Printf("[nexus] Received message from remote %s: %v", bind.remote.RemoteUUID, event)
+			if snap := bind.viewersSnap.Load(); snap != nil {
+				for _, viewer := range *snap {
+					err := viewer.HandleMsg(event)
+					if err != nil {
+						log.Printf("[nexus] Error handling message for viewer %s: %v", viewer.SessionID, err)
+					}
 				}
 			}
 		}
