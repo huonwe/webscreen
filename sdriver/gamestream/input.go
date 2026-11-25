@@ -290,6 +290,10 @@ func mapMouseButton(buttons uint32) byte {
 		return 2
 	case buttons&sdriver.BUTTON_SECONDARY != 0:
 		return 3
+	case buttons&sdriver.BUTTON_X1 != 0:
+		return 4
+	case buttons&sdriver.BUTTON_X2 != 0:
+		return 5
 	default:
 		return 0
 	}

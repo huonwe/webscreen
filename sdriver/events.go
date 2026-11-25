@@ -50,9 +50,11 @@ const (
 )
 
 const (
-	BUTTON_PRIMARY   uint32 = 1 << 0
-	BUTTON_SECONDARY uint32 = 1 << 1
-	BUTTON_TERTIARY  uint32 = 1 << 2
+	BUTTON_PRIMARY   uint32 = 1 << 0 // 1: 左键
+	BUTTON_SECONDARY uint32 = 1 << 1 // 2: 右键
+	BUTTON_TERTIARY  uint32 = 1 << 2 // 4: 中键
+	BUTTON_X1        uint32 = 1 << 3 // 8: 侧键后退
+	BUTTON_X2        uint32 = 1 << 4 // 16: 侧键前进
 )
 
 const (
