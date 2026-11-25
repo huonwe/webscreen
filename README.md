@@ -2,7 +2,7 @@
 
 # 📺 Webscreen
 
-A self-hosted screen streaming web application for Android and Linux devices. 
+A self-hosted screen streaming web application for Android, Linux, and GameStream devices. 
 
 [![GitHub release](https://img.shields.io/github/v/release/huonwe/webscreen?style=flat-square)](https://github.com/huonwe/webscreen/releases)
 [![GitHub stars](https://img.shields.io/github/stars/huonwe/webscreen?style=flat-square)](https://github.com/huonwe/webscreen/stargazers)
@@ -33,12 +33,12 @@ Webscreen can run on **Android Termux**, **Linux**, **Windows**, and **MacOS** (
 - WebRTC / WebSocket Streaming
 > **Note**: If you choose WebSocket, HTTPS is required.
 
-### GameStream ([Sunshine](https://github.com/SunshineStream/Sunshine) / [Wolf](https://github.com/games-on-whales/wolf))
+### ☀ GameStream ([Sunshine](https://github.com/SunshineStream/Sunshine) / [Wolf](https://github.com/games-on-whales/wolf))
 - Video, Audio, Control
 - H.264 / H.265
 - Touch, Mouse, Keyboard
 
-### 📱 Android (via [scrcpy](https://github.com/Genymobile/scrcpy))
+### 📱 Android ([scrcpy](https://github.com/Genymobile/scrcpy))
 - Video, Audio, Control
 - UHID Devices (Mouse, Keyboard, Gamepad)
 - Clipboard Sync (HTTPS required)

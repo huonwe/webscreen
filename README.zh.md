@@ -3,7 +3,7 @@
 
 # 📺 Webscreen
 
-一款适用于 Android 和 Linux 设备的自托管屏幕串流 Web 应用程序。
+一款适用于 Android, Linux, 和 GameStream 设备的自托管屏幕串流 Web 应用程序。
 
 [![GitHub release](https://img.shields.io/github/v/release/huonwe/webscreen?style=flat-square)](https://github.com/huonwe/webscreen/releases)
 [![GitHub stars](https://img.shields.io/github/stars/huonwe/webscreen?style=flat-square)](https://github.com/huonwe/webscreen/stargazers)

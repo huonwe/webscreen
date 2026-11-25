@@ -3,7 +3,7 @@
 
 # 📺 Webscreen
 
-Android および Linux デバイス向けのセルフホスト型画面ストリーミング Web アプリケーション。
+Android、Linux および GameStream デバイス向けのセルフホスト型画面ストリーミング Web アプリケーション。
 
 [![GitHub release](https://img.shields.io/github/v/release/huonwe/webscreen?style=flat-square)](https://github.com/huonwe/webscreen/releases)
 [![GitHub stars](https://img.shields.io/github/stars/huonwe/webscreen?style=flat-square)](https://github.com/huonwe/webscreen/stargazers)
