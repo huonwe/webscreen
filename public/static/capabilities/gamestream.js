@@ -51,6 +51,10 @@ const gsPadState = {
 function sendOrderedPacket(buf) {
     if (typeof window.sendDataChannelMessage === 'function' && window.dataChannelOrdered) {
         window.sendDataChannelMessage(window.dataChannelOrdered, buf);
+        return
+    }
+    if (window.ws && window.ws.readyState === WebSocket.OPEN) {
+        window.ws.send(buf);
     }
 }
 
