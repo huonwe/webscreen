@@ -16,3 +16,6 @@ dist/
 *.db
 *.db-shm
 *.db-wal
+
+gamestream_auth
+*.pem
