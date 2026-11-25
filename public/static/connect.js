@@ -2,30 +2,6 @@ const jitterBufferTargetMs = 0; // 0 is a cake
 
 // Load CONFIG from sessionStorage if available, otherwise use URL params or defaults
 var CONFIG = (function () {
-
-    // // if url has ?debug, use hardcoded debug config
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.has('debug')) {
-        console.log("Using debug config from URL parameter");
-        return {
-            device_type: "sunshine",
-            device_id: "127.0.0.1:5555",
-            device_ip: "127.0.0.1",
-            device_port: "5555",
-            av_sync: false,
-            driver_config: {
-                max_fps: "60",
-                video_codec: "h265",
-                audio_codec: "opus",
-                video_bit_rate: "4000000",
-                audio: "true",
-                file_path: "test/test.h265",
-                deviceID: "emulator-5554",
-                // new_display: "1920x1080/60",
-            }
-        };
-    }
-
     // Try to load from sessionStorage first (set by console.js)
     const stored = sessionStorage.getItem('webscreen_device_configs_now');
     console.log("Stored config:", stored);
@@ -40,21 +16,7 @@ var CONFIG = (function () {
             console.warn('Failed to parse stored config:', e);
         }
     }
-
-    // Fallback to hardcoded defaults for testing
-    return {
-        device_type: "none",
-        device_id: "emulator-5554",
-        device_ip: "0",
-        device_port: "0",
-        av_sync: false,
-        driver_config: {
-            video_codec: "h264",
-            audio: "true",
-            audio_codec: "opus",
-            video_bit_rate: "8000000"
-        }
-    };
+    console.error("No valid configuration found.");
 })();
 
 if (window.location.pathname.startsWith('/screen-ws')) {
@@ -93,7 +55,7 @@ async function start() {
         return;
     }
 
-    activeTransportProtocol = CONFIG.protocol || 'websocket';
+    activeTransportProtocol = CONFIG.protocol || 'webrtc';
     const usesWebSocket = activeTransportProtocol === 'websocket';
     if (usesWebSocket) window.WebSocketMedia.enableAudioStart();
     if (!usesWebSocket && activeTransportProtocol !== 'webrtc') {
@@ -368,61 +330,61 @@ function sendDataChannelMessage(channel, msg) {
     }
 }
 
-let lastJitterDelay = 0;
-let lastEmittedCount = 0;
+// let lastJitterDelay = 0;
+// let lastEmittedCount = 0;
 
-async function force_sync(pc) {
-    if (!pc) {
-        console.warn("RTCPeerConnection is not defined. Cannot force sync.");
-        return;
-    };
+// async function force_sync(pc) {
+//     if (!pc) {
+//         console.warn("RTCPeerConnection is not defined. Cannot force sync.");
+//         return;
+//     };
 
-    // 获取 WebRTC 统计信息
-    const stats = await pc.getStats();
+//     // 获取 WebRTC 统计信息
+//     const stats = await pc.getStats();
 
-    stats.forEach(report => {
-        // 找到视频接收通道的统计
-        if (report.type === 'inbound-rtp' && report.kind === 'video') {
+//     stats.forEach(report => {
+//         // 找到视频接收通道的统计
+//         if (report.type === 'inbound-rtp' && report.kind === 'video') {
 
-            // jitterBufferDelay 是累积的总延迟时间（秒）
-            // jitterBufferEmittedCount 是累积的总帧数
-            // 我们需要计算“当前”的平均延迟，所以要减去上一次的值取差值
+//             // jitterBufferDelay 是累积的总延迟时间（秒）
+//             // jitterBufferEmittedCount 是累积的总帧数
+//             // 我们需要计算“当前”的平均延迟，所以要减去上一次的值取差值
 
-            const deltaDelay = report.jitterBufferDelay - lastJitterDelay;
-            const deltaCount = report.jitterBufferEmittedCount - lastEmittedCount;
+//             const deltaDelay = report.jitterBufferDelay - lastJitterDelay;
+//             const deltaCount = report.jitterBufferEmittedCount - lastEmittedCount;
 
-            // 更新历史值
-            lastJitterDelay = report.jitterBufferDelay;
-            lastEmittedCount = report.jitterBufferEmittedCount;
+//             // 更新历史值
+//             lastJitterDelay = report.jitterBufferDelay;
+//             lastEmittedCount = report.jitterBufferEmittedCount;
 
-            // 计算最近一秒内的平均帧延迟
-            let currentDelay = 0;
-            if (deltaCount > 0) {
-                currentDelay = deltaDelay / deltaCount;
-            }
+//             // 计算最近一秒内的平均帧延迟
+//             let currentDelay = 0;
+//             if (deltaCount > 0) {
+//                 currentDelay = deltaDelay / deltaCount;
+//             }
 
-            // let delay_ms = (currentDelay * 5000).toFixed(2);
-            // if (delay_ms > 50) {
-            //     console.log(`WebRTC Internal Delay: ${delay_ms} ms`);
-            // }
+//             // let delay_ms = (currentDelay * 5000).toFixed(2);
+//             // if (delay_ms > 50) {
+//             //     console.log(`WebRTC Internal Delay: ${delay_ms} ms`);
+//             // }
 
-            const videoEl = document.getElementById('remoteVideo');
-            if (!videoEl) return;
+//             const videoEl = document.getElementById('remoteVideo');
+//             if (!videoEl) return;
 
-            if (currentDelay > 0.1) {
-                if (videoEl.playbackRate !== 1.1) {
-                    // console.log("轻微延迟，启用 1.1x 倍速追赶");
-                    videoEl.playbackRate = 1.1;
-                }
-            }
-            // 延迟恢复正常后，切回 1.0
-            else if (currentDelay <= 0.1 && videoEl.playbackRate !== 1.0) {
-                // console.log("延迟恢复正常，切回 1.0x");
-                videoEl.playbackRate = 1.0;
-            }
-        }
-    });
-};
+//             if (currentDelay > 0.1) {
+//                 if (videoEl.playbackRate !== 1.1) {
+//                     // console.log("轻微延迟，启用 1.1x 倍速追赶");
+//                     videoEl.playbackRate = 1.1;
+//                 }
+//             }
+//             // 延迟恢复正常后，切回 1.0
+//             else if (currentDelay <= 0.1 && videoEl.playbackRate !== 1.0) {
+//                 // console.log("延迟恢复正常，切回 1.0x");
+//                 videoEl.playbackRate = 1.0;
+//             }
+//         }
+//     });
+// };
 
 
 function loadScript(src) {

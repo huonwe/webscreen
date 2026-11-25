@@ -93,6 +93,7 @@ function ensureDeviceConfig(device) {
             device_ip: device.ip || '0',
             device_port: device.port || '0',
             av_sync: baseConfig.av_sync,
+            protocol: device.protocol || 'webrtc',
             remote_uuid: device.uuid || '',
             driver_config: baseConfig.driver_config
         };
@@ -644,10 +645,10 @@ function startStream(serial) {
         device_id: config.device_id || serial,
         device_ip: config.device_ip || '0',
         device_port: config.device_port || '0',
-        av_sync: config.av_sync || false,
+        // av_sync: config.av_sync || false,
         remote_uuid: config.remote_uuid || '',
-        protocol: config.protocol || 'not set',
-        use_local_timestamp: config.use_local_timestamp || false,
+        protocol: config.protocol || 'webrtc',
+        // use_local_timestamp: config.use_local_timestamp || false,
         driver_config: drv
     };
 
