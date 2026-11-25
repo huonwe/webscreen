@@ -1,5 +1,3 @@
-const remoteCanvas = document.getElementById('remoteCanvas');
-
 window.isUHIDMouseEnabled = false;
 // 缓存视频元素的位置和尺寸，避免频繁调用 getBoundingClientRect
 window.cachedRect = {

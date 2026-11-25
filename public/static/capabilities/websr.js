@@ -13,7 +13,7 @@ function getSourceCanvas() {
 }
 
 function getVideoContainer() {
-    return document.querySelector('.video-container');
+    return document.querySelector('.canvas-container');
 }
 
 function updateCanvasBounds() {

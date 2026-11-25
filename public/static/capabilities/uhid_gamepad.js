@@ -225,9 +225,9 @@ function createUHIDGamepadDestroyPacket() {
 // --- 4. 虚拟手柄 UI 构建 ---
 
 function createVirtualGamepadUI() {
-    // 必须挂到视频容器内部, 这样进入全屏(.video-container 被 requestFullscreen)时
+    // 必须挂到视频容器内部, 这样进入全屏(.canvas-container 被 requestFullscreen)时
     // 叠加层会跟随进入全屏子树, 否则只显示在 body 上会被全屏元素遮住
-    let container = document.querySelector('.video-container');
+    let container = document.querySelector('.canvas-container');
     if (!container) container = document.body;
 
     // gamepad 使用 position:absolute + 100% 尺寸, 容器必须是定位上下文

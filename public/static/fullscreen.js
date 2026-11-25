@@ -1,10 +1,7 @@
-const canvasElementFs = document.getElementById('remoteCanvas');
-const canvasContainer = document.querySelector('.video-container');
-
-if (canvasElementFs) {
+if (remoteCanvas) {
     // 常驻禁用默认触摸手势，避免非全屏模式下触控板/直触触发页面滚动或缩放
-    canvasElementFs.style.touchAction = 'none';
-    canvasElementFs.style.overscrollBehavior = 'none';
+    remoteCanvas.style.touchAction = 'none';
+    remoteCanvas.style.overscrollBehavior = 'none';
 
     // 阻止点击/双击视频时的默认行为（如暂停/播放）
     // canvasElementFs.addEventListener('click', (event) => {
@@ -27,8 +24,10 @@ function getFullscreenElement() {
 }
 
 function fullscreenPlayer() {
-    if (!canvasElementFs && !canvasContainer) return;
-    const target = canvasContainer || canvasElementFs;
+    console.log("Attempting to toggle fullscreen");
+    // const remoteCanvas = document.getElementById('remoteCanvas');
+    if (!remoteCanvas) return;
+    const target = remoteCanvas;
 
     if (!getFullscreenElement()) {
         const requestMethod = target.requestFullscreen ||
@@ -44,9 +43,9 @@ function fullscreenPlayer() {
                     console.error(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
                 });
             }
-        } else if (canvasElementFs && typeof canvasElementFs.webkitEnterFullscreen === 'function') {
+        } else if (remoteCanvas && typeof remoteCanvas.webkitEnterFullscreen === 'function') {
             // iPhone Safari 兜底（注意：原生播放器全屏会遮挡自定义 HTML 覆盖层）
-            canvasElementFs.webkitEnterFullscreen();
+            remoteCanvas.webkitEnterFullscreen();
         }
     } else {
         const exitMethod = document.exitFullscreen ||
@@ -77,17 +76,17 @@ async function syncKeyboardLock(isFullscreen) {
 }
 
 function handleFullscreenChange() {
-    if (!canvasElementFs) return;
+    if (!remoteCanvas) return;
     const isFullscreen = !!getFullscreenElement();
 
     if (isFullscreen) {
-        canvasElementFs.style.width = '100%';
-        canvasElementFs.style.height = '100%';
-        canvasElementFs.style.objectFit = 'contain';
+        remoteCanvas.style.width = '100%';
+        remoteCanvas.style.height = '100%';
+        remoteCanvas.style.objectFit = 'contain';
     } else {
-        canvasElementFs.style.width = '';
-        canvasElementFs.style.height = '';
-        canvasElementFs.style.objectFit = '';
+        remoteCanvas.style.width = '';
+        remoteCanvas.style.height = '';
+        remoteCanvas.style.objectFit = '';
     }
 
     syncKeyboardLock(isFullscreen);

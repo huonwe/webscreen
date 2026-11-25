@@ -88,32 +88,6 @@ function sendMousePacket(action, dx, dy, buttons, wheelX, wheelY) {
     }
 }
 
-// function getVideoCoords(clientX, clientY) {
-//     if (typeof window.getScreenCoordinates === 'function') {
-//         return window.getScreenCoordinates(clientX, clientY);
-//     }
-//     const canvas = document.getElementById('remoteCanvas');
-//     if (!canvas) return null;
-//     if ((!window.cachedRect || !window.cachedRect.MediaWidth) && typeof window.updateVideoCache === 'function') {
-//         window.updateVideoCache();
-//     }
-//     const rect = canvas.getBoundingClientRect();
-//     const content = window.cachedRect && window.cachedRect.ContentRect && window.cachedRect.ContentRect.width > 0
-//         ? window.cachedRect.ContentRect
-//         : { left: 0, top: 0, width: rect.width, height: rect.height };
-//     const mediaW = (window.cachedRect && window.cachedRect.MediaWidth) || canvas.width || canvas.videoWidth || 1920;
-//     const mediaH = (window.cachedRect && window.cachedRect.MediaHeight) || canvas.height || canvas.videoHeight || 1080;
-
-//     const relX = clientX - rect.left - content.left;
-//     const relY = clientY - rect.top - content.top;
-//     if (relX < 0 || relY < 0 || relX > content.width || relY > content.height) return null;
-
-//     return {
-//         x: Math.max(0, Math.min(mediaW - 1, Math.round((relX / content.width) * mediaW))),
-//         y: Math.max(0, Math.min(mediaH - 1, Math.round((relY / content.height) * mediaH))),
-//     };
-// }
-
 // 前端：直接返回 0 ~ 65535 的归一化坐标，彻底免疫分辨率切换和 CSS 缩放
 function getNormalizedTouchCoords(clientX, clientY) {
     const canvas = document.getElementById('remoteCanvas');
@@ -562,7 +536,7 @@ function makeStick(isLeft) {
 function showVirtualGamepad() {
     if (document.getElementById('gs-virtual-gamepad')) return;
     injectGamepadStyles();
-    const container = document.querySelector('.video-container') || document.body;
+    const container = document.querySelector('.canvas-container') || document.body;
 
     const root = document.createElement('div');
     root.id = 'gs-virtual-gamepad';
