@@ -20,7 +20,7 @@ Android および Linux デバイス向けのセルフホスト型画面スト�
 
 </div>
 
-<!-- ![screenshot](doc/assets/screenshot.png) -->
+![screenshot](doc/assets/screenshot.png)
 ![timer](doc/assets/timer-difference.png)
 
 ## ✨ 主な機能
