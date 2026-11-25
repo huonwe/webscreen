@@ -43,7 +43,7 @@ Webscreen can run on **Android Termux**, **Linux**, **Windows**, and **MacOS** (
 - UHID Devices (Mouse, Keyboard, Gamepad)
 - Clipboard Sync (HTTPS required)
 - Touch (Multi-finger, pressure)
-> [Quick Start with Redroid](doc/quick-start-redroid.md)
+> [Quickstart with Redroid](doc/quick-start-redroid.md)
 
 
 > **Note**: For Android apk (rooted) and FnOS fpk, you might see [youyoudezhuzhu/webscreen](https://github.com/youyoudezhuzhu/webscreen).
