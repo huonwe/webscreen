@@ -37,13 +37,15 @@ Webscreen can run on **Android Termux**, **Linux**, **Windows**, and **MacOS** (
 - Video, Audio, Control
 - H.264 / H.265
 - Touch, Mouse, Keyboard
-> [Quickstart with Wolf](https://www.google.com/search?q=doc/quick-start-wolf.md)
+> [Quickstart with Wolf](doc/quick-start-wolf.md)
 
 ### 📱 Android ([scrcpy](https://github.com/Genymobile/scrcpy))
 - Video, Audio, Control
 - UHID Devices (Mouse, Keyboard, Gamepad)
 - Clipboard Sync (HTTPS required)
 - Touch (Multi-finger, pressure)
+> [Quick Start with Redroid](doc/quick-start-redroid.md)
+
 
 > **Note**: For Android apk (rooted) and FnOS fpk, you might see [youyoudezhuzhu/webscreen](https://github.com/youyoudezhuzhu/webscreen).
 
@@ -147,7 +149,6 @@ You might need to pair your Android device via [Wireless Debugging](https://deve
 
 ## 📖 Documentation
 
-* [Quick Start with Redroid](doc/quick-start-redroid.md)
 * [For Developers](doc/dev)
 
 ---

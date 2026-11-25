@@ -38,13 +38,14 @@ Webscreen は **Android Termux**、**Linux**、**Windows**、および **MacOS**
 - 映像、音声、操作
 - H.264 / H.265
 - タッチ、マウス、キーボード対応
-> [Quickstart with Wolf](https://www.google.com/search?q=doc/quick-start-wolf.md)
+> [Quickstart with Wolf](doc/quick-start-wolf.md)
 
 ### 📱 Android（[scrcpy](https://github.com/Genymobile/scrcpy) 経由）
 - 映像、音声、操作
 - UHID デバイス（マウス、キーボード、ゲームパッド）
 - クリップボード同期（HTTPS が必要）
 - タッチ操作（マルチタッチ、筆圧感知）
+> [Quick Start with Redroid](doc/quick-start-redroid.md)
 
 > **注意**：Android 用 APK（要 root）および FnOS 用 fpk については、[youyoudezhuzhu/webscreen](https://github.com/youyoudezhuzhu/webscreen) をご参照ください。
 

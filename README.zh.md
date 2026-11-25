@@ -38,13 +38,14 @@ Webscreen 可在 **Android Termux**、**Linux**、**Windows** 和 **MacOS**（�
 - 视频、音频与控制
 - H.264 / H.265 编码
 - 触控、鼠标、键盘支持
-> [Quickstart with Wolf](https://www.google.com/search?q=doc/quick-start-wolf.md)
+> [Quickstart with Wolf](doc/quick-start-wolf.md)
 
 ### 📱 Android（基于 [scrcpy](https://github.com/Genymobile/scrcpy)）
 - 视频、音频与控制
 - UHID 设备（鼠标、键盘、游戏手柄）
 - 剪贴板同步（需要 HTTPS）
 - 触控（多指触控、压感）
+> [Quick Start with Redroid](doc/quick-start-redroid.md)
 
 > **注意**：如需 Android APK（需 Root）和 FnOS fpk 安装包，可前往查看 [youyoudezhuzhu/webscreen](https://github.com/youyoudezhuzhu/webscreen)。
 
