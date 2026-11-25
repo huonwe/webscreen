@@ -272,27 +272,27 @@ func (n *Nexus) NewViewSession(userID string, config ConnectionConfig) (*ViewSes
 		switch config.VideoCodec {
 		case "h264":
 			packetizer = rtp.NewPacketizer(
-				1200, // MTU 大小，通常 1200 左右很安全
-				0,    // Payload Type，Pion 会自动覆盖它，填 0 即可
-				0,    // SSRC (TrackLocalStaticRTP 会自动覆盖它，填 0 即可)
+				n.mtu, // MTU 大小，通常 1200 左右很安全
+				0,     // Payload Type，Pion 会自动覆盖它，填 0 即可
+				0,     // SSRC (TrackLocalStaticRTP 会自动覆盖它，填 0 即可)
 				&codecs.H264Payloader{},
 				rtp.NewRandomSequencer(), // 随机序列号生成器
 				90000,                    // 视频的基准时钟频率 (WebRTC 规定视频固定为 90kHz)
 			)
 		case "h265":
 			packetizer = rtp.NewPacketizer(
-				1200, // MTU 大小，通常 1200 左右很安全
-				0,    // Payload Type，Pion 会自动覆盖它，填 0 即可
-				0,    // SSRC (TrackLocalStaticRTP 会自动覆盖它，填 0 即可)
+				n.mtu, // MTU 大小，通常 1200 左右很安全
+				0,     // Payload Type，Pion 会自动覆盖它，填 0 即可
+				0,     // SSRC (TrackLocalStaticRTP 会自动覆盖它，填 0 即可)
 				&codecs.H265Payloader{},
 				rtp.NewRandomSequencer(), // 随机序列号生成器
 				90000,                    // 视频的基准时钟频率 (WebRTC 规定视频固定为 90kHz)
 			)
 		case "av1":
 			packetizer = rtp.NewPacketizer(
-				1200, // MTU 大小，通常 1200 左右很安全
-				0,    // Payload Type，Pion 会自动覆盖它，填 0 即可
-				0,    // SSRC (TrackLocalStaticRTP 会自动覆盖它，填 0 即可)
+				n.mtu, // MTU 大小，通常 1200 左右很安全
+				0,     // Payload Type，Pion 会自动覆盖它，填 0 即可
+				0,     // SSRC (TrackLocalStaticRTP 会自动覆盖它，填 0 即可)
 				&codecs.AV1Payloader{},
 				rtp.NewRandomSequencer(), // 随机序列号生成器
 				90000,                    // 视频的基准时钟频率 (WebRTC 规定视频固定为 90kHz)
