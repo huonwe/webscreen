@@ -1,5 +1,6 @@
 let upscalingEnabled = false;
 let isUpscalingBusy = false; // 防止主线程超分来不及处理时，VideoFrame 堆积撑爆解码器
+let srPort = null;
 
 self.onmessage = (event) => {
     const { type } = event.data;
@@ -16,8 +17,18 @@ self.onmessage = (event) => {
     }
 
     if (type === 'init') {
+        if (event.data.srPort) {
+            if (srPort) srPort.close();
+            srPort = event.data.srPort;
+        }
         upscalingEnabled = Boolean(event.data.upscalingEnabled);
         renderStream(event.data.readable, event.data.canvas);
+    }
+
+    if (type === 'set-sr-port') {
+        if (srPort) srPort.close();
+        srPort = event.data.port;
+        return;
     }
 };
 
@@ -34,14 +45,18 @@ async function renderStream(readable, canvas) {
         if (done) return;
 
         if (upscalingEnabled) {
-            try {
-                // 超分模式下画面由 outputCanvas 渲染，无需再操作 remoteCanvas 的宽高
-                self.postMessage({ type: 'source-frame', frame }, [frame]);
-            } catch (error) {
+            if (srPort) {
+                try {
+                    srPort.postMessage({ type: 'frame', frame }, [frame]);
+                } catch (error) {
+                    frame.close();
+                    self.postMessage({ type: 'error', message: error.message || String(error) });
+                }
+            } else {
+                // 端口尚未就绪时直接释放，防止阻塞解码器
                 frame.close();
-                self.postMessage({ type: 'error', message: error.message || String(error) });
             }
-            continue;
+            continue; // 在 WS Worker 的 output 回调中则是 return;
         }
 
         try {

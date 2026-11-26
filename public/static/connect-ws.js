@@ -31,6 +31,7 @@ async function initWebCodecs(mediaMeta, videoCodec) {
     mediaWorkerReady = false;
 
     const worker = new Worker('/static/canvasWorkerWS.js');
+    window.streamWorker = worker;
     let offscreen;
     try {
         offscreen = canvas.transferControlToOffscreen();

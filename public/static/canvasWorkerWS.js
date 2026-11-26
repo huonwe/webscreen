@@ -10,6 +10,8 @@ let lastVideoTimestamp = -1;
 let lastAudioTimestamp = -1;
 let upscaleEnabled = false;
 
+let srPort = null;
+
 async function initialize({ canvas, codec, width, height, upscalingEnabled }) {
     upscaleEnabled = Boolean(upscalingEnabled);
     offscreenCanvas = canvas;
@@ -61,15 +63,19 @@ async function initialize({ canvas, codec, width, height, upscalingEnabled }) {
 
     videoDecoder = new VideoDecoder({
         output(frame) {
-            if (upscaleEnabled) {
-                try {
-                    // 关键修改 3：超分模式下直接零拷贝转发，不再触碰隐藏 Canvas 的宽高
-                    self.postMessage({ type: 'source-frame', frame }, [frame]);
-                } catch (error) {
+            if (upscalingEnabled) {
+                if (srPort) {
+                    try {
+                        srPort.postMessage({ type: 'frame', frame }, [frame]);
+                    } catch (error) {
+                        frame.close();
+                        self.postMessage({ type: 'error', message: error.message || String(error) });
+                    }
+                } else {
+                    // 端口尚未就绪时直接释放，防止阻塞解码器
                     frame.close();
-                    reportError(`Failed to transfer decoded video: ${error.message}`);
                 }
-                return;
+                return
             }
             try {
                 if (offscreenCanvas.width !== frame.displayWidth) {
@@ -134,7 +140,7 @@ function decodeFrame(buffer) {
 
     if (kind === 0) {
         if (!videoDecoder || videoDecoder.state !== 'configured') return;
-        
+
         // 关键修改 4：把积压阈值从 8 降到 2，防止瞬时卡顿后画面持续滞后
         if (videoDecoder.decodeQueueSize > 2) {
             videoNeedsKeyFrame = true;
@@ -177,8 +183,16 @@ function reportError(message) {
 self.onmessage = async (event) => {
     const { type } = event.data;
     try {
-        if (type === 'init') {
+        if (type === 'set-sr-port') {
+            if (srPort) srPort.close();
+            srPort = event.data.port;
+            return;
+        } else if (type === 'init') {
             await initialize(event.data);
+            if (event.data.srPort) {
+                if (srPort) srPort.close();
+                srPort = event.data.srPort;
+            }
             self.postMessage({ type: 'ready', audioAvailable: Boolean(audioDecoder) });
         } else if (type === 'frame') {
             decodeFrame(event.data.buffer);

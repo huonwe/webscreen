@@ -154,6 +154,7 @@ function enableUpscaling(button) {
         worker = new Worker(new URL('../websr/worker.js', import.meta.url), {
             type: 'module'
         });
+        connectStreamToWebSR(window.streamWorker, worker);
 
         worker.onmessage = (event) => {
             const { type, message, width, height } = event.data;

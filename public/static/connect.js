@@ -84,9 +84,10 @@ async function start() {
 
                 const worker = new Worker('/static/canvasWorkerWebRTC.js');
                 webRtcFrameWorker = worker;
+                window.streamWorker = worker;
                 worker.onmessage = (messageEvent) => {
                     if (messageEvent.data.type === 'source-frame') {
-                        
+
                         window.handleWebSRSourceFrame(messageEvent.data.frame);
                     }
 
@@ -504,4 +505,22 @@ async function renderStreamToCanvas(videoTrack, canvas) {
         // ⚠️ 极其重要：必须手动释放帧内存，否则会瞬间内存泄漏导致页面崩溃
         frame.close();
     }
+}
+
+function connectStreamToWebSR(streamWorker, websrWorker) {
+    if (!streamWorker || !websrWorker) return;
+
+    const channel = new MessageChannel();
+
+    // port1 交给解码/拉流 Worker（生产端）
+    streamWorker.postMessage(
+        { type: 'set-sr-port', port: channel.port1 },
+        [channel.port1]
+    );
+
+    // port2 交给 WebSR Worker（消费端）
+    websrWorker.postMessage(
+        { type: 'set-source-port', port: channel.port2 },
+        [channel.port2]
+    );
 }
