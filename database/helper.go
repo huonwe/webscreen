@@ -77,3 +77,8 @@ func UpdateDeviceByTypeIPPort(db *sql.DB, dtype string, ip string, port int, idA
 	_, err := db.Exec("UPDATE devices SET id_adb = ?, display_name = ?, status_adb = ?, status_ui = ? WHERE type = ? AND ip = ? AND port = ?", idAdb, displayName, statusADB, statusUI, dtype, ip, port)
 	return err
 }
+
+func UpdateDeviceDisplayNameByUUID(db *sql.DB, deviceUUID string, displayName string) error {
+	_, err := db.Exec("UPDATE devices SET display_name = ? WHERE uuid = ?", displayName, deviceUUID)
+	return err
+}
