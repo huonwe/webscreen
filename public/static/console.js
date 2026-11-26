@@ -1,16 +1,17 @@
 // /static/console.js
-import { getSetting } from '../global-settings.js';
+import { i18n } from './i18n.js';
+import { getSetting } from './global-settings.js';
 import {
     t,
     escapeHtml,
     showToast,
     openConfirmDialog,
     openRenameDeviceDialog,
-} from './ui-dialogs.js';
+} from './console-modules/ui-dialogs.js';
 import {
     ensureUniversalSettingsInitialized,
     openGlobalSettingsModal,
-} from './global-settings-ui.js';
+} from './console-modules/global-settings-ui.js';
 import {
     openDeviceConfigModal,
     openRemoteConfigModal,
@@ -18,14 +19,16 @@ import {
     setDeviceIgnored,
     getMergedDeviceStreamConfig,
     fetchDriverSchema,
-} from './device-config-ui.js';
+} from './console-modules/device-config-ui.js';
 import {
     openAndroidPairModal,
     openConnectDeviceModal,
-} from './android-device-ui.js';
+} from './console-modules/android-device-ui.js';
 import {
     openGameStreamPairModal,
-} from './gamestream-pair-ui.js';
+} from './console-modules/gamestream-pair-ui.js';
+
+const STREAMING_POLL_INTERVAL_MS = 3000;
 
 /**
  * Runtime state (kept in memory; persistent configs live in global_settings._device_config)
@@ -36,6 +39,9 @@ const state = {
     universalSchema: [],
     driverSchemas: new Map(), // `${type}:${device_id}` -> schemaArray
     showIgnored: false,
+    pollTimerId: null,
+    isPollingStatus: false,
+    deviceGeneration: 0,
 };
 
 // --- Formatting Helpers ---
@@ -56,25 +62,102 @@ function getDeviceIcon(deviceType) {
     return 'smartphone';
 }
 
-// --- Data Fetching ---
+// --- Streaming Status Polling & Device Fetching ---
 
-async function fetchStreamingStatus(device_uuid) {
-    if (!device_uuid) return { streaming: false };
+async function fetchStreamingStatus(uuid) {
+    if (!uuid) return { streaming: false, config: {} };
     try {
-        const res = await fetch(`/api/device/streaming/status?device_uuid=${encodeURIComponent(device_uuid)}`);
-        if (!res.ok) return { streaming: false };
+        const res = await fetch(`/api/device/streaming/status?device_uuid=${encodeURIComponent(uuid)}`);
+        if (!res.ok) return { streaming: false, config: {} };
         const data = await res.json();
         return {
             streaming: Boolean(data.streaming),
             config: data.config && typeof data.config === 'object' ? data.config : {},
         };
     } catch (err) {
-        console.warn(`Failed to check streaming status for ${device_uuid}:`, err);
-        return { streaming: false };
+        console.warn(`Failed to check streaming status for ${uuid}:`, err);
+        return { streaming: false, config: {} };
     }
 }
 
+function isSameStreamingStatus(prev, next) {
+    if (!prev && !next) return true;
+    if (!prev || !next) return false;
+    if (Boolean(prev.streaming) !== Boolean(next.streaming)) return false;
+
+    const prevCfg = prev.config || {};
+    const nextCfg = next.config || {};
+    const prevKeys = Object.keys(prevCfg);
+    const nextKeys = Object.keys(nextCfg);
+    if (prevKeys.length !== nextKeys.length) return false;
+
+    return prevKeys.every((key) => String(prevCfg[key]) === String(nextCfg[key]));
+}
+
+/**
+ * Periodically query streaming status for existing devices without reloading /api/device/list.
+ * Re-renders the grid only when a device's streaming status or RemoteConfig actually changes.
+ */
+async function pollStreamingStatuses({ force = false } = {}) {
+    if (state.isPollingStatus) return;
+    if (!force && document.visibilityState !== 'visible') return;
+
+    const uuids = state.devices.map((d) => d.device_uuid).filter(Boolean);
+    if (!uuids.length) return;
+
+    state.isPollingStatus = true;
+    const generationAtStart = state.deviceGeneration;
+
+    try {
+        const results = await Promise.all(
+            uuids.map(async (uuid) => [uuid, await fetchStreamingStatus(uuid)])
+        );
+
+        // Discard stale poll results if user manually refreshed the device list in the meantime
+        if (generationAtStart !== state.deviceGeneration) return;
+
+        let changed = false;
+        for (const [uuid, nextStatus] of results) {
+            const prevStatus = state.streamingStatusMap.get(uuid);
+            if (!isSameStreamingStatus(prevStatus, nextStatus)) {
+                state.streamingStatusMap.set(uuid, nextStatus);
+                changed = true;
+            }
+        }
+
+        if (changed) {
+            renderDeviceGrid();
+        }
+    } finally {
+        state.isPollingStatus = false;
+    }
+}
+
+function startStreamingStatusPolling() {
+    if (state.pollTimerId !== null) {
+        clearInterval(state.pollTimerId);
+    }
+
+    state.pollTimerId = setInterval(() => {
+        pollStreamingStatuses();
+    }, STREAMING_POLL_INTERVAL_MS);
+
+    // Immediately sync status when returning to tab or navigating back from /screen/:id
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            pollStreamingStatuses({ force: true });
+        }
+    });
+
+    window.addEventListener('pageshow', () => {
+        pollStreamingStatuses({ force: true });
+    });
+}
+
 async function refreshDevices({ silent = false } = {}) {
+    state.deviceGeneration += 1;
+    const currentGeneration = state.deviceGeneration;
+
     const grid = document.getElementById('deviceGrid');
     if (grid) {
         grid.innerHTML = `
@@ -96,30 +179,35 @@ async function refreshDevices({ silent = false } = {}) {
         }
 
         const payload = await deviceRes.json();
-        const devices = Array.isArray(payload.devices) ? payload.devices : [];
+        if (currentGeneration !== state.deviceGeneration) return;
 
+        const devices = Array.isArray(payload.devices) ? payload.devices : [];
+        console.log("fetched devices:", devices);
         state.devices = devices;
         state.universalSchema = universalSchema;
         state.streamingStatusMap.clear();
 
-        // Concurrently fetch per-device driver schemas and active streaming statuses
+        // Concurrently fetch per-device driver schemas and initial streaming statuses
         await Promise.all(
             devices.map(async (device) => {
-                console.log("get devices:", device)
-                const device_uuid = device.device_uuid;
+                const uuid = device.device_uuid;
                 const schemaKey = `${device.device_type || 'unknown'}:${device.device_id || ''}`;
 
                 const [driverSchema, streamStatus] = await Promise.all([
                     fetchDriverSchema(device.device_type, device.device_id),
-                    fetchStreamingStatus(device_uuid),
+                    fetchStreamingStatus(uuid),
                 ]);
 
+                if (currentGeneration !== state.deviceGeneration) return;
+
                 state.driverSchemas.set(schemaKey, driverSchema);
-                if (device_uuid) {
-                    state.streamingStatusMap.set(device_uuid, streamStatus);
+                if (uuid) {
+                    state.streamingStatusMap.set(uuid, streamStatus);
                 }
             })
         );
+
+        if (currentGeneration !== state.deviceGeneration) return;
 
         renderDeviceGrid();
         if (!silent) {
@@ -156,7 +244,6 @@ function launchStream(device) {
     const isJoining = Boolean(streamStatus?.streaming);
     const remoteConfig = streamStatus?.config || {};
 
-    // Base device identity parameters + merged universal & driver configs
     const queryPayload = {
         device_uuid: device_uuid || '',
         device_type: device.device_type || '',
@@ -213,7 +300,6 @@ function buildConfigBadgesHtml(device) {
             const val = values[key];
             if (val === undefined || val === null || val === '') continue;
 
-            // Show badge-flagged params, or core codec/transport params in universal schema
             const isCoreUniversal = ['protocol_transport', 'transport_protocol', 'video_codec', 'audio_codec'].includes(key);
             if (!param.badge && !isCoreUniversal) continue;
 
@@ -246,15 +332,14 @@ function buildConfigBadgesHtml(device) {
         : `<span class="text-xs text-gray-500 italic">${escapeHtml(t('default_config', '默认配置'))}</span>`;
 }
 
-
 function buildDeviceCard(device) {
-    const device_uuid = device.device_uuid;
-    const entry = getDeviceConfigEntry(device_uuid);
+    const uuid = device.device_uuid;
+    const entry = getDeviceConfigEntry(uuid);
     const isIgnored = Boolean(entry.ignored);
-    const streamStatus = state.streamingStatusMap.get(device_uuid) || { streaming: false, config: {} };
+    const streamStatus = state.streamingStatusMap.get(uuid) || { streaming: false, config: {} };
     const isStreaming = streamStatus.streaming;
-
-    const displayName = device.displayName || device.device_id || device_uuid;
+    // console.log("build device card for", device);
+    const displayName = device.display_name || device.device_id || uuid;
     const endpoint = device.device_ip && device.device_ip !== '0'
         ? (device.device_port ? `${device.device_ip}:${device.device_port}` : device.device_ip)
         : '';
@@ -351,12 +436,11 @@ function buildDeviceCard(device) {
         ${footerHtml}
     `;
 
-    // Card Event Bindings
     card.querySelector('[data-action="stream"]')?.addEventListener('click', () => {
         launchStream(device);
     });
+
     card.querySelector('[data-action="remote-config"]')?.addEventListener('click', () => {
-        console.log('Opening remote config modal for device:', device, streamStatus.config);
         openRemoteConfigModal(device, streamStatus.config, {
             universalSchema: state.universalSchema,
         });
@@ -364,12 +448,12 @@ function buildDeviceCard(device) {
 
     card.querySelector('[data-action="rename"]')?.addEventListener('click', async () => {
         const updatedName = await openRenameDeviceDialog({
-            uuid,
-            currentName: device.displayName || device.device_id || '',
+            device_uuid: uuid,
+            currentName: device.display_name || device.device_id || '',
             deviceId: device.device_id || '',
         });
         if (updatedName !== null) {
-            device.displayName = updatedName;
+            device.display_name = updatedName;
             renderDeviceGrid();
         }
     });
@@ -401,7 +485,7 @@ function updateIgnoredToggleButton() {
     const badgeEl = document.getElementById('ignoredCountBadge');
     if (!toggleBtn) return;
 
-    const ignoredCount = state.devices.filter((d) => Boolean(getDeviceConfigEntry(d.uuid).ignored)).length;
+    const ignoredCount = state.devices.filter((d) => Boolean(getDeviceConfigEntry(d.device_uuid).ignored)).length;
 
     if (ignoredCount > 0) {
         toggleBtn.classList.remove('hidden');
@@ -430,7 +514,7 @@ function renderDeviceGrid() {
     grid.innerHTML = '';
 
     const visibleDevices = state.devices.filter((device) => {
-        const entry = getDeviceConfigEntry(device.uuid);
+        const entry = getDeviceConfigEntry(device.device_uuid);
         return state.showIgnored || !entry.ignored;
     });
 
@@ -459,18 +543,16 @@ function renderDeviceGrid() {
 // --- Toolbar & Global Event Bindings ---
 
 function bindToolbarEvents() {
-    // Language switcher
     document.querySelectorAll('.lang-btn').forEach((btn) => {
         btn.addEventListener('click', () => {
             const lang = btn.dataset.lang;
-            if (lang && window.i18n && typeof window.i18n.setLang === 'function') {
-                window.i18n.setLang(lang);
+            if (lang) {
+                i18n.setLang(lang);
                 renderDeviceGrid();
             }
         });
     });
 
-    // Global settings modal trigger
     document.getElementById('globalSettingsBtn')?.addEventListener('click', () => {
         openGlobalSettingsModal({
             onSaved: async () => {
@@ -480,7 +562,6 @@ function bindToolbarEvents() {
         });
     });
 
-    // Clear localStorage trigger
     document.getElementById('clearStorageBtn')?.addEventListener('click', async () => {
         const confirmed = await openConfirmDialog({
             title: t('clear_local_storage', '清空本地存储'),
@@ -498,32 +579,28 @@ function bindToolbarEvents() {
         }
     });
 
-    // Manual device refresh trigger (only refreshes when clicked or on initial load)
+    // Device list is only refreshed when user clicks refresh
     document.getElementById('refreshDevicesBtn')?.addEventListener('click', () => {
         refreshDevices();
     });
 
-    // Toggle ignored devices visibility
     document.getElementById('toggleIgnoredBtn')?.addEventListener('click', () => {
         state.showIgnored = !state.showIgnored;
         renderDeviceGrid();
     });
 
-    // Android wireless pairing trigger
     document.getElementById('openAndroidPairBtn')?.addEventListener('click', () => {
         openAndroidPairModal({
             onPaired: () => refreshDevices(),
         });
     });
 
-    // GameStream pairing trigger
     document.getElementById('openGameStreamPairBtn')?.addEventListener('click', () => {
         openGameStreamPairModal({
             onPaired: () => refreshDevices(),
         });
     });
 
-    // Connect device trigger
     document.getElementById('openConnectDeviceBtn')?.addEventListener('click', () => {
         openConnectDeviceModal({
             onConnected: () => refreshDevices(),
@@ -532,8 +609,8 @@ function bindToolbarEvents() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Ensure global_settings is initialized on startup
     getSetting('_device_config');
     bindToolbarEvents();
     refreshDevices({ silent: true });
+    startStreamingStatusPolling();
 });

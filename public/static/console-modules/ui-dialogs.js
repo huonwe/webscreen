@@ -1,23 +1,18 @@
 // /static/console-modules/ui-dialogs.js
 
-/**
- * Safe i18n lookup with parameter interpolation and fallback.
- */
+import { i18n } from '../i18n.js';
+
 export function t(key, fallback = '', params = null) {
-    let text = '';
-    if (window.i18n && typeof window.i18n.t === 'function') {
-        const translated = window.i18n.t(key, params || undefined);
-        if (translated && translated !== key) {
-            text = translated;
-        }
+    const translated = i18n.t(key, params || {});
+    if (translated && translated !== key) {
+        return translated;
     }
-    if (!text) {
-        text = fallback || key;
-        if (params && typeof text === 'string') {
-            Object.entries(params).forEach(([k, v]) => {
-                text = text.replace(new RegExp(`\\{${k}\\}`, 'g'), String(v));
-            });
-        }
+
+    let text = fallback || key;
+    if (params && typeof text === 'string') {
+        Object.entries(params).forEach(([k, v]) => {
+            text = text.replace(new RegExp(`\\{${k}\\}`, 'g'), String(v));
+        });
     }
     return text;
 }
@@ -300,7 +295,7 @@ export function openRenameDeviceDialog({ device_uuid, currentName = '', deviceId
                 const response = await fetch('/api/device/updateDisplayName', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ device_uuid, displayName }),
+                    body: JSON.stringify({ device_uuid, display_name: displayName }),
                 });
                 const data = await response.json().catch(() => ({}));
                 if (!response.ok) {

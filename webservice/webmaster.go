@@ -118,7 +118,7 @@ func (wm *WebMaster) setRouter() {
 		api.GET("/device/list", wm.handleListDevices)
 		api.GET("/device/streaming/status", wm.handleDeviceStreamingStatus)
 		api.POST("/device/connect", wm.handleConnectDevice)
-		api.POST("/device/updateName", wm.handleUpdateDeviceDisplayName)
+		api.POST("/device/updateDisplayName", wm.handleUpdateDeviceDisplayName)
 		api.POST("/device/pair", wm.handlePairDevice)
 		api.GET("/device/configDescription", wm.handleDeviceConfigDescription)
 		api.GET("/gamestream/discover", wm.handleGameStreamDiscover)

@@ -111,7 +111,7 @@ func (wm *WebMaster) handleListDevices(c *gin.Context) {
 		c.JSON(500, gin.H{"error": "Internal server error"})
 		return
 	}
-	log.Printf("Queried all devices: %+v", all_devices)
+	// log.Printf("Queried all devices: %+v", all_devices)
 
 	c.JSON(200, gin.H{"devices": all_devices})
 }
@@ -267,12 +267,13 @@ func (wm *WebMaster) registerDevice(device db.DeviceInfo) {
 func (wm *WebMaster) handleUpdateDeviceDisplayName(c *gin.Context) {
 	var req struct {
 		DeviceUUID string `json:"device_uuid"`
-		Name       string `json:"name"`
+		Name       string `json:"display_name"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(400, gin.H{"error": "Invalid request"})
 		return
 	}
+	// log.Printf("Updating display name for device UUID %s to %s", req.DeviceUUID, req.Name)
 	if err := db.UpdateDeviceDisplayNameByUUID(wm.DB, req.DeviceUUID, req.Name); err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
