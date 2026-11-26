@@ -12,7 +12,7 @@ import (
 )
 
 func createPeerConnection(cfg ConnectionConfig) (*webrtc.PeerConnection, error) {
-	if cfg.VideoCodec != "h264" && cfg.VideoCodec != "h265" {
+	if cfg.VideoCodec != "h264" && cfg.VideoCodec != "h265" && cfg.VideoCodec != "av1" {
 		return nil, errors.New("WebRTC: Unsupported video codec: " + cfg.VideoCodec)
 	}
 	sdp := cfg.Extra["sdp"]
