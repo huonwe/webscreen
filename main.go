@@ -9,7 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"webscreen/consts"
-	"webscreen/db"
+	db "webscreen/database"
 	"webscreen/webservice"
 
 	"github.com/gin-gonic/gin"

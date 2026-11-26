@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"uuid"
 	"webscreen/consts"
-	"webscreen/db"
+	db "webscreen/database"
 	"webscreen/nexus"
 	"webscreen/sdriver/gamestream"
 	linuxDriver "webscreen/sdriver/linux"
@@ -115,18 +115,6 @@ func (wm *WebMaster) handleListDevices(c *gin.Context) {
 
 	c.JSON(200, gin.H{"devices": all_devices})
 }
-
-// func (wm *WebMaster) handleListDevicesDiscoveried(c *gin.Context) {
-// 	wm.devicesDiscoveredMu.RLock()
-// 	defer wm.devicesDiscoveredMu.RUnlock()
-
-// 	var devices []Device
-// 	for _, v := range wm.devicesDiscovered {
-// 		devices = append(devices, v)
-// 	}
-
-// 	c.JSON(200, devices)
-// }
 
 // HandleConnectDevice 处理连接设备的请求
 // POST /api/device/connect
@@ -274,4 +262,20 @@ func (wm *WebMaster) registerDevice(device db.DeviceInfo) {
 		db.InsertDevice(wm.DB, deviceUUID, device.Type, device.DeviceID, device.DeviceID, device.IP, device.Port, device.Status, "")
 	}
 
+}
+
+func (wm *WebMaster) handleUpdateDeviceDisplayName(c *gin.Context) {
+	var req struct {
+		DeviceUUID string `json:"device_uuid"`
+		Name       string `json:"name"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"error": "Invalid request"})
+		return
+	}
+	if err := db.UpdateDeviceDisplayNameByUUID(wm.DB, req.DeviceUUID, req.Name); err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, gin.H{"status": "updated"})
 }

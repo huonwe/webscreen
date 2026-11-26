@@ -10,7 +10,7 @@ import (
 	"sync/atomic"
 	"uuid"
 	"webscreen/consts"
-	"webscreen/db"
+	db "webscreen/database"
 	"webscreen/sdriver"
 	"webscreen/sdriver/gamestream"
 	linuxDriver "webscreen/sdriver/linux"
@@ -84,7 +84,7 @@ func (n *Nexus) ConnectToRemote(remoteUUID string, config RemoteConfig) error {
 		return nil
 	}
 	binding := &remoteBinding{
-		remote:  &Remote{RemoteUUID: remoteUUID, sdriver: driver},
+		remote:  &Remote{RemoteUUID: remoteUUID, RemoteConfig: config, sdriver: driver},
 		viewers: make(map[string]*ViewSession),
 		stopCh:  make(chan struct{}),
 	}
@@ -616,4 +616,19 @@ func (b *remoteBinding) refreshSnapshot() {
 		snap = append(snap, v)
 	}
 	b.viewersSnap.Store(&snap)
+}
+
+// 如果存在master session，返回设备是否正在串流。如果存在master session，同时返回master session的串流配置
+func (n *Nexus) IsAlreadyStreaming(remoteUUID string) (bool, RemoteConfig) {
+	n.RLock()
+	b, exists := n.bindings[remoteUUID]
+	n.RUnlock()
+	if !exists || b == nil {
+		return false, RemoteConfig{}
+	}
+
+	if b.masterSessionID != "" && b.remote.sdriver != nil {
+		return true, b.remote.RemoteConfig
+	}
+	return false, RemoteConfig{}
 }
