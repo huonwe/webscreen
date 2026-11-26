@@ -3,6 +3,8 @@ const GLOBAL_SETTINGS_KEY = 'global_settings';
 
 const DEFAULT_SETTINGS = {
     transport_protocol: "webrtc",
+    video_codec: "h264",
+    audio_codec: "opus",
     user_language: "zh-CN",
     language_to_translate: "ja-JP",
     translate_llm_endpoint: "",
@@ -18,7 +20,8 @@ const DEFAULT_SETTINGS = {
 1. 只输出最终的用户指定语言译文，绝对不要输出任何解释、注释、拼音、原文对照或多余的标点符号。
 2. 保留角色语气、口癖和人物关系称谓（如「お兄ちゃん」译为“哥哥”，「先輩」译为“前辈”等），对话口语化，旁白细腻流畅。
 3. 输入文本来自 OCR 识别，若存在明显的个别错别字、多余空格或识别噪点，请结合日文语境自动修正后再翻译。
-4. 保留原文中的特殊符号（如「」、……、！？、♪ 等）。`
+4. 保留原文中的特殊符号（如「」、……、！？、♪ 等）。`,
+    _device_config: {},
 };
 
 // 1. 私有内存缓存，不暴露到 window 上
