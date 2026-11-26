@@ -108,7 +108,7 @@ async function translateText(text) {
         return clean;
     } catch (err) {
         console.warn('[Ollama] Failed:', err);
-        return `${clean}\n[Failed: ${err.name === 'AbortError' ? 'timeout' : err.message}]`;
+        return `[Failed: ${err.name === 'AbortError' ? 'timeout' : err.message}]`;
     } finally {
         clearTimeout(timer);
     }
@@ -499,6 +499,7 @@ self.onmessage = async (e) => {
                 rawText,
                 translatedText: cached,
             });
+            console.log('Cache hit for rawText:', rawText, 'cached translation:', cached);
             return;
         }
 

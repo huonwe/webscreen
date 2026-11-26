@@ -111,7 +111,7 @@ function ensureWorker() {
         const msg = e.data || {};
         if (msg.type === 'RESULT') {
             workerBusy = false;
-            renderTranslationResult(msg.translatedText, msg.rawText);
+            renderTranslationResult(msg.translatedText);
         } else if (msg.type === 'SKIPPED') {
             workerBusy = false;
         } else if (msg.type === 'ERROR') {
@@ -139,7 +139,7 @@ function ensureWorker() {
 function startRegionSelection() {
     const canvas = getTargetCanvas();
     if (!canvas) {
-        notifyToast('未找到视频画布 (#remoteCanvas)');
+        notifyToast('Canvas not found (#remoteCanvas)');
         return;
     }
 
@@ -238,7 +238,7 @@ function startRegionSelection() {
         const height = Math.abs(curY - startY);
 
         if (width < 20 || height < 16) {
-            notifyToast('选区过小，请重新拖拽框选对话框');
+            notifyToast('Selection area is too small, please drag to select the dialogue box again');
             selectionBox.style.display = 'none';
             return;
         }
@@ -258,7 +258,7 @@ function startRegionSelection() {
         const y2 = Math.max(0, Math.min(content.height, absTop + height - contentAbsTop));
 
         if (x2 - x1 < 16 || y2 - y1 < 12) {
-            notifyToast('请框选画面有效区域内的对话框');
+            notifyToast('Please select the dialogue box within the valid area of the screen');
             selectionBox.style.display = 'none';
             return;
         }
@@ -435,7 +435,7 @@ function syncOverlayPosition() {
     });
 }
 
-function renderTranslationResult(translatedText, rawText) {
+function renderTranslationResult(translatedText) {
     if (!subtitleTextBox || translateState !== 'running') return;
     const text = (translatedText || '').trim();
     if (!text) {
