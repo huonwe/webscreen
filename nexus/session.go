@@ -243,7 +243,7 @@ func (v *ViewSession) HandleMsg(event sdriver.Event) error {
 	default:
 		return fmt.Errorf("Unhandled event type in HandleMsg: %d", eType)
 	}
-	log.Printf("[nexus] Handling message of type: %d", eType)
+	// log.Printf("[nexus] Handling message of type: %d", eType)
 	switch v.ConnectionConfig.Protocol {
 	case "websocket":
 		v.WSConn.WriteMessage(websocket.BinaryMessage, msg)

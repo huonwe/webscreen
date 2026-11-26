@@ -157,7 +157,7 @@ func (n *Nexus) pumpRemoteMsg(bind *remoteBinding) {
 			if !ok {
 				return
 			}
-			log.Printf("[nexus] Received message from remote %s: %v", bind.remote.RemoteUUID, event)
+			// log.Printf("[nexus] Received message from remote %s: %v", bind.remote.RemoteUUID, event)
 			if snap := bind.viewersSnap.Load(); snap != nil {
 				for _, viewer := range *snap {
 					err := viewer.HandleMsg(event)
