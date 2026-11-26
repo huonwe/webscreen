@@ -25,12 +25,28 @@ func ConfigDescription() []ConfigParamDescription {
 		// 	Description: "Use WebSocket instead of WebRTC for streaming. (Now developing, no real effect yet)",
 		// },
 		{
-			Name:        "protocol",
+			Name:        "protocol_transport",
 			Type:        "string",
 			Required:    true,
 			Default:     "webrtc",
 			Options:     []string{"webrtc", "websocket"},
 			Description: "Connection protocol to use.",
+		},
+		{
+			Name:        "video_codec",
+			Type:        "string",
+			Required:    true,
+			Default:     "h264",
+			Options:     []string{"h264", "h265", "av1"},
+			Description: "Video codec to use for the connection.",
+		},
+		{
+			Name:        "audio_codec",
+			Type:        "string",
+			Required:    true,
+			Default:     "opus",
+			Options:     []string{"opus"},
+			Description: "Audio codec to use for the connection.",
 		},
 	}
 }
