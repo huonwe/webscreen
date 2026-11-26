@@ -28,6 +28,7 @@ Webscreen can run on **Android Termux**, **Linux**, **Windows**, and **MacOS** (
 
 ### 🌟 Universal
 - Super Resolution (HTTPS required)
+- OCR Translate (LLM Endpoint required)
 - H.264 / H.265
 - Multi-Connection
 - WebRTC / WebSocket Streaming

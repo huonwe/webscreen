@@ -29,6 +29,7 @@ Webscreen 可在 **Android Termux**、**Linux**、**Windows** 和 **MacOS**（�
 
 ### 🌟 通用功能
 - 超分辨率（需要 HTTPS）
+- OCR Translate (需要LLM Endpoint)
 - H.264 / H.265 编码
 - 多连接支持
 - WebRTC / WebSocket 串流
@@ -36,7 +37,6 @@ Webscreen 可在 **Android Termux**、**Linux**、**Windows** 和 **MacOS**（�
 
 ### ☀️ GameStream ([Sunshine](https://github.com/SunshineStream/Sunshine) / [Wolf](https://github.com/games-on-whales/wolf))
 - 视频、音频与控制
-- H.264 / H.265 编码
 - 触控、鼠标、键盘支持
 > [Quickstart with Wolf](doc/quick-start-wolf.md)
 

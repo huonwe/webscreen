@@ -29,6 +29,7 @@ Webscreen は **Android Termux**、**Linux**、**Windows**、および **MacOS**
 
 ### 🌟 共通機能
 - 超解像（Super Resolution / HTTPS が必要）
+- OCR Translate (LLM Endpoint が必要)
 - H.264 / H.265
 - マルチ接続
 - WebRTC / WebSocket ストリーミング
@@ -36,7 +37,6 @@ Webscreen は **Android Termux**、**Linux**、**Windows**、および **MacOS**
 
 ### ☀️ GameStream ([Sunshine](https://github.com/SunshineStream/Sunshine) / [Wolf](https://github.com/games-on-whales/wolf))
 - 映像、音声、操作
-- H.264 / H.265
 - タッチ、マウス、キーボード対応
 > [Quickstart with Wolf](doc/quick-start-wolf.md)
 
