@@ -14,8 +14,9 @@ import (
 
 // Remote：彻底干净，只持有设备驱动
 type Remote struct {
-	RemoteUUID string
-	sdriver    sdriver.SDriver
+	RemoteUUID   string
+	RemoteConfig RemoteConfig
+	sdriver      sdriver.SDriver
 }
 
 // ViewSession：封装具体传输协议（WebRTC / WS / WT）

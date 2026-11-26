@@ -11,7 +11,7 @@ import (
 
 	"webscreen/auth"
 	appauth "webscreen/auth"
-	"webscreen/db"
+	db "webscreen/database"
 	"webscreen/nexus"
 	"webscreen/utils"
 	"webscreen/webservice/android"
@@ -116,7 +116,9 @@ func (wm *WebMaster) setRouter() {
 	{
 		api.GET("/auth/status", wm.handleAuthStatus)
 		api.GET("/device/list", wm.handleListDevices)
+		api.GET("/device/streaming/status", wm.handleDeviceStreamingStatus)
 		api.POST("/device/connect", wm.handleConnectDevice)
+		api.POST("/device/updateName", wm.handleUpdateDeviceDisplayName)
 		api.POST("/device/pair", wm.handlePairDevice)
 		api.GET("/device/configDescription", wm.handleDeviceConfigDescription)
 		api.GET("/gamestream/discover", wm.handleGameStreamDiscover)
