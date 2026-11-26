@@ -78,7 +78,7 @@ export function openGameStreamPairModal({ onPaired } = {}) {
 
         listEl.innerHTML = '';
         discoveredDevices.forEach((dev, index) => {
-            const isSelected = selectedDevice && selectedDevice.ip === dev.ip;
+            const isSelected = selectedDevice && selectedDevice.device_ip === dev.device_ip;
             const badgeClass = dev.paired ? 'gs-badge-paired' : 'gs-badge-unpaired';
             const badgeText = dev.paired
                 ? t('gamestream_paired_badge', '已配对')
@@ -89,8 +89,8 @@ export function openGameStreamPairModal({ onPaired } = {}) {
             item.className = `gs-device-item w-full text-left ${isSelected ? 'selected' : ''}`;
             item.innerHTML = `
                 <div class="min-w-0 pr-3">
-                    <div class="font-medium text-sm text-[#e3e3e3] truncate">${escapeHtml(dev.device_id || dev.ip)}</div>
-                    <div class="text-xs text-gray-400 font-mono">${escapeHtml(`${dev.ip}:${dev.port || 47989}`)}</div>
+                    <div class="font-medium text-sm text-[#e3e3e3] truncate">${escapeHtml(dev.device_id || dev.device_ip)}</div>
+                    <div class="text-xs text-gray-400 font-mono">${escapeHtml(`${dev.device_ip}:${dev.device_port || 47989}`)}</div>
                 </div>
                 <span class="px-2.5 py-0.5 rounded-full text-xs font-medium shrink-0 ${badgeClass}">${escapeHtml(badgeText)}</span>
             `;
@@ -105,8 +105,8 @@ export function openGameStreamPairModal({ onPaired } = {}) {
         selectedDevice = dev;
         renderList();
 
-        if (selectedLabelEl) selectedLabelEl.textContent = dev.device_id || dev.ip;
-        if (selectedAddrEl) selectedAddrEl.textContent = `${dev.ip}:${dev.port || 47989}`;
+        if (selectedLabelEl) selectedLabelEl.textContent = dev.device_id || dev.device_ip;
+        if (selectedAddrEl) selectedAddrEl.textContent = `${dev.device_ip}:${dev.device_port || 47989}`;
         formEl?.classList.remove('hidden');
         pinInput?.focus();
     };
@@ -161,8 +161,8 @@ export function openGameStreamPairModal({ onPaired } = {}) {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     device_id: selectedDevice.device_id,
-                    ip: selectedDevice.ip,
-                    port: selectedDevice.port || 47989,
+                    device_ip: selectedDevice.device_ip,
+                    device_port: selectedDevice.device_port || 47989,
                     pin,
                 }),
             });
