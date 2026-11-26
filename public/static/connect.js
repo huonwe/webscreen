@@ -422,7 +422,7 @@ async function updateUIBasedOnCapabilities(caps) {
 
     await loadScript('/static/capabilities/websr.js');
     // still under developing
-    // await loadScript('/static/capabilities/translate.js')
+    await loadScript('/static/capabilities/translate.js')
     
     // Handle Control
     if (caps.can_control) {

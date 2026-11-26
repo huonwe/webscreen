@@ -1,7 +1,7 @@
 // =========================================================================
 // PaddleOCR 模型与运行参数配置
 // =========================================================================
-const MODEL_CONFIG = {
+const OCR_OCR_MODEL_SETTINGS = {
     // ONNX Runtime Web ESM 入口（支持本地静态路径或 CDN）
     ortModuleUrl: 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort.min.mjs',
     wasmBasePath: 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/',
@@ -15,34 +15,19 @@ const MODEL_CONFIG = {
     recImgHeight: 48,
 };
 
-const TRANSLATE_CONFIG = {
-    // 默认请求当前页面同 IP 的 5000 端口；若通过 HTTPS 域名访问，可改为反向代理路径（如 '/libretranslate/translate'）
-    endpoint: `http://${self.location.hostname}:5000/translate`,
-    sourceLang: 'ja',   // 日文 Galgame 建议固定为 'ja'（比 'auto' 对短句和人名更准）；通用可改为 'auto'
-    targetLang: 'zh',   // LibreTranslate 中文目标语言代码为 'zh'
-    apiKey: '',         // 若服务端未开启 API Key 验证保持为空即可
-    timeoutMs: 8000,
+let TRANSLATE_SETTINGS = {
+    // Ollama 原生对话接口地址
+    user_language: 'zh-CN',
+    llm_endpoint: '',
+    llm_secret: '',
+    llm_model: '',
+    // 专用于日文 Galgame + OCR 文本的翻译提示词
+    llm_system_prompt: `Translate given text`,
 };
 
-// Galgame 打字机稳定与静态帧去重参数
-const DIFF_SAMPLE_W = 64;
-const DIFF_SAMPLE_H = 32;
-const DIFF_THRESHOLD = 2.2; // 像素平均亮度变化阈值（0~255）
 
-const diffCanvas = new OffscreenCanvas(DIFF_SAMPLE_W, DIFF_SAMPLE_H);
-const diffCtx = diffCanvas.getContext('2d', { willReadFrequently: true });
-
-const workCanvas = new OffscreenCanvas(1, 1);
-const workCtx = workCanvas.getContext('2d', { willReadFrequently: true });
-
-let prevSample = null;      // 上一次收到的帧缩略图（用于判断打字机是否仍在刷新）
-let lastOcrSample = null;   // 上一次实际执行 OCR 的帧缩略图（用于跳过静态画面）
-let lastRawText = '';
-
-let detSession = null;
-let recSession = null;
-let charDict = null;
-let initPromise = null;
+const LLM_KEEP_ALIVE = '30m';
+const LLM_TIMEOUT_MS = 15000; // 15 秒超时
 
 // =========================================================================
 // 1. 虚拟翻译接口（待后续阶段接入真实翻译 API）
@@ -51,37 +36,52 @@ let initPromise = null;
 const translationCache = new Map();
 
 /**
- * 调用本机同 IP 5000 端口的 LibreTranslate API 完成翻译
+ * 调用局域网 Ollama API 完成日文 Galgame 文本翻译
  *
  * @param {string} text - PaddleOCR 识别并合并后的原文
  * @returns {Promise<string>} 翻译后的文本
  */
 async function translateText(text) {
+    // 移除换行符并清理首尾空白
+    // .replace(/[\r\n]/g, '')
     const clean = (text || '').trim();
     if (!clean) return '';
 
+    console.log('Translating text:', clean);
     if (translationCache.has(clean)) {
         return translationCache.get(clean);
     }
 
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), TRANSLATE_CONFIG.timeoutMs);
+    const timer = setTimeout(() => controller.abort(), LLM_TIMEOUT_MS); // 15 秒超时
 
     try {
         const payload = {
-            q: clean,
-            source: TRANSLATE_CONFIG.sourceLang,
-            target: TRANSLATE_CONFIG.targetLang,
-            format: 'text',
+            model: TRANSLATE_SETTINGS.llm_model,
+            stream: false, // 关闭流式输出，一次性拿完整结果
+            keep_alive: LLM_KEEP_ALIVE,
+            messages: [
+                {
+                    role: 'system',
+                    content: TRANSLATE_SETTINGS.llm_system_prompt,
+                },
+                {
+                    role: 'user',
+                    content: `Translate to ${TRANSLATE_SETTINGS.user_language}：\n${clean}`,
+                },
+            ],
+            options: {
+                temperature: 0.2, // 低温度防止 3B 小模型自由发挥或胡言乱语
+                top_p: 0.7,
+                num_predict: 256, // 限制最大输出 token，防止死循环复读
+            },
         };
-        if (TRANSLATE_CONFIG.apiKey) {
-            payload.api_key = TRANSLATE_CONFIG.apiKey;
-        }
 
-        const resp = await fetch(TRANSLATE_CONFIG.endpoint, {
+        const resp = await fetch(TRANSLATE_SETTINGS.llm_endpoint, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                'Authorization': `Bearer ${TRANSLATE_SETTINGS.llm_secret}`,
             },
             body: JSON.stringify(payload),
             signal: controller.signal,
@@ -93,9 +93,9 @@ async function translateText(text) {
         }
 
         const data = await resp.json();
-        const translated = (data && typeof data.translatedText === 'string')
-            ? data.translatedText.trim()
-            : '';
+        // 提取 Ollama /api/chat 的返回内容，并去掉可能残留的首尾引号
+        let translated = (data?.message?.content || '').trim();
+        translated = translated.replace(/^["“]|["”]$/g, '');
 
         if (translated) {
             translationCache.set(clean, translated);
@@ -103,16 +103,39 @@ async function translateText(text) {
         }
         return clean;
     } catch (err) {
-        console.warn('[LibreTranslate] 翻译请求失败:', err);
-        // 失败时不写入缓存，下次画面刷新可重试，同时在界面保留原文并提示错误
-        return `${clean}\n[翻译失败: ${err.name === 'AbortError' ? '请求超时' : err.message}]`;
+        console.warn('[Ollama] Failed:', err);
+        return `${clean}\n[Failed: ${err.name === 'AbortError' ? 'timeout' : err.message}]`;
     } finally {
         clearTimeout(timer);
     }
 }
 // =========================================================================
-// 2. 帧差检测（跳过静态台词 + 等待打字机打印完成）
+// 2. 高灵敏度局部网格帧差检测 + 上一次结果缓存
 // =========================================================================
+const DIFF_SAMPLE_W = 128;
+const DIFF_SAMPLE_H = 64;
+const BLOCK_SIZE = 8;               // 将采样图划分为 8x8 局部网格检测变化
+const BLOCK_DIFF_THRESHOLD = 5;   // 单个网格内平均亮度变化阈值（越小越灵敏，推荐 2.5~5.0）
+const STABLE_DURATION_MS = 700;     // 画面停止变化后等待 700ms 触发（可按需改为 1000）
+
+const diffCanvas = new OffscreenCanvas(DIFF_SAMPLE_W, DIFF_SAMPLE_H);
+const diffCtx = diffCanvas.getContext('2d', { willReadFrequently: true });
+
+const workCanvas = new OffscreenCanvas(1, 1);
+const workCtx = workCanvas.getContext('2d', { willReadFrequently: true });
+
+let prevSample = null;          // 上一帧缩略图
+let lastMotionTime = 0;         // 最近一次检测到画面变化的时间戳
+let hasPendingChange = false;   // 标记是否有待处理的画面变化
+
+// 显式保存上一次的原文与翻译结果
+let lastOriginalText = '';
+let lastTranslatedText = '';
+
+let detSession = null;
+let recSession = null;
+let charDict = null;
+let initPromise = null;
 
 function sampleLuma(bitmap) {
     diffCtx.drawImage(bitmap, 0, 0, DIFF_SAMPLE_W, DIFF_SAMPLE_H);
@@ -124,15 +147,32 @@ function sampleLuma(bitmap) {
     return luma;
 }
 
-function calcMeanAbsDiff(a, b) {
+/**
+ * 计算局部 8x8 网格的最大平均差异
+ * 只要选区内任意一小块区域出现新文字，就能返回较大的差值，不会被大片背景稀释
+ */
+function calcMaxBlockDiff(a, b) {
     if (!a || !b || a.length !== b.length) return 255;
-    let sum = 0;
-    for (let i = 0; i < a.length; i++) {
-        sum += Math.abs(a[i] - b[i]);
-    }
-    return sum / a.length;
-}
+    let maxBlockDiff = 0;
+    const pixelsPerBlock = BLOCK_SIZE * BLOCK_SIZE;
 
+    for (let by = 0; by < DIFF_SAMPLE_H; by += BLOCK_SIZE) {
+        for (let bx = 0; bx < DIFF_SAMPLE_W; bx += BLOCK_SIZE) {
+            let sum = 0;
+            for (let y = 0; y < BLOCK_SIZE; y++) {
+                const rowOffset = (by + y) * DIFF_SAMPLE_W + bx;
+                for (let x = 0; x < BLOCK_SIZE; x++) {
+                    sum += Math.abs(a[rowOffset + x] - b[rowOffset + x]);
+                }
+            }
+            const blockMean = sum / pixelsPerBlock;
+            if (blockMean > maxBlockDiff) {
+                maxBlockDiff = blockMean;
+            }
+        }
+    }
+    return maxBlockDiff;
+}
 // =========================================================================
 // 3. PaddleOCR (PP-OCRv4 ONNX) 初始化与推理管线
 // =========================================================================
@@ -142,8 +182,8 @@ async function ensurePaddleOCR() {
     if (initPromise) return initPromise;
 
     initPromise = (async () => {
-        const ort = await import(MODEL_CONFIG.ortModuleUrl);
-        ort.env.wasm.wasmPaths = MODEL_CONFIG.wasmBasePath;
+        const ort = await import(OCR_MODEL_CONFIG.ortModuleUrl);
+        ort.env.wasm.wasmPaths = OCR_MODEL_CONFIG.wasmBasePath;
         ort.env.wasm.numThreads = 1;
 
         const sessionOpts = {
@@ -152,13 +192,13 @@ async function ensurePaddleOCR() {
         };
 
         const [det, rec, dictResp] = await Promise.all([
-            ort.InferenceSession.create(MODEL_CONFIG.detModelUrl, sessionOpts),
-            ort.InferenceSession.create(MODEL_CONFIG.recModelUrl, sessionOpts),
-            fetch(MODEL_CONFIG.dictUrl),
+            ort.InferenceSession.create(OCR_MODEL_CONFIG.detModelUrl, sessionOpts),
+            ort.InferenceSession.create(OCR_MODEL_CONFIG.recModelUrl, sessionOpts),
+            fetch(OCR_MODEL_CONFIG.dictUrl),
         ]);
 
         if (!dictResp.ok) {
-            throw new Error(`字典加载失败 (${dictResp.status}): ${MODEL_CONFIG.dictUrl}`);
+            throw new Error(`字典加载失败 (${dictResp.status}): ${OCR_MODEL_CONFIG.dictUrl}`);
         }
         const dictText = await dictResp.text();
         // PaddleOCR 字典：索引 0 为 CTC blank，1..N 对应字典每行字符，末尾追加空格
@@ -213,7 +253,7 @@ async function detectTextBoxes(imgData, width, height) {
     for (let y = 0; y < height; y++) {
         for (let x = 0; x < width; x++) {
             const idx = y * width + x;
-            if (visited[idx] || probMap[y * padW + x] < MODEL_CONFIG.detThreshold) continue;
+            if (visited[idx] || probMap[y * padW + x] < OCR_MODEL_CONFIG.detThreshold) continue;
 
             let minX = x, maxX = x, minY = y, maxY = y;
             let top = 0;
@@ -240,7 +280,7 @@ async function detectTextBoxes(imgData, width, height) {
                     const ny = neighbors[k][1];
                     if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
                     const nIdx = ny * width + nx;
-                    if (!visited[nIdx] && probMap[ny * padW + nx] >= MODEL_CONFIG.detThreshold) {
+                    if (!visited[nIdx] && probMap[ny * padW + nx] >= OCR_MODEL_CONFIG.detThreshold) {
                         visited[nIdx] = 1;
                         stackX[top] = nx;
                         stackY[top] = ny;
@@ -281,7 +321,7 @@ async function detectTextBoxes(imgData, width, height) {
  * 文本行识别 (SVTR / CRNN + CTC Greedy Decode)
  */
 async function recognizeBoxText(sourceCanvas, box) {
-    const targetH = MODEL_CONFIG.recImgHeight;
+    const targetH = OCR_MODEL_CONFIG.recImgHeight;
     const targetW = Math.max(targetH, Math.round(box.w * (targetH / box.h)));
 
     const lineCanvas = new OffscreenCanvas(targetW, targetH);
@@ -362,67 +402,114 @@ async function runPaddleOCR(bitmap) {
 
 self.onmessage = async (e) => {
     const msg = e.data || {};
+    if (msg.type === 'UPDATE_SETTINGS' && msg.settings) {
+        if (msg.settings) {
+            TRANSLATE_SETTINGS.llm_endpoint = msg.settings.translate_llm_endpoint;
+            TRANSLATE_SETTINGS.llm_prompt = msg.settings.translate_llm_prompt;
+            TRANSLATE_SETTINGS.llm_secret = msg.settings.translate_llm_secret;
+            TRANSLATE_SETTINGS.translate_model = msg.settings.translate_model;
+            TRANSLATE_SETTINGS.user_language = msg.settings.user_language;
+            TRANSLATE_SETTINGS.llm_system_prompt = msg.settings.llm_system_prompt;
+        }
+        return;
+    }
 
     if (msg.type === 'RESET_DIFF') {
         prevSample = null;
-        lastOcrSample = null;
-        lastRawText = '';
+        lastMotionTime = 0;
+        hasPendingChange = false;
+        lastOriginalText = '';
+        lastTranslatedText = '';
         return;
     }
 
     if (msg.type !== 'OCR_FRAME' || !msg.bitmap) return;
     const bitmap = msg.bitmap;
+    const now = performance.now();
 
     try {
         const curSample = sampleLuma(bitmap);
 
-        // 1. 若与上一次已识别画面几乎无变化，说明台词静止，直接跳过
-        if (calcMeanAbsDiff(curSample, lastOcrSample) < DIFF_THRESHOLD) {
-            self.postMessage({ type: 'SKIPPED', reason: 'unchanged' });
+        // 0. 首帧初始化：记录基准并进入等待稳定状态
+        if (!prevSample) {
+            prevSample = curSample;
+            lastMotionTime = now;
+            hasPendingChange = true;
+            self.postMessage({ type: 'SKIPPED', reason: 'init_wait' });
             return;
         }
 
-        // 2. 若与上一采样帧仍在剧烈变化，说明 Galgame 正在逐字打字输出，等下一帧稳定再识别
-        if (prevSample && calcMeanAbsDiff(curSample, prevSample) >= DIFF_THRESHOLD) {
-            prevSample = curSample;
+        // 计算局部最大网格变化
+        const maxDiff = calcMaxBlockDiff(curSample, prevSample);
+        prevSample = curSample;
+
+        // 1. 任意网格仍在变化（逐字打印 / 翻页中）：重置静止计时器并标记有新变化
+        if (maxDiff >= BLOCK_DIFF_THRESHOLD) {
+            lastMotionTime = now;
+            hasPendingChange = true;
             self.postMessage({ type: 'SKIPPED', reason: 'animating' });
             return;
         }
 
-        prevSample = curSample;
-        lastOcrSample = curSample;
+        // 2. 画面静止且没有待处理的新变化：直接跳过
+        if (!hasPendingChange) {
+            self.postMessage({ type: 'SKIPPED', reason: 'idle' });
+            return;
+        }
 
-        // 3. 执行 PaddleOCR 识别
+        // 3. 画面已停止变化，但持续静止时间未达到设定时长：继续等待
+        if (now - lastMotionTime < STABLE_DURATION_MS) {
+            self.postMessage({ type: 'SKIPPED', reason: 'waiting_stable' });
+            return;
+        }
+
+        // 4. 满足“变化后持续静止”条件：消耗标记并执行 OCR
+        hasPendingChange = false;
+
         const rawText = await runPaddleOCR(bitmap);
         if (!rawText) {
-            lastRawText = '';
+            lastOriginalText = '';
+            lastTranslatedText = '';
             self.postMessage({ type: 'RESULT', rawText: '', translatedText: '' });
             return;
         }
 
-        if (rawText === lastRawText && translationCache.has(rawText)) {
+        // 5. 命中上一次原文缓存：直接返回上一次保存的译文
+        if (rawText === lastOriginalText && lastTranslatedText) {
             self.postMessage({
                 type: 'RESULT',
                 rawText,
-                translatedText: translationCache.get(rawText),
+                translatedText: lastTranslatedText,
             });
             return;
         }
 
-        lastRawText = rawText;
+        // 6. 命中历史 Map 缓存（如回看历史记录或重复选项）
+        if (translationCache.has(rawText)) {
+            const cached = translationCache.get(rawText);
+            lastOriginalText = rawText;
+            lastTranslatedText = cached;
+            self.postMessage({
+                type: 'RESULT',
+                rawText,
+                translatedText: cached,
+            });
+            return;
+        }
 
-        // 4. 调用虚拟翻译接口
+        // 7. 调用 Ollama 翻译并更新上一次原文/译文缓存
         const translatedText = await translateText(rawText);
+        lastOriginalText = rawText;
+        lastTranslatedText = translatedText;
+
         self.postMessage({ type: 'RESULT', rawText, translatedText });
     } catch (err) {
-        console.error("OCR Worker encountered an error", err);
+        console.error('OCR Worker encountered an error', err);
         self.postMessage({
             type: 'ERROR',
             error: err instanceof Error ? err.message : String(err),
         });
-        
     } finally {
-        // 务必关闭 ImageBitmap 释放显存
         bitmap.close();
     }
 };

@@ -1,6 +1,7 @@
 import { addControlButton } from './control_ui.js';
+import { getSetting } from '../global-settings.js';
 
-const CAPTURE_INTERVAL_MS = 350; // 采样周期（Worker 内部会自动跳过未变化帧）
+const CAPTURE_INTERVAL_MS = 200; // 采样周期（Worker 内部会自动跳过未变化帧）
 const WORKER_SCRIPT_URL = new URL('../paddleocr/worker.js', import.meta.url);
 
 // 状态: 'idle' | 'selecting' | 'running'
@@ -30,8 +31,8 @@ function getTargetCanvas() {
 
 function getVideoContainer(canvas) {
     return (canvas && canvas.closest('.video-container')) ||
-           document.querySelector('.video-container') ||
-           document.body;
+        document.querySelector('.video-container') ||
+        document.body;
 }
 
 /**
@@ -94,6 +95,17 @@ function ensureWorker() {
     if (ocrWorker) return ocrWorker;
 
     ocrWorker = new Worker(WORKER_SCRIPT_URL, { type: 'module' });
+    // 初始化配置
+    ocrWorker.postMessage({
+        type: 'UPDATE_SETTINGS',
+        settings: {
+            language_to_translate: getSetting('language_to_translate'),
+            user_language: getSetting('user_language'),
+            translate_llm_endpoint: getSetting('translate_llm_endpoint'),
+            translate_llm_secret: getSetting('translate_llm_secret'),
+            translate_llm_system_prompt: getSetting('translate_llm_system_prompt')
+        }
+    });
     ocrWorker.onmessage = (e) => {
         const msg = e.data || {};
         if (msg.type === 'RESULT') {
