@@ -97,13 +97,20 @@ sudo apt install xvfb ffmpeg xfce4 sway wf-recorder seatd
 
 ### Option 1: Use Pre-built Binary
 
-Download the latest binary from the [Releases](https://github.com/huonwe/webscreen/releases) page. The default port is `8079`. A 6-digit PIN is also required (defaults to no password if omitted).
+Download the latest binary from the [Releases](https://github.com/huonwe/webscreen/releases) page.
 
+Then,
 ```bash
-./webscreen -host 0.0.0.0 -port 8080 -pin 555555
+mkdir ./data
+curl -fsSL https://raw.githubusercontent.com/huonwe/webscreen/main/config.yml -o ./data/config.yml
+# You might need to change some settings here.
 ```
 
-Then open your browser and visit: `http://<your-ip>:8080`
+```bash
+./webscreen -D ./data
+```
+
+Then open your browser and visit: `http://<your-ip>:8081`
 
 ### Option 2: Build from Source
 
@@ -128,11 +135,8 @@ services:
     restart: unless-stopped
     volumes:
       - /dev/bus/usb:/dev/bus/usb
+      - ./data:/webscreen/data
     privileged: true
-    environment:
-      - GIN_MODE=release
-      - PORT=8081
-      - PIN=123456
 
 ```
 

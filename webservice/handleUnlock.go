@@ -1,6 +1,7 @@
 package webservice
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
@@ -15,7 +16,7 @@ type UnlockAttemptRecord struct {
 
 // User need to enter correct PIN to unlock the web access
 func (wm *WebMaster) handleUnlock(c *gin.Context) {
-	if wm.pin == "" {
+	if wm.pin == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"result": "error", "message": "PIN login is not enabled"})
 		return
 	}
@@ -63,7 +64,7 @@ func (wm *WebMaster) handleUnlock(c *gin.Context) {
 		wm.UnlockAttemptRecords[sIP] = record
 	}
 
-	if req.PIN != wm.pin {
+	if req.PIN != fmt.Sprintf("%06d", wm.pin) {
 		c.JSON(200, gin.H{"result": "failed", "message": "Incorrect PIN", "leftTries": 5 - record.Attempts})
 		record.Attempts++
 		wm.UnlockAttemptRecords[sIP] = record

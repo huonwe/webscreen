@@ -8,47 +8,46 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"webscreen/consts"
 	"webscreen/db"
 	"webscreen/webservice"
+
+	"github.com/gin-gonic/gin"
 )
 
 //go:embed public
 var publicFS embed.FS
 
+var DATA_DIR string
+
 func main() {
-	host := flag.String("host", "0.0.0.0", "host to bind the server to")
-	port := flag.String("port", "8081", "server port")
-	pin := flag.String("pin", "", "initial PIN for web access")
-
+	// host := flag.String("host", "0.0.0.0", "host to bind the server to")
+	// port := flag.String("port", "8081", "server port")
+	flag.StringVar(&DATA_DIR, "D", "./data", "directory to store data")
 	flag.Parse()
+	consts.SetDataDir(DATA_DIR)
 	// pin should be 6 digits and only digits
-	if *pin != "" {
-		if len(*pin) != 6 {
-			log.Fatal("PIN must be exactly 6 digits")
-		}
-		for _, ch := range *pin {
-			if ch < '0' || ch > '9' {
-				log.Fatal("PIN must contain only digits")
-			}
-		}
-	}
-
+	gin.SetMode(gin.ReleaseMode)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
 	pub, _ := fs.Sub(publicFS, "public")
-	config, err := webservice.LoadConfig("config.yml")
+	if err := os.MkdirAll(DATA_DIR, 0755); err != nil {
+		log.Printf("create data dir failed: %v\n", err)
+		return
+	}
+	config, err := webservice.LoadConfig(DATA_DIR + "/config.yml")
 	if err != nil {
 		log.Fatalf("Failed to load config.yml: %v", err)
 	}
 	// config.EnableAndroidDiscover = true
-	MyDataBase, err := db.InitDB("webscreen.db")
+	MyDataBase, err := db.InitDB(DATA_DIR + "/webscreen.db")
 	if err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
 	webMaster := webservice.New(config, pub, MyDataBase)
 
-	go webMaster.Serve(*host, *port)
+	go webMaster.Serve(config.Host, config.Port)
 
 	<-ctx.Done()
 	log.Println("Gracefully closing")

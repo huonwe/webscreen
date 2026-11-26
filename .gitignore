@@ -22,3 +22,5 @@ gamestream_auth
 
 public/static/paddleocr/*.onnx
 public/static/paddleocr/*.txt
+
+data/

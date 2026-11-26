@@ -7,9 +7,9 @@ import (
 	"webscreen/sdriver"
 )
 
-const (
+var (
 	defaultHTTPPort = 47989
-	defaultAuthDir  = "gamestream_auth"
+	defaultAuthDir  = "./sdriver/gamestream_auth"
 )
 
 func ConfigDescription() []sdriver.ConfigParamDescription {

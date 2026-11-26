@@ -97,14 +97,20 @@ sudo apt install xvfb ffmpeg xfce4 sway wf-recorder seatd
 
 ### 方式一：使用预编译二进制文件
 
-从 [Releases](https://github.com/huonwe/webscreen/releases) 页面下载最新的二进制文件。默认端口为 `8079`，同时需要设置一个 6 位数的 PIN 码（若省略则默认无密码）。
+从 [Releases](https://github.com/huonwe/webscreen/releases) 页面下载最新的二进制文件。
 
 ```bash
-./webscreen -host 0.0.0.0 -port 8080 -pin 555555
+mkdir ./data
+curl -fsSL https://raw.githubusercontent.com/huonwe/webscreen/main/config.yml -o ./data/config.yml
+# You might need to change some settings here.
+```
+
+```bash
+./webscreen
 
 ```
 
-随后打开浏览器访问：`http://<你的IP>:8080`
+随后打开浏览器访问：`http://<你的IP>:8081`
 
 ### 方式二：从源码构建
 
@@ -130,11 +136,8 @@ services:
     restart: unless-stopped
     volumes:
       - /dev/bus/usb:/dev/bus/usb
+      - ./data:/webscreen/data
     privileged: true
-    environment:
-      - GIN_MODE=release
-      - PORT=8081
-      - PIN=123456
 
 ```
 

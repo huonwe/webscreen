@@ -17,7 +17,7 @@ func (wm *WebMaster) handleLoginUI(c *gin.Context) {
 		c.Redirect(http.StatusFound, "/setup")
 		return
 	}
-	if wm.pin != "" && wm.isTrustedIP(c.ClientIP()) {
+	if wm.pin != 0 && wm.isTrustedIP(c.ClientIP()) {
 		c.Redirect(http.StatusFound, "/unlock")
 		return
 	}
@@ -25,7 +25,7 @@ func (wm *WebMaster) handleLoginUI(c *gin.Context) {
 }
 
 func (wm *WebMaster) handleLogin(c *gin.Context) {
-	if wm.pin != "" && wm.isTrustedIP(c.ClientIP()) {
+	if wm.pin != 0 && wm.isTrustedIP(c.ClientIP()) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "受信任 IP 请使用 PIN 登录"})
 		return
 	}

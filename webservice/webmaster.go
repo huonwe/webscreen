@@ -2,6 +2,7 @@ package webservice
 
 import (
 	"database/sql"
+	"fmt"
 	"io/fs"
 	"log"
 	"net/http"
@@ -24,7 +25,7 @@ type WebMaster struct {
 	Nexus *nexus.Nexus
 	// ScreenSessions map[string]ScreenSession
 
-	pin                  string
+	pin                  int
 	trustedIPs           []string
 	UnlockAttemptRecords map[string]UnlockAttemptRecord
 	jwtSecret            []byte
@@ -146,7 +147,7 @@ func (wm *WebMaster) setRouter() {
 	wm.router = r
 }
 
-func (wm *WebMaster) Serve(host, port string) {
+func (wm *WebMaster) Serve(host string, port int) {
 	// if wm.config.EnableAndroidDiscover {
 	// 	go wm.AndroidDevicesDiscovery()
 	// }
@@ -156,7 +157,7 @@ func (wm *WebMaster) Serve(host, port string) {
 		android.GetManager().Start()
 	}
 	wm.setRouter()
-	err := wm.router.Run(host + ":" + port)
+	err := wm.router.Run(fmt.Sprintf("%s:%d", host, port))
 	if err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}
