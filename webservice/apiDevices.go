@@ -121,8 +121,8 @@ func (wm *WebMaster) handleListDevices(c *gin.Context) {
 func (wm *WebMaster) handleConnectDevice(c *gin.Context) {
 	var req struct {
 		DeviceType string `json:"device_type"`
-		IP         string `json:"ip"`
-		Port       string `json:"port"`
+		IP         string `json:"device_ip"`
+		Port       string `json:"device_port"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(400, gin.H{"error": "Invalid request"})
@@ -149,8 +149,8 @@ func (wm *WebMaster) handleConnectDevice(c *gin.Context) {
 func (wm *WebMaster) handlePairDevice(c *gin.Context) {
 	var req struct {
 		DeviceType string `json:"device_type"`
-		IP         string `json:"ip"`
-		Port       string `json:"port"`
+		IP         string `json:"device_ip"`
+		Port       string `json:"device_port"`
 		Code       string `json:"code"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -190,8 +190,8 @@ func (wm *WebMaster) handleGameStreamDiscover(c *gin.Context) {
 func (wm *WebMaster) handleGameStreamPair(c *gin.Context) {
 	var req struct {
 		DeviceID string `json:"device_id"`
-		IP       string `json:"ip"`
-		Port     int    `json:"port"`
+		IP       string `json:"device_ip"`
+		Port     int    `json:"device_port"`
 		PIN      string `json:"pin"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {

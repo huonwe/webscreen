@@ -88,7 +88,7 @@ func New(config map[string]string) (*ScrcpyDriver, error) {
 	}
 	da.ctx, da.cancel = context.WithCancel(context.Background())
 	da.localMode = utils.IsLocalRootMode()
-	da.adbClient = NewADBClient(config["deviceID"], da.scid, da.ctx)
+	da.adbClient = NewADBClient(config["device_id"], da.scid, da.ctx)
 
 	// scrcpy defaults video/audio/control to true. The web UI omits them
 	// entirely for a device that was never configured, which would leave the

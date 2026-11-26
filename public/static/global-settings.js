@@ -2,7 +2,7 @@
 const GLOBAL_SETTINGS_KEY = 'global_settings';
 
 const DEFAULT_SETTINGS = {
-    transport_protocol: "webrtc",
+    protocol_transport: "webrtc",
     video_codec: "h264",
     audio_codec: "opus",
     user_language: "zh-CN",

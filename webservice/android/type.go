@@ -3,10 +3,10 @@ package android
 import "webscreen/consts"
 
 type AndroidDevice struct {
-	UUID     string `json:"uuid"`
+	UUID     string `json:"device_uuid"`
 	DeviceID string `json:"device_id"`
-	IP       string `json:"ip"`
-	Port     int    `json:"port"`
+	IP       string `json:"device_ip"`
+	Port     int    `json:"device_port"`
 	Status   string `json:"status"`
 	// 以下字段由设备管理器（adbmanager.go）填充，用于区分 USB / Wi-Fi、
 	// 显示授权状态与用户自定义名称；老前端只读上面几个字段，保持兼容。

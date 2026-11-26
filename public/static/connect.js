@@ -1,23 +1,12 @@
-const jitterBufferTargetMs = 0; // 0 is a cake
+// 获取当前页面 URL 参数，或传入任意查询字符串（如 "?a=1&b=2"）
+const params = new URLSearchParams(window.location.search);
 
-// Load CONFIG from sessionStorage if available, otherwise use URL params or defaults
-var CONFIG = (function () {
-    // Try to load from sessionStorage first (set by console.js)
-    const stored = sessionStorage.getItem('webscreen_device_configs_now');
-    console.log("Stored config:", stored);
-    if (stored) {
-        try {
-            const parsed = JSON.parse(stored);
-            console.log("Using stored config:", parsed);
-            // Clear it after reading to avoid stale data
-            // sessionStorage.removeItem('webscreen_device_configs_now');
-            return parsed;
-        } catch (e) {
-            console.warn('Failed to parse stored config:', e);
-        }
-    }
-    console.error("No valid configuration found.");
-})();
+// 直接转为普通对象
+const CONFIG = Object.fromEntries(params.entries());
+// 简写：const obj = Object.fromEntries(params);
+
+// 如果需要 JSON 字符串：
+console.log("URL Params Object:", CONFIG);
 
 let activeTransportProtocol = 'webrtc';
 let webRtcFrameWorker = null;
@@ -43,13 +32,13 @@ window.handleWebSRSourceFrame = (frame) => {
 
 async function start() {
     console.log("CONFIG:", CONFIG);
-    if (!CONFIG.remote_uuid) {
+    if (!CONFIG.device_uuid) {
         console.error("No device configuration found. Please set up the device configuration in the console.");
         showToast(i18n.t('error_no_device_config'), 3000);
         return;
     }
 
-    activeTransportProtocol = CONFIG.protocol || 'webrtc';
+    activeTransportProtocol = CONFIG.protocol_transport || 'webrtc';
     const usesWebSocket = activeTransportProtocol === 'websocket';
     if (usesWebSocket) window.WebSocketMedia.enableAudioStart();
     if (!usesWebSocket && activeTransportProtocol !== 'webrtc') {
@@ -181,22 +170,22 @@ async function start() {
 
     window.ws.onopen = () => {
         console.log('WebSocket connected');
-        const extra = { av_sync: String(CONFIG.av_sync === true) };
+        const extra = { };
         if (pc) extra.sdp = pc.localDescription.sdp;
         const config = {
-            protocol: activeTransportProtocol,
-            video_codec: CONFIG.driver_config?.video_codec || 'h264',
-            audio_codec: CONFIG.driver_config?.audio_codec || 'opus',
-            remote_uuid: CONFIG.remote_uuid,
+            protocol_transport: CONFIG.protocol_transport,
+            video_codec: CONFIG.video_codec || getSetting('video_codec'),
+            audio_codec: CONFIG.audio_codec || getSetting('audio_codec'),
+            remote_uuid: CONFIG.device_uuid,
             extra
         };
         console.log("connection config:", config);
         window.ws.send(JSON.stringify(config));
-
-        const remoteConfig = { ...(CONFIG.driver_config || {}) };
-        if (CONFIG.type === 'android') {
-            remoteConfig.deviceID = CONFIG.device_ip || CONFIG.device_id || '';
-        }
+        delete CONFIG.protocol_transport;
+        delete CONFIG.device_uuid
+        delete CONFIG.extra
+        const remoteConfig = { ...(CONFIG || {}) };
+        console.log("remote config:", remoteConfig);
         window.ws.send(JSON.stringify(remoteConfig));
     };
 

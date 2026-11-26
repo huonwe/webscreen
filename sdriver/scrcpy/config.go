@@ -21,19 +21,19 @@ var scrcpyServerData embed.FS
 // Receive an optional params
 func ConfigDescription(opt string) []sdriver.ConfigParamDescription {
 	deviceID := opt
-	var encoderList []string
+	// var encoderList []string
 	// var appList []string
 	if utils.IsLocalRootMode() {
 		// On the device itself the encoders are read from the local codec
 		// configuration files instead of `adb shell grep`.
-		encoderList = LocalVideoEncoderList()
+		// encoderList = LocalVideoEncoderList()
 	} else if deviceID != "" {
 		adbClient := NewADBClient(deviceID, "", context.Background())
-		encoderList = adbClient.SupportedVideoEncoderList()
+		// encoderList = adbClient.SupportedVideoEncoderList()
 		// appList = adbClient.AppList("3")
 		adbClient.Stop()
 	} else {
-		encoderList = []string{}
+		// encoderList = []string{}
 		// appList = []string{}
 	}
 
@@ -54,23 +54,23 @@ func ConfigDescription(opt string) []sdriver.ConfigParamDescription {
 			Badge:       true,
 			Description: "enable control stream",
 		},
-		{
-			Name:        "video_codec",
-			Type:        "string",
-			Required:    true,
-			Default:     "h264",
-			Options:     []string{"h264", "h265"},
-			Badge:       true,
-			Description: "video codec to use",
-		},
-		{
-			Name:        "video_encoder",
-			Type:        "string",
-			Required:    false,
-			Badge:       true,
-			Options:     encoderList,
-			Description: "video encoder to use",
-		},
+		// {
+		// 	Name:        "video_codec",
+		// 	Type:        "string",
+		// 	Required:    true,
+		// 	Default:     "h264",
+		// 	Options:     []string{"h264", "h265"},
+		// 	Badge:       true,
+		// 	Description: "video codec to use",
+		// },
+		// {
+		// 	Name:        "video_encoder",
+		// 	Type:        "string",
+		// 	Required:    false,
+		// 	Badge:       true,
+		// 	Options:     encoderList,
+		// 	Description: "video encoder to use",
+		// },
 		{
 			Name:        "video_bit_rate",
 			Type:        "string",
@@ -86,12 +86,12 @@ func ConfigDescription(opt string) []sdriver.ConfigParamDescription {
 			Default:     true,
 			Description: "enable intra refresh for the video stream",
 		},
-		{
-			Name:        "video_codec_options",
-			Type:        "string",
-			Required:    false,
-			Description: "overwrite video codec options, e.g. profile=1,level=4.1,bitrate=8000000",
-		},
+		// {
+		// 	Name:        "video_codec_options",
+		// 	Type:        "string",
+		// 	Required:    false,
+		// 	Description: "overwrite video codec options, e.g. profile=1,level=4.1,bitrate=8000000",
+		// },
 		{
 			Name:        "max_size",
 			Type:        "integer",

@@ -15,7 +15,7 @@ var (
 func ConfigDescription() []sdriver.ConfigParamDescription {
 	return []sdriver.ConfigParamDescription{
 		{Name: "app", Type: "string", Required: false, Default: "Desktop", Badge: true, Description: "application name or id to launch on the host"},
-		{Name: "video_codec", Type: "string", Required: true, Default: "h264", Options: []string{"h264", "h265"}, Badge: true, Description: "video codec"},
+		// {Name: "video_codec", Type: "string", Required: true, Default: "h264", Options: []string{"h264", "h265"}, Badge: true, Description: "video codec"},
 		{Name: "video_bit_rate", Type: "string", Required: true, Default: "10M", Badge: true, Description: "video bit rate, e.g. 10M"},
 		{Name: "frame_rate", Type: "integer", Required: false, Default: 60, Description: "stream frame rate"},
 		{Name: "resolution", Type: "string", Required: true, Default: "1920x1080", Options: []string{"3840x2160", "2560x1600", "2560x1440", "1920x1080", "1280x720"}, Badge: true, Description: "stream resolution"},

@@ -14,15 +14,15 @@ func ConfigDescription() []sdriver.ConfigParamDescription {
 			Description: "capture backend to use, e.g. 'wayland' for wf-recorder, " +
 				"'xorg' for x11+kmsgrab, 'xvfb' for Xvfb + kmsgrab",
 		},
-		{
-			Name:        "video_codec",
-			Type:        "string",
-			Required:    true,
-			Default:     "h265",
-			Options:     []string{"h264", "h265"},
-			Badge:       true,
-			Description: "video codec to use",
-		},
+		// {
+		// 	Name:        "video_codec",
+		// 	Type:        "string",
+		// 	Required:    true,
+		// 	Default:     "h265",
+		// 	Options:     []string{"h264", "h265"},
+		// 	Badge:       true,
+		// 	Description: "video codec to use",
+		// },
 
 		{
 			Name:        "video_bit_rate",

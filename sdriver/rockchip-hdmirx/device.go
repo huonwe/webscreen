@@ -15,9 +15,9 @@ var deviceTreeProperties = []string{
 
 type Device struct {
 	DeviceID string `json:"device_id"`
-	IP       string `json:"ip"`
-	Port     int    `json:"port"`
-	Status   string `json:"status"`
+	IP       string `json:"device_ip"`
+	Port     int    `json:"device_port"`
+	Status   string `json:"device_status"`
 }
 
 func (d Device) GetType() string     { return "rockchip-hdmirx" }

@@ -538,7 +538,6 @@ func (n *Nexus) setupRemote(remoteUUID string, config RemoteConfig) (sdriver.SDr
 	}
 	log.Println("[nexus]remote device info:", deviceInfo)
 	// log.Println("[nexus]remote config:", config)
-	config["deviceID"] = deviceInfo.DeviceID
 	var driver sdriver.SDriver
 	switch deviceInfo.Type {
 	case consts.DEVICE_TYPE_ANDROID:

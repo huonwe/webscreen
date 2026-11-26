@@ -3,12 +3,12 @@ package db
 import "database/sql"
 
 type DeviceInfo struct {
-	Type        string `json:"type"`
+	Type        string `json:"device_type"`
 	DeviceID    string `json:"device_id"`
-	IP          string `json:"ip"`
-	Port        int    `json:"port"`
-	Status      string `json:"status"`
-	UUID        string `json:"uuid"`
+	IP          string `json:"device_ip"`
+	Port        int    `json:"device_port"`
+	Status      string `json:"device_status"`
+	UUID        string `json:"device_uuid"`
 	DisplayName string `json:"display_name"`
 }
 

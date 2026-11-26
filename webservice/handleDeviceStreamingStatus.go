@@ -1,11 +1,16 @@
 package webservice
 
-import "github.com/gin-gonic/gin"
+import (
+	"log"
+
+	"github.com/gin-gonic/gin"
+)
 
 func (wm *WebMaster) handleDeviceStreamingStatus(ctx *gin.Context) {
-	uuid := ctx.Query("uuid")
-	isStreaming, remoteConfig := wm.Nexus.IsAlreadyStreaming(uuid)
+	device_uuid := ctx.Query("device_uuid")
+	isStreaming, remoteConfig := wm.Nexus.IsAlreadyStreaming(device_uuid)
 	if isStreaming {
+		log.Printf("Device %s is streaming with config: %+v", device_uuid, remoteConfig)
 		ctx.JSON(200, gin.H{
 			"streaming": true,
 			"config":    remoteConfig,
