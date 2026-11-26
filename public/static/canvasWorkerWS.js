@@ -1,6 +1,8 @@
+// canvasWorkerWS.js
 let videoDecoder = null;
 let audioDecoder = null;
 let canvasContext = null;
+let offscreenCanvas = null;
 let videoConfig = null;
 let audioConfig = null;
 let videoNeedsKeyFrame = true;
@@ -10,20 +12,29 @@ let upscaleEnabled = false;
 
 async function initialize({ canvas, codec, width, height, upscalingEnabled }) {
     upscaleEnabled = Boolean(upscalingEnabled);
+    offscreenCanvas = canvas;
+
     if (!self.VideoDecoder || !self.EncodedVideoChunk || !self.AudioDecoder || !self.EncodedAudioChunk) {
         throw new Error('This worker does not support WebCodecs audio/video decoding');
     }
 
+    // 关键修改 1：开启 optimizeForLatency，禁止硬件解码器内部攒帧
+    const baseConfig = {
+        codedWidth: width,
+        codedHeight: height,
+        optimizeForLatency: true,
+    };
+
     switch (codec.toLowerCase()) {
         case 'h264':
-            videoConfig = { codec: 'avc3.640028', codedWidth: width, codedHeight: height };
+            videoConfig = { ...baseConfig, codec: 'avc3.640028' };
             break;
         case 'h265':
         case 'hevc':
-            videoConfig = { codec: 'hvc1.1.6.L93.B0', codedWidth: width, codedHeight: height };
+            videoConfig = { ...baseConfig, codec: 'hvc1.1.6.L93.B0' };
             break;
         case 'av1':
-            videoConfig = { codec: 'av01.0.08M.08', codedWidth: width, codedHeight: height };
+            videoConfig = { ...baseConfig, codec: 'av01.0.08M.08' };
             break;
         default:
             throw new Error(`Unsupported video codec: ${codec}`);
@@ -33,22 +44,26 @@ async function initialize({ canvas, codec, width, height, upscalingEnabled }) {
     if (!videoSupport.supported) {
         throw new Error(`Worker cannot decode ${videoConfig.codec}`);
     }
+
     audioConfig = { codec: 'opus', sampleRate: 48000, numberOfChannels: 2 };
     const audioSupport = await AudioDecoder.isConfigSupported(audioConfig);
     if (!audioSupport.supported) {
         self.postMessage({ type: 'warning', message: 'Worker cannot decode Opus audio' });
     }
 
-    canvas.width = width;
-    canvas.height = height;
-    canvasContext = canvas.getContext('2d');
+    offscreenCanvas.width = width;
+    offscreenCanvas.height = height;
+    // 关键修改 2：开启低延迟直通合成，跳过透明通道计算
+    canvasContext = offscreenCanvas.getContext('2d', {
+        alpha: false,
+        desynchronized: true,
+    });
 
     videoDecoder = new VideoDecoder({
         output(frame) {
             if (upscaleEnabled) {
                 try {
-                    if (canvas.width !== frame.displayWidth) canvas.width = frame.displayWidth;
-                    if (canvas.height !== frame.displayHeight) canvas.height = frame.displayHeight;
+                    // 关键修改 3：超分模式下直接零拷贝转发，不再触碰隐藏 Canvas 的宽高
                     self.postMessage({ type: 'source-frame', frame }, [frame]);
                 } catch (error) {
                     frame.close();
@@ -57,9 +72,13 @@ async function initialize({ canvas, codec, width, height, upscalingEnabled }) {
                 return;
             }
             try {
-                if (canvas.width !== frame.displayWidth) canvas.width = frame.displayWidth;
-                if (canvas.height !== frame.displayHeight) canvas.height = frame.displayHeight;
-                canvasContext.drawImage(frame, 0, 0, canvas.width, canvas.height);
+                if (offscreenCanvas.width !== frame.displayWidth) {
+                    offscreenCanvas.width = frame.displayWidth;
+                }
+                if (offscreenCanvas.height !== frame.displayHeight) {
+                    offscreenCanvas.height = frame.displayHeight;
+                }
+                canvasContext.drawImage(frame, 0, 0, offscreenCanvas.width, offscreenCanvas.height);
             } catch (error) {
                 reportError(`Failed to render decoded video: ${error.message}`);
             } finally {
@@ -115,7 +134,9 @@ function decodeFrame(buffer) {
 
     if (kind === 0) {
         if (!videoDecoder || videoDecoder.state !== 'configured') return;
-        if (videoDecoder.decodeQueueSize > 8) {
+        
+        // 关键修改 4：把积压阈值从 8 降到 2，防止瞬时卡顿后画面持续滞后
+        if (videoDecoder.decodeQueueSize > 2) {
             videoNeedsKeyFrame = true;
             return;
         }
@@ -134,7 +155,7 @@ function decodeFrame(buffer) {
 
     if (kind === 1) {
         if (!audioDecoder || audioDecoder.state !== 'configured' || payload.length === 0) return;
-        if (audioDecoder.decodeQueueSize > 8) {
+        if (audioDecoder.decodeQueueSize > 4) {
             lastAudioTimestamp = -1;
             return;
         }

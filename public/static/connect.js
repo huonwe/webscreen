@@ -86,8 +86,10 @@ async function start() {
                 webRtcFrameWorker = worker;
                 worker.onmessage = (messageEvent) => {
                     if (messageEvent.data.type === 'source-frame') {
+                        
                         window.handleWebSRSourceFrame(messageEvent.data.frame);
                     }
+
                 };
                 worker.postMessage(
                     {
@@ -482,7 +484,7 @@ async function renderStreamToCanvas(videoTrack, canvas) {
     const ctx = canvas.getContext('2d');
 
     // 1. 创建处理器，将轨道转换为可读流
-    const processor = new MediaStreamTrackProcessor({ track: videoTrack });
+    const processor = new MediaStreamTrackProcessor({ track: videoTrack, maxBufferSize: 1 });
     const reader = processor.readable.getReader();
 
     // 2. 循环读取每一帧 VideoFrame
