@@ -3,14 +3,13 @@
 // =========================================================================
 const OCR_MODEL_SETTINGS = {
     // ONNX Runtime Web ESM 入口（支持本地静态路径或 CDN）
-    ortModuleUrl: 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort.min.mjs',
-    wasmBasePath: 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/',
+    ortModuleUrl: 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.1/dist/ort.min.mjs',
+    wasmBasePath: 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.1/dist/',
 
     // PaddleOCR (PP-OCRv4 Mobile) 模型与字典路径，请替换为你的实际部署路径
-    detModelUrl: './ch_PP-OCRv4_det_infer.onnx',
-    recModelUrl: './japan_PP-OCRv4_rec_infer.onnx', // 日语 Galgame 推荐 japan 模型；通用可选 ch_PP-OCRv4_rec_infer.onnx
-    dictUrl: './japan_dict.txt',
-
+    detModelUrl: 'https://huggingface.co/breezedeus/cnstd-ppocr-ch_PP-OCRv4_det/resolve/main/ch_PP-OCRv4_det_infer.onnx',
+    recModelUrl: 'https://huggingface.co/cycloneboy/japan_PP-OCRv4_rec_infer/resolve/main/fp16_model.onnx',
+    dictUrl: 'https://huggingface.co/cycloneboy/japan_PP-OCRv4_rec_infer/resolve/main/japan_dict.txt',
     detThreshold: 0.3,
     recImgHeight: 48,
 };
@@ -28,6 +27,72 @@ let TRANSLATE_SETTINGS = {
 
 const LLM_KEEP_ALIVE = '30m';
 const LLM_TIMEOUT_MS = 15000; // 15 秒超时
+
+const MODEL_CACHE_DB = 'gs-paddleocr-model-cache';
+const MODEL_CACHE_STORE = 'files';
+
+/**
+ * 从 IndexedDB 读取缓存文件；若未命中则从网络下载并写入缓存
+ */
+function openModelCacheDB() {
+    return new Promise((resolve, reject) => {
+        const req = indexedDB.open(MODEL_CACHE_DB, 1);
+        req.onupgradeneeded = () => {
+            const db = req.result;
+            if (!db.objectStoreNames.contains(MODEL_CACHE_STORE)) {
+                db.createObjectStore(MODEL_CACHE_STORE);
+            }
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+    });
+}
+
+async function fetchWithIDBCache(url, responseType = 'arraybuffer') {
+    const cacheKey = `${responseType}:${url}`;
+    let db = null;
+
+    try {
+        db = await openModelCacheDB();
+        const cached = await new Promise((resolve, reject) => {
+            const tx = db.transaction(MODEL_CACHE_STORE, 'readonly');
+            const req = tx.objectStore(MODEL_CACHE_STORE).get(cacheKey);
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+        });
+        if (cached !== undefined) {
+            console.log('[OCR Cache] Hit local cache:', url);
+            return cached;
+        }
+    } catch (e) {
+        console.warn('[OCR Cache] Failed to read IndexedDB, falling back to direct download:', e);
+    }
+
+    console.log('[OCR Cache] First time downloading model/dictionary:', url);
+    const resp = await fetch(url);
+    if (!resp.ok) {
+        throw new Error(`下载失败 (${resp.status}): ${url}`);
+    }
+
+    const data = responseType === 'text'
+        ? await resp.text()
+        : await resp.arrayBuffer();
+
+    if (db) {
+        try {
+            await new Promise((resolve, reject) => {
+                const tx = db.transaction(MODEL_CACHE_STORE, 'readwrite');
+                const req = tx.objectStore(MODEL_CACHE_STORE).put(data, cacheKey);
+                req.onsuccess = () => resolve();
+                req.onerror = () => reject(req.error);
+            });
+        } catch (e) {
+            console.warn('[OCR Cache] Failed to write to IndexedDB:', e);
+        }
+    }
+
+    return data;
+}
 
 // =========================================================================
 // 1. 虚拟翻译接口（待后续阶段接入真实翻译 API）
@@ -186,6 +251,10 @@ async function ensurePaddleOCR() {
     if (initPromise) return initPromise;
 
     initPromise = (async () => {
+        self.postMessage({
+            type: 'ERROR',
+            error: 'Now loading OCR model (first run will download about 15MB from Hugging Face, please wait)...',
+        });
         const ort = await import(OCR_MODEL_SETTINGS.ortModuleUrl);
         ort.env.wasm.wasmPaths = OCR_MODEL_SETTINGS.wasmBasePath;
         ort.env.wasm.numThreads = 1;
@@ -195,16 +264,18 @@ async function ensurePaddleOCR() {
             graphOptimizationLevel: 'all',
         };
 
-        const [det, rec, dictResp] = await Promise.all([
-            ort.InferenceSession.create(OCR_MODEL_SETTINGS.detModelUrl, sessionOpts),
-            ort.InferenceSession.create(OCR_MODEL_SETTINGS.recModelUrl, sessionOpts),
-            fetch(OCR_MODEL_SETTINGS.dictUrl),
+        // 并行读取/下载检测模型、识别模型和字典
+        const [detBuffer, recBuffer, dictText] = await Promise.all([
+            fetchWithIDBCache(OCR_MODEL_SETTINGS.detModelUrl, 'arraybuffer'),
+            fetchWithIDBCache(OCR_MODEL_SETTINGS.recModelUrl, 'arraybuffer'),
+            fetchWithIDBCache(OCR_MODEL_SETTINGS.dictUrl, 'text'),
         ]);
 
-        if (!dictResp.ok) {
-            throw new Error(`Failed to fetch dictionary (${dictResp.status}): ${OCR_MODEL_SETTINGS.dictUrl}`);
-        }
-        const dictText = await dictResp.text();
+        const [det, rec] = await Promise.all([
+            ort.InferenceSession.create(detBuffer, sessionOpts),
+            ort.InferenceSession.create(recBuffer, sessionOpts),
+        ]);
+        
         // PaddleOCR 字典：索引 0 为 CTC blank，1..N 对应字典每行字符，末尾追加空格
         const lines = dictText.replace(/\r\n/g, '\n').split('\n');
         if (lines[lines.length - 1] === '') lines.pop();

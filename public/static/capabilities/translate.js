@@ -1,6 +1,7 @@
 import { addControlButton } from './control_ui.js';
 import { getSetting } from '../global-settings.js';
 
+
 const CAPTURE_INTERVAL_MS = 200; // 采样周期（Worker 内部会自动跳过未变化帧）
 const WORKER_SCRIPT_URL = new URL('../paddleocr/worker.js', import.meta.url);
 
@@ -118,7 +119,7 @@ function ensureWorker() {
             workerBusy = false;
             console.warn('[OCR Worker]', msg.error);
             if (subtitleTextBox && !subtitleTextBox.dataset.hasText) {
-                subtitleTextBox.textContent = `[OCR 初始化提示] ${msg.error}`;
+                subtitleTextBox.textContent = `[OCR Init] ${msg.error}`;
                 subtitleTextBox.style.display = 'block';
             }
         }
@@ -170,7 +171,7 @@ function startRegionSelection() {
     });
 
     const hint = document.createElement('div');
-    hint.textContent = '请拖拽框选 Galgame 对话框区域（按 Esc 或右键取消）';
+    hint.textContent = 'Please drag to select the text area (Esc or right-click to cancel)';
     Object.assign(hint.style, {
         position: 'absolute',
         top: '16px',
@@ -548,7 +549,14 @@ const translateBtn = addControlButton(
 if (translateBtn) {
     translateBtn.addEventListener('click', () => {
         if (translateState === 'idle') {
-            startRegionSelection();
+            const translate_llm_endpoint = getSetting('translate_llm_endpoint');
+            const translate_llm_model = getSetting('translate_llm_model');
+
+            if (!translate_llm_endpoint || !translate_llm_model) {
+                notifyToast('Please configure the translation LLM endpoint and model in the settings');
+            } else {
+                startRegionSelection();
+            }
         } else {
             stopTranslation(true);
         }
