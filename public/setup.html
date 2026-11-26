@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>初始化系统 - 创建管理员账户</title>
+  <title>Setup Admin Account</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -33,8 +33,8 @@
             <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
           </svg>
         </div>
-        <h1 class="text-xl font-semibold tracking-tight text-white">系统初始化</h1>
-        <p class="text-sm text-zinc-400 mt-1.5">创建唯一的管理员账户以保护您的远程控制服务</p>
+        <h1 class="text-xl font-semibold tracking-tight text-white">System Initialization</h1>
+        <p class="text-sm text-zinc-400 mt-1.5">Create a unique admin account to protect your remote control service</p>
       </header>
 
       <!-- 动态提示框 -->
@@ -45,13 +45,13 @@
         
         <!-- 用户名 -->
         <div>
-          <label for="username" class="block text-sm font-medium text-zinc-200 mb-1.5">管理员用户名</label>
+          <label for="username" class="block text-sm font-medium text-zinc-200 mb-1.5">Admin Username</label>
           <input
             type="text"
             id="username"
             name="username"
             value="admin"
-            placeholder="请输入管理员用户名"
+            placeholder="Enter admin username"
             autocomplete="username"
             required
             class="w-full px-3.5 py-2.5 text-sm text-white bg-zinc-900 border border-zinc-800 rounded-lg placeholder-zinc-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition"
@@ -61,9 +61,9 @@
         <!-- 设置密码 -->
         <div>
           <div class="flex items-center justify-between mb-1.5">
-            <label for="password" class="block text-sm font-medium text-zinc-200">设置访问密码</label>
+            <label for="password" class="block text-sm font-medium text-zinc-200">Set Access Password</label>
             <button type="button" id="generate-btn" class="text-xs font-medium text-blue-400 hover:text-blue-300 hover:underline transition cursor-pointer">
-              生成强密码
+              Generate Strong Password
             </button>
           </div>
           
@@ -72,7 +72,7 @@
               type="password"
               id="password"
               name="password"
-              placeholder="至少 8 位字符，建议包含字母与数字"
+              placeholder="At least 8 characters, recommended to include letters and numbers"
               autocomplete="new-password"
               required
               class="w-full pl-3.5 pr-10 py-2.5 text-sm text-white bg-zinc-900 border border-zinc-800 rounded-lg placeholder-zinc-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition"
@@ -89,17 +89,17 @@
           <div class="h-1 w-full bg-zinc-800 rounded-full mt-2.5 overflow-hidden">
             <div id="strength-bar" class="h-full w-0 transition-all duration-300 rounded-full"></div>
           </div>
-          <p id="strength-text" class="text-xs text-zinc-400 mt-1.5">请输入高强度密码以防止公网暴力破解</p>
+          <p id="strength-text" class="text-xs text-zinc-400 mt-1.5">Enter a strong password to prevent brute-force attacks over the public network</p>
         </div>
 
         <!-- 确认密码 -->
         <div>
-          <label for="confirm-password" class="block text-sm font-medium text-zinc-200 mb-1.5">确认访问密码</label>
+          <label for="confirm-password" class="block text-sm font-medium text-zinc-200 mb-1.5">Confirm Access Password</label>
           <input
             type="password"
             id="confirm-password"
             name="confirm-password"
-            placeholder="再次输入密码"
+            placeholder="Re-enter password"
             autocomplete="new-password"
             required
             class="w-full px-3.5 py-2.5 text-sm text-white bg-zinc-900 border border-zinc-800 rounded-lg placeholder-zinc-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition"
@@ -112,7 +112,7 @@
           id="submit-btn"
           class="w-full mt-2 py-2.5 px-4 text-sm font-medium text-white bg-blue-600 hover:bg-blue-500 active:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed rounded-lg shadow-lg shadow-blue-600/20 flex items-center justify-center gap-2 transition cursor-pointer"
         >
-          <span class="btn-text">完成初始化并进入控制台</span>
+          <span class="btn-text">Complete Setup and Enter Console</span>
           <svg class="spinner hidden animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -123,7 +123,7 @@
       <!-- 底部提示 -->
       <footer class="mt-6 pt-5 border-t border-zinc-800/80 text-center">
         <p class="text-xs text-zinc-500 leading-relaxed">
-          初始化完成后注册入口将自动关闭。如需重置，请删除服务器上的数据库文件。
+          The registration entry will automatically close after the setup is complete. To reset, please delete the database file on the server.
         </p>
       </footer>
     </div>

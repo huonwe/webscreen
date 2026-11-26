@@ -30,7 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function evaluateStrength(pwd) {
     if (!pwd) {
       strengthBar.className = 'h-full w-0 transition-all duration-300 rounded-full';
-      strengthText.textContent = '请输入高强度密码以防止公网暴力破解';
+      strengthText.textContent = 'Enter a strong password to prevent brute-force attacks over the public network';
       strengthText.className = 'text-xs text-zinc-400 mt-1.5';
       return;
     }
@@ -44,15 +44,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (pwd.length < 8 || score <= 2) {
       strengthBar.className = 'h-full w-1/3 bg-red-500 transition-all duration-300 rounded-full';
-      strengthText.textContent = '密码强度：弱（至少需要 8 位字符）';
+      strengthText.textContent = 'Weak (at least 8 characters required)';
       strengthText.className = 'text-xs text-red-400 mt-1.5';
     } else if (score <= 3) {
       strengthBar.className = 'h-full w-2/3 bg-amber-500 transition-all duration-300 rounded-full';
-      strengthText.textContent = '密码强度：中等（建议增加长度或特殊符号）';
+      strengthText.textContent = 'Medium (consider increasing length or adding special characters)';
       strengthText.className = 'text-xs text-amber-400 mt-1.5';
     } else {
       strengthBar.className = 'h-full w-full bg-emerald-500 transition-all duration-300 rounded-full';
-      strengthText.textContent = '密码强度：高（安全性良好）';
+      strengthText.textContent = 'Strong (good security)';
       strengthText.className = 'text-xs text-emerald-400 mt-1.5';
     }
   }
@@ -102,25 +102,25 @@ document.addEventListener('DOMContentLoaded', () => {
     const confirmPassword = confirmInput.value;
 
     if (!username) {
-      showAlert('请输入管理员用户名');
+      showAlert('Please enter admin username');
       usernameInput.focus();
       return;
     }
 
     if (password.length < 8) {
-      showAlert('为了公网安全，密码长度不能少于 8 位');
+      showAlert('For public network security, the password must be at least 8 characters long');
       passwordInput.focus();
       return;
     }
 
     if (password !== confirmPassword) {
-      showAlert('两次输入的密码不一致');
+      showAlert('Passwords do not match');
       confirmInput.focus();
       return;
     }
 
     submitBtn.disabled = true;
-    btnText.textContent = '正在初始化...';
+    btnText.textContent = 'Now requesting...';
     spinner.classList.remove('hidden');
 
     try {
@@ -133,7 +133,7 @@ document.addEventListener('DOMContentLoaded', () => {
       });
 
       if (!response.ok) {
-        let errMsg = '初始化失败，请检查服务端日志';
+        let errMsg = 'Setup failed, please check the server logs';
         const contentType = response.headers.get('content-type') || '';
         if (contentType.includes('application/json')) {
           const errData = await response.json();
@@ -145,14 +145,14 @@ document.addEventListener('DOMContentLoaded', () => {
         throw new Error(errMsg);
       }
 
-      showAlert('初始化成功！正在跳转到控制台...', 'success');
+      showAlert('Setup successful! Redirecting to the console...', 'success');
       setTimeout(() => {
         window.location.href = '/';
       }, 800);
     } catch (err) {
       showAlert(err.message);
       submitBtn.disabled = false;
-      btnText.textContent = '完成初始化并进入控制台';
+      btnText.textContent = 'Complete Setup and Enter Console';
       spinner.classList.add('hidden');
     }
   });

@@ -35,19 +35,19 @@ document.addEventListener('DOMContentLoaded', () => {
     const password = passwordInput.value;
 
     if (!username) {
-      showAlert('请输入用户名');
+      showAlert('Please enter username');
       usernameInput.focus();
       return;
     }
 
     if (!password) {
-      showAlert('请输入访问密码');
+      showAlert('Please enter access password');
       passwordInput.focus();
       return;
     }
 
     submitBtn.disabled = true;
-    btnText.textContent = '正在验证...';
+    btnText.textContent = 'Verifying...';
     spinner.classList.remove('hidden');
 
     try {
@@ -60,7 +60,7 @@ document.addEventListener('DOMContentLoaded', () => {
       });
 
       if (!response.ok) {
-        let errMsg = '用户名或密码错误';
+        let errMsg = 'Incorrect username or password';
         const contentType = response.headers.get('content-type') || '';
         if (contentType.includes('application/json')) {
           const errData = await response.json();
@@ -72,7 +72,7 @@ document.addEventListener('DOMContentLoaded', () => {
         throw new Error(errMsg);
       }
 
-      showAlert('登录成功，正在进入控制台...', 'success');
+      showAlert('Login successful, redirecting to the console...', 'success');
 
       // 支持登录后跳回原访问路径（仅限同源相对路径，防止开放重定向漏洞）
       const params = new URLSearchParams(window.location.search);
@@ -87,7 +87,7 @@ document.addEventListener('DOMContentLoaded', () => {
       passwordInput.value = '';
       passwordInput.focus();
       submitBtn.disabled = false;
-      btnText.textContent = '登录';
+      btnText.textContent = 'Login';
       spinner.classList.add('hidden');
     }
   });
