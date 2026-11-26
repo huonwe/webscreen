@@ -1,7 +1,7 @@
 // =========================================================================
 // PaddleOCR 模型与运行参数配置
 // =========================================================================
-const OCR_OCR_MODEL_SETTINGS = {
+const OCR_MODEL_SETTINGS = {
     // ONNX Runtime Web ESM 入口（支持本地静态路径或 CDN）
     ortModuleUrl: 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort.min.mjs',
     wasmBasePath: 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/',
@@ -46,7 +46,11 @@ async function translateText(text) {
     // .replace(/[\r\n]/g, '')
     const clean = (text || '').trim();
     if (!clean) return '';
-
+    // console.log('llm system prompt:', TRANSLATE_SETTINGS.llm_system_prompt);
+    // console.log('llm endpoint:', TRANSLATE_SETTINGS.llm_endpoint);
+    // console.log('llm secret:', TRANSLATE_SETTINGS.llm_secret);
+    // console.log('llm model:', TRANSLATE_SETTINGS.llm_model);
+    // console.log('user language:', TRANSLATE_SETTINGS.user_language);
     console.log('Translating text:', clean);
     if (translationCache.has(clean)) {
         return translationCache.get(clean);
@@ -182,8 +186,8 @@ async function ensurePaddleOCR() {
     if (initPromise) return initPromise;
 
     initPromise = (async () => {
-        const ort = await import(OCR_MODEL_CONFIG.ortModuleUrl);
-        ort.env.wasm.wasmPaths = OCR_MODEL_CONFIG.wasmBasePath;
+        const ort = await import(OCR_MODEL_SETTINGS.ortModuleUrl);
+        ort.env.wasm.wasmPaths = OCR_MODEL_SETTINGS.wasmBasePath;
         ort.env.wasm.numThreads = 1;
 
         const sessionOpts = {
@@ -192,13 +196,13 @@ async function ensurePaddleOCR() {
         };
 
         const [det, rec, dictResp] = await Promise.all([
-            ort.InferenceSession.create(OCR_MODEL_CONFIG.detModelUrl, sessionOpts),
-            ort.InferenceSession.create(OCR_MODEL_CONFIG.recModelUrl, sessionOpts),
-            fetch(OCR_MODEL_CONFIG.dictUrl),
+            ort.InferenceSession.create(OCR_MODEL_SETTINGS.detModelUrl, sessionOpts),
+            ort.InferenceSession.create(OCR_MODEL_SETTINGS.recModelUrl, sessionOpts),
+            fetch(OCR_MODEL_SETTINGS.dictUrl),
         ]);
 
         if (!dictResp.ok) {
-            throw new Error(`字典加载失败 (${dictResp.status}): ${OCR_MODEL_CONFIG.dictUrl}`);
+            throw new Error(`Failed to fetch dictionary (${dictResp.status}): ${OCR_MODEL_SETTINGS.dictUrl}`);
         }
         const dictText = await dictResp.text();
         // PaddleOCR 字典：索引 0 为 CTC blank，1..N 对应字典每行字符，末尾追加空格
@@ -253,7 +257,7 @@ async function detectTextBoxes(imgData, width, height) {
     for (let y = 0; y < height; y++) {
         for (let x = 0; x < width; x++) {
             const idx = y * width + x;
-            if (visited[idx] || probMap[y * padW + x] < OCR_MODEL_CONFIG.detThreshold) continue;
+            if (visited[idx] || probMap[y * padW + x] < OCR_MODEL_SETTINGS.detThreshold) continue;
 
             let minX = x, maxX = x, minY = y, maxY = y;
             let top = 0;
@@ -280,7 +284,7 @@ async function detectTextBoxes(imgData, width, height) {
                     const ny = neighbors[k][1];
                     if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
                     const nIdx = ny * width + nx;
-                    if (!visited[nIdx] && probMap[ny * padW + nx] >= OCR_MODEL_CONFIG.detThreshold) {
+                    if (!visited[nIdx] && probMap[ny * padW + nx] >= OCR_MODEL_SETTINGS.detThreshold) {
                         visited[nIdx] = 1;
                         stackX[top] = nx;
                         stackY[top] = ny;
@@ -321,7 +325,7 @@ async function detectTextBoxes(imgData, width, height) {
  * 文本行识别 (SVTR / CRNN + CTC Greedy Decode)
  */
 async function recognizeBoxText(sourceCanvas, box) {
-    const targetH = OCR_MODEL_CONFIG.recImgHeight;
+    const targetH = OCR_MODEL_SETTINGS.recImgHeight;
     const targetW = Math.max(targetH, Math.round(box.w * (targetH / box.h)));
 
     const lineCanvas = new OffscreenCanvas(targetW, targetH);
@@ -403,13 +407,14 @@ async function runPaddleOCR(bitmap) {
 self.onmessage = async (e) => {
     const msg = e.data || {};
     if (msg.type === 'UPDATE_SETTINGS' && msg.settings) {
+        console.log('Updating translate settings', msg);
         if (msg.settings) {
             TRANSLATE_SETTINGS.llm_endpoint = msg.settings.translate_llm_endpoint;
             TRANSLATE_SETTINGS.llm_prompt = msg.settings.translate_llm_prompt;
             TRANSLATE_SETTINGS.llm_secret = msg.settings.translate_llm_secret;
-            TRANSLATE_SETTINGS.translate_model = msg.settings.translate_model;
+            TRANSLATE_SETTINGS.llm_model = msg.settings.translate_llm_model;
             TRANSLATE_SETTINGS.user_language = msg.settings.user_language;
-            TRANSLATE_SETTINGS.llm_system_prompt = msg.settings.llm_system_prompt;
+            TRANSLATE_SETTINGS.llm_system_prompt = msg.settings.translate_llm_system_prompt;
         }
         return;
     }

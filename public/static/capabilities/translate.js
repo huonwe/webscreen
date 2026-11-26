@@ -103,6 +103,7 @@ function ensureWorker() {
             user_language: getSetting('user_language'),
             translate_llm_endpoint: getSetting('translate_llm_endpoint'),
             translate_llm_secret: getSetting('translate_llm_secret'),
+            translate_llm_model: getSetting('translate_llm_model'),
             translate_llm_system_prompt: getSetting('translate_llm_system_prompt')
         }
     });
@@ -493,7 +494,7 @@ function startAutoTranslate() {
     worker.postMessage({ type: 'RESET_DIFF' });
 
     createSubtitleOverlay(getVideoContainer(canvas));
-    notifyToast('自动翻译已开启（点击侧边栏按钮可终止）');
+    notifyToast('Auto-translate started (click the sidebar button to stop)');
 
     // 立即抓取首帧并开启定时循环
     captureAndSendRoiFrame();
@@ -525,7 +526,7 @@ function stopTranslation(showTip = true) {
     setButtonActive(false);
 
     if (showTip) {
-        notifyToast('自动翻译已终止');
+        notifyToast('Auto-translate stopped');
     }
 }
 

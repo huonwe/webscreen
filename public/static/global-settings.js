@@ -5,9 +5,10 @@ const DEFAULT_SETTINGS = {
     transport_protocol: "webrtc",
     user_language: "zh-CN",
     language_to_translate: "ja-JP",
-    translate_llm_endpoint: "http://127.0.0.1:11434/api/chat",
+    translate_llm_endpoint: "",
     translate_llm_secret: "",
-    translate_llm_system_prompt: `你是一个专业的日文 Galgame（视觉小说）本地化翻译专家。请将用户输入的日文游戏文本（对话、心理描写或旁白）准确翻译成自然、贴合二次元语境的{{language_to_translate}}。
+    translate_llm_model: "",
+    translate_llm_system_prompt: `你是一个专业的日文 Galgame（视觉小说）本地化翻译专家。请将用户输入的游戏文本（对话、心理描写或旁白）准确翻译成自然、贴合二次元语境的用户指定语言。
 严格遵守以下规则：
 1. 只输出最终的中文译文，绝对不要输出任何解释、注释、拼音、原文对照或多余的标点符号。
 2. 保留角色语气、口癖和人物关系称谓，对话口语化，旁白细腻流畅。
@@ -26,6 +27,10 @@ function initSettings() {
         settingsCache = stored
             ? { ...DEFAULT_SETTINGS, ...JSON.parse(stored) }
             : { ...DEFAULT_SETTINGS };
+        if (!stored) {
+            console.log('Initializing settings with default values');
+            localStorage.setItem(GLOBAL_SETTINGS_KEY, JSON.stringify(settingsCache));
+        }
     } catch (e) {
         console.error('Failed to load settings:', e);
         settingsCache = { ...DEFAULT_SETTINGS };
