@@ -1,5 +1,6 @@
 pin: "123456"
 jwt_secret: "change-this-secret-before-use"
+# If from trusted IPs, allow access with PIN
 trusted_ips:
   - "127.0.0.1"
   - "::1"
