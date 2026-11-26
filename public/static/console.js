@@ -645,10 +645,8 @@ function startStream(serial) {
         device_id: config.device_id || serial,
         device_ip: config.device_ip || '0',
         device_port: config.device_port || '0',
-        // av_sync: config.av_sync || false,
         remote_uuid: config.remote_uuid || '',
         protocol: config.protocol || 'webrtc',
-        // use_local_timestamp: config.use_local_timestamp || false,
         driver_config: drv
     };
 
@@ -1259,17 +1257,17 @@ async function initDeviceManager() {
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
-    fetch('/api/auth/status')
-        .then(response => {
-            if (!response.ok) throw new Error('无法获取登录状态');
-            return response.json();
-        })
-        .then(status => {
-            showToast(`用户: ${status.username}  |  角色: ${status.role}`);
-        })
-        .catch(error => {
-            showToast(error.message, 'error');
-        });
+    // fetch('/api/auth/status')
+    //     .then(response => {
+    //         if (!response.ok) throw new Error('无法获取登录状态');
+    //         return response.json();
+    //     })
+    //     .then(status => {
+    //         showToast(`用户: ${status.username}  |  角色: ${status.role}`);
+    //     })
+    //     .catch(error => {
+    //         showToast(error.message, 'error');
+    //     });
     fetchDevices();
     initDeviceManager();
 });

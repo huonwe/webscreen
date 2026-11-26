@@ -19,12 +19,6 @@ var CONFIG = (function () {
     console.error("No valid configuration found.");
 })();
 
-if (window.location.pathname.startsWith('/screen-ws')) {
-    CONFIG.protocol = 'websocket';
-    CONFIG.remote_uuid = CONFIG.remote_uuid || '68bf97a0-011c-40b5-8710-cb49a5bad369';
-    CONFIG.type = CONFIG.type || 'android';
-}
-
 let activeTransportProtocol = 'webrtc';
 let webRtcFrameWorker = null;
 let webSRSourceEnabled = false;
