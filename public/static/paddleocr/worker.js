@@ -95,63 +95,123 @@ async function fetchWithIDBCache(url, responseType = 'arraybuffer') {
 }
 
 // =========================================================================
-// 1. 虚拟翻译接口（待后续阶段接入真实翻译 API）
+// 1. 翻译接口）
 // =========================================================================
+
+/**
+ * 根据 endpoint URL 后缀识别 API 协议类型
+ * @param {string} endpoint
+ * @returns {'ollama' | 'openai' | 'claude'}
+ */
+function detectApiProvider(endpoint) {
+    try {
+        // 去除末尾斜杠和查询参数后匹配路径后缀
+        const pathname = new URL(endpoint, self.location?.origin || 'http://localhost')
+            .pathname.replace(/\/+$/, '');
+
+        if (pathname.endsWith('/messages')) return 'claude';
+        if (pathname.endsWith('/chat/completions')) return 'openai';
+        if (pathname.endsWith('/api/chat')) return 'ollama';
+    } catch (_) {
+        // URL 解析异常时的兜底字符串匹配
+        const cleanUrl = (endpoint || '').split('?')[0].replace(/\/+$/, '');
+        if (cleanUrl.endsWith('/messages')) return 'claude';
+        if (cleanUrl.endsWith('/chat/completions')) return 'openai';
+        if (cleanUrl.endsWith('/api/chat')) return 'ollama';
+    }
+    // 默认按最通用的 OpenAI 兼容格式处理
+    return 'openai';
+}
 
 const translationCache = new Map();
 
 /**
- * 调用局域网 Ollama API 完成日文 Galgame 文本翻译
+ * 调用大模型 API 完成文本翻译（自动适配 Ollama / OpenAI / Claude）
  *
  * @param {string} text - PaddleOCR 识别并合并后的原文
  * @returns {Promise<string>} 翻译后的文本
  */
 async function translateText(text) {
-    // 移除换行符并清理首尾空白
-    // .replace(/[\r\n]/g, '')
     const clean = (text || '').trim();
     if (!clean) return '';
-    // console.log('llm system prompt:', TRANSLATE_SETTINGS.llm_system_prompt);
-    // console.log('llm endpoint:', TRANSLATE_SETTINGS.llm_endpoint);
-    // console.log('llm secret:', TRANSLATE_SETTINGS.llm_secret);
-    // console.log('llm model:', TRANSLATE_SETTINGS.llm_model);
-    // console.log('user language:', TRANSLATE_SETTINGS.user_language);
+
     console.log('Translating text:', clean);
     if (translationCache.has(clean)) {
         return translationCache.get(clean);
     }
 
+    const provider = detectApiProvider(TRANSLATE_SETTINGS.llm_endpoint);
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), LLM_TIMEOUT_MS); // 15 秒超时
+    const timer = setTimeout(() => controller.abort(), LLM_TIMEOUT_MS);
+
+    const userPrompt = `Translate to ${TRANSLATE_SETTINGS.user_language}：\n${clean}`;
+    const systemPrompt = TRANSLATE_SETTINGS.llm_system_prompt || '';
+    const secret = (TRANSLATE_SETTINGS.llm_secret || '').trim();
 
     try {
-        const payload = {
-            model: TRANSLATE_SETTINGS.llm_model,
-            stream: false, // 关闭流式输出，一次性拿完整结果
-            keep_alive: LLM_KEEP_ALIVE,
-            messages: [
-                {
-                    role: 'system',
-                    content: TRANSLATE_SETTINGS.llm_system_prompt,
-                },
-                {
-                    role: 'user',
-                    content: `Translate to ${TRANSLATE_SETTINGS.user_language}：\n${clean}`,
-                },
-            ],
-            options: {
-                temperature: 0.2, // 低温度防止 3B 小模型自由发挥或胡言乱语
-                top_p: 0.7,
-                num_predict: 256, // 限制最大输出 token，防止死循环复读
-            },
+        const headers = {
+            'Content-Type': 'application/json',
         };
+        let payload;
+
+        if (provider === 'claude') {
+            // 1. Anthropic Claude API (/v1/messages)
+            if (secret) {
+                headers['x-api-key'] = secret;
+            }
+            headers['anthropic-version'] = '2023-06-01';
+            // 允许浏览器 / Web Worker 直接跨域调用 Anthropic 官方接口
+            headers['anthropic-dangerous-direct-browser-access'] = 'true';
+
+            payload = {
+                model: TRANSLATE_SETTINGS.llm_model,
+                max_tokens: 256,
+                temperature: 0.2, // Claude 建议仅传 temperature 或 top_p 其一，避免部分模型报错
+                ...(systemPrompt ? { system: systemPrompt } : {}),
+                messages: [
+                    { role: 'user', content: userPrompt },
+                ],
+            };
+        } else if (provider === 'ollama') {
+            // 2. Ollama 原生 API (/api/chat)
+            if (secret) {
+                headers['Authorization'] = `Bearer ${secret}`;
+            }
+            payload = {
+                model: TRANSLATE_SETTINGS.llm_model,
+                stream: false,
+                keep_alive: LLM_KEEP_ALIVE,
+                messages: [
+                    ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
+                    { role: 'user', content: userPrompt },
+                ],
+                options: {
+                    temperature: 0.2,
+                    top_p: 0.7,
+                    num_predict: 256,
+                },
+            };
+        } else {
+            // 3. OpenAI 兼容 API (/v1/chat/completions)
+            if (secret) {
+                headers['Authorization'] = `Bearer ${secret}`;
+            }
+            payload = {
+                model: TRANSLATE_SETTINGS.llm_model,
+                stream: false,
+                temperature: 0.2,
+                top_p: 0.7,
+                max_tokens: 256,
+                messages: [
+                    ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
+                    { role: 'user', content: userPrompt },
+                ],
+            };
+        }
 
         const resp = await fetch(TRANSLATE_SETTINGS.llm_endpoint, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${TRANSLATE_SETTINGS.llm_secret}`,
-            },
+            headers,
             body: JSON.stringify(payload),
             signal: controller.signal,
         });
@@ -162,9 +222,21 @@ async function translateText(text) {
         }
 
         const data = await resp.json();
-        // 提取 Ollama /api/chat 的返回内容，并去掉可能残留的首尾引号
-        let translated = (data?.message?.content || '').trim();
-        translated = translated.replace(/^["“]|["”]$/g, '');
+
+        // 按协议提取模型输出文本
+        let rawOutput = '';
+        if (provider === 'claude') {
+            rawOutput = Array.isArray(data?.content)
+                ? data.content.filter((b) => b.type === 'text').map((b) => b.text).join('')
+                : '';
+        } else if (provider === 'ollama') {
+            rawOutput = data?.message?.content || '';
+        } else {
+            rawOutput = data?.choices?.[0]?.message?.content || '';
+        }
+
+        // 清理首尾空白及可能残留的引号
+        let translated = rawOutput.trim().replace(/^["“]|["”]$/g, '');
 
         if (translated) {
             translationCache.set(clean, translated);
@@ -172,7 +244,7 @@ async function translateText(text) {
         }
         return clean;
     } catch (err) {
-        console.warn('[Ollama] Failed:', err);
+        console.warn(`[LLM:${provider}] Failed:`, err);
         return `[Failed: ${err.name === 'AbortError' ? 'timeout' : err.message}]`;
     } finally {
         clearTimeout(timer);
