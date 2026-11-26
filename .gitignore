@@ -19,3 +19,6 @@ dist/
 
 gamestream_auth
 *.pem
+
+public/static/paddleocr/*.onnx
+public/static/paddleocr/*.txt
