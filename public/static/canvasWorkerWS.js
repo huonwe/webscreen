@@ -188,6 +188,7 @@ self.onmessage = async (event) => {
             srPort = event.data.port;
             return;
         } else if (type === 'init') {
+            console.log("Initializing canvas worker:", event.data);
             await initialize(event.data);
             if (event.data.srPort) {
                 if (srPort) srPort.close();

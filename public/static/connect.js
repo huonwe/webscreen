@@ -170,7 +170,7 @@ async function start() {
 
     window.ws.onopen = () => {
         console.log('WebSocket connected');
-        const extra = { };
+        const extra = {};
         if (pc) extra.sdp = pc.localDescription.sdp;
         const config = {
             protocol_transport: CONFIG.protocol_transport,
@@ -188,10 +188,40 @@ async function start() {
         console.log("remote config:", remoteConfig);
         window.ws.send(JSON.stringify(remoteConfig));
     };
-
+    const decoder = new TextDecoder();
     window.ws.onmessage = async (event) => {
         if (event.data instanceof ArrayBuffer) {
             if (usesWebSocket) {
+                const view = new Uint8Array(event.data);
+                // console.log("first byte of WebSocket message:", view[0])
+                switch (view[0]) {
+                    case 0x17: {
+                        const text = decoder.decode(view.slice(1));
+                        console.log("Clipboard from device:", text);
+                        try {
+                            navigator.clipboard.writeText(text).catch(err => {
+                                console.error('Failed to write to clipboard:', err);
+                            });
+                        } catch (error) {
+                            console.error('Clipboard API not available:', error);
+                        }
+                        return;
+                    }
+                    case 0x64: {
+                        const textMsg = decoder.decode(view.slice(1));
+                        console.log("Text message from agent:", textMsg);
+                        showToast(textMsg, 3000);
+                        return;
+                    }
+                    case 0x65: {
+                        const width = (view[1] << 24) | (view[2] << 16) | (view[3] << 8) | view[4];
+                        const height = (view[5] << 24) | (view[6] << 16) | (view[7] << 8) | view[8];
+                        console.log("Video meta updated from agent: Width=" + width + ", Height=" + height);
+                        window.videoResolution = { width, height };
+                        return;
+                    }
+                }
+                // console.log("binary WebSocket message:", event.data);
                 if (websocketMediaReady) {
                     window.WebSocketMedia.handleFrame(event.data);
                 } else {
@@ -238,7 +268,7 @@ async function start() {
                 try {
                     const audioAvailable = await window.WebSocketMedia.initialize(
                         message.media_meta,
-                        CONFIG.driver_config?.video_codec || 'h264'
+                        CONFIG.video_codec
                     );
                     websocketMediaReady = true;
                     window.WebSocketMedia.status(
@@ -406,7 +436,7 @@ async function updateUIBasedOnCapabilities(caps) {
     await loadScript('/static/capabilities/websr.js');
     // still under developing
     await loadScript('/static/capabilities/translate.js')
-    
+
     // Handle Control
     if (caps.can_control) {
         // Load control scripts
