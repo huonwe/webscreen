@@ -21,10 +21,8 @@ services:
     container_name: webscreen
     restart: unless-stopped
     network_mode: host
-    environment:
-      - GIN_MODE=release
-      - PIN=123456
-      #- PORT=8079
+    volumes:
+      - ./data:/webscreen/data
     depends_on:
       - wolf
 ```
