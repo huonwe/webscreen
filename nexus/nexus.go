@@ -371,9 +371,19 @@ func (v *ViewSession) connectToNexus(n *Nexus, cfg ConnectionConfig) error {
 		if !exists {
 			videoTrack, audioTrack = createAVTrack(videoMimeType, cfg.Extra["av_sync"] == "true")
 		} else {
+			n.RLock()
 			masterSession := n.sessions[r.masterSessionID]
+			n.RUnlock()
+			masterSession.MasterSessionLock.Lock()
 			videoTrack = masterSession.videoTrack
 			audioTrack = masterSession.audioTrack
+			if videoTrack == nil || audioTrack == nil {
+				// 这说明master session是websocket传输
+				videoTrack, audioTrack = createAVTrack(videoMimeType, cfg.Extra["av_sync"] == "true")
+				masterSession.videoTrack = videoTrack
+				masterSession.audioTrack = audioTrack
+			}
+			masterSession.MasterSessionLock.Unlock()
 		}
 
 		// 2. Add SHARED tracks to PeerConnection

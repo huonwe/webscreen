@@ -30,6 +30,7 @@ type ViewSession struct {
 	videoTSMapper     *videoTimestampMapper
 	audioTSMapper     *audioTimestampMapper
 
+	MasterSessionLock sync.RWMutex
 	// 各协议私有字段（WebRTC peerConnection / Track，或 WS/WT Conn）
 	// Only used for WebRTC connections, to store the final SDP answer after negotiation.
 	FinalSDP2Nexus       string
