@@ -96,12 +96,16 @@ func ConfigDescription(opt string) []sdriver.ConfigParamDescription {
 			Name:        "max_size",
 			Type:        "integer",
 			Required:    false,
-			Description: "maximum video dimension (width or height) in pixels, e.g. 1920",
+			Default:     1920,
+			Options:     []string{"1280", "1920", "2560", "3840"},
+			Description: "maximum video dimension (width or height) in pixels, e.g. 1920 for 1080p",
 		},
 		{
 			Name:        "max_fps",
 			Type:        "integer",
 			Required:    false,
+			Default:     60,
+			Options:     []string{"30", "60", "90", "120"},
 			Description: "maximum video frames per second, e.g. 60",
 		},
 
