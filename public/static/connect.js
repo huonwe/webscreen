@@ -4,7 +4,7 @@ const params = new URLSearchParams(window.location.search);
 // 直接转为普通对象
 const CONFIG = Object.fromEntries(params.entries());
 // 简写：const obj = Object.fromEntries(params);
-
+document.title = CONFIG.device_id || CONFIG.device_uuid;
 // 如果需要 JSON 字符串：
 console.log("URL Params Object:", CONFIG);
 
