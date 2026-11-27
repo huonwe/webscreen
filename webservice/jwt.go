@@ -82,7 +82,7 @@ func (wm *WebMaster) HybridAuthMiddleware() gin.HandlerFunc {
 		if tokenString == "" || !wm.validateToken(tokenString) {
 			accept := c.GetHeader("Accept")
 			if strings.Contains(accept, "text/html") {
-				if wm.pin != 0 && wm.isTrustedIP(c.ClientIP()) {
+				if wm.pin != "" && wm.isTrustedIP(c.ClientIP()) {
 					c.Redirect(http.StatusFound, "/unlock")
 				} else {
 					c.Redirect(http.StatusFound, "/login")

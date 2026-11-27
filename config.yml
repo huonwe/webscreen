@@ -7,6 +7,7 @@ jwt_secret: change_before_use
 trusted_ips:
 - 127.0.0.1
 - ::1
+- 192.168.0.0/24
 # Must be 6 digits
-pin: 000000
+pin: "000000"
 mtu: 1400

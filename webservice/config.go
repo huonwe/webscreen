@@ -14,7 +14,7 @@ type WebMasterConfig struct {
 
 	JWTSecret  string   `yaml:"jwt_secret"`
 	TrustedIPs []string `yaml:"trusted_ips"`
-	PIN        int      `yaml:"pin"`
+	PIN        string   `yaml:"pin"`
 	MTU        uint16   `yaml:"mtu"`
 }
 
@@ -25,7 +25,7 @@ func LoadConfig(path string) (WebMasterConfig, error) {
 		Port:                  8081,
 		JWTSecret:             "change_before_use",
 		TrustedIPs:            []string{"127.0.0.1", "::1"},
-		PIN:                   0,
+		PIN:                   "000000",
 		MTU:                   1400,
 	}
 
@@ -46,6 +46,7 @@ func LoadConfig(path string) (WebMasterConfig, error) {
 	if err := yaml.Unmarshal(data, &userConfig); err != nil {
 		return defaultConfig, err
 	}
+	log.Println("Loaded user config: ", userConfig)
 	return userConfig, nil
 }
 

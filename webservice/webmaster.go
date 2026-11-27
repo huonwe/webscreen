@@ -25,7 +25,7 @@ type WebMaster struct {
 	Nexus *nexus.Nexus
 	// ScreenSessions map[string]ScreenSession
 
-	pin                  int
+	pin                  string
 	trustedIPs           []string
 	UnlockAttemptRecords map[string]UnlockAttemptRecord
 	jwtSecret            []byte

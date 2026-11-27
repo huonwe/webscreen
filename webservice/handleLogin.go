@@ -1,6 +1,7 @@
 package webservice
 
 import (
+	"log"
 	"net/http"
 	"strings"
 
@@ -17,7 +18,8 @@ func (wm *WebMaster) handleLoginUI(c *gin.Context) {
 		c.Redirect(http.StatusFound, "/setup")
 		return
 	}
-	if wm.pin != 0 && wm.isTrustedIP(c.ClientIP()) {
+	log.Println("PIN: ", wm.pin, "ClientIP: ", c.ClientIP())
+	if wm.pin != "" && wm.isTrustedIP(c.ClientIP()) {
 		c.Redirect(http.StatusFound, "/unlock")
 		return
 	}
@@ -25,7 +27,7 @@ func (wm *WebMaster) handleLoginUI(c *gin.Context) {
 }
 
 func (wm *WebMaster) handleLogin(c *gin.Context) {
-	if wm.pin != 0 && wm.isTrustedIP(c.ClientIP()) {
+	if wm.pin != "" && wm.isTrustedIP(c.ClientIP()) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "受信任 IP 请使用 PIN 登录"})
 		return
 	}
