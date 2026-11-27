@@ -21,12 +21,11 @@ let roiGuideBox = null;
 let subtitleTextBox = null;
 
 function getTargetCanvas() {
-    if (typeof window !== 'undefined' && window.remoteCanvas instanceof HTMLCanvasElement) {
-        return window.remoteCanvas;
+    const websrCanvas = document.getElementById('websr-output');
+    if (websrCanvas) {
+        return websrCanvas;
     }
-    if (typeof remoteCanvas !== 'undefined' && remoteCanvas instanceof HTMLCanvasElement) {
-        return remoteCanvas;
-    }
+
     return document.getElementById('remoteCanvas');
 }
 
