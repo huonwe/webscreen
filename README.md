@@ -120,6 +120,9 @@ curl -fsSL https://raw.githubusercontent.com/huonwe/webscreen/main/config.yml -o
 ```
 
 ```bash
+# Pair and connect Android devices
+adb pair <your Android device IP>
+adb connect <your Android device IP>
 ./webscreen -D ./data
 ```
 
