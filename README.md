@@ -1,65 +1,58 @@
-<div align="center">
-
 # 📺 Webscreen
 
-A self-hosted screen streaming web application for Android, Linux, and GameStream devices. 
+**Turn any browser into an AI-enhanced universal remote screen.**  
+Stream **Android**, **GameStream (Sunshine/Wolf)**, **Linux Desktops**, and **RK3588 HDMI-in** from a single self-hosted Go binary — supercharged with client-side **WebSR Super Resolution (Anime4K models)** and **LLM OCR Translation**.
 
-[![GitHub release](https://img.shields.io/github/v/release/huonwe/webscreen?style=flat-square)](https://github.com/huonwe/webscreen/releases)
-[![GitHub stars](https://img.shields.io/github/stars/huonwe/webscreen?style=flat-square)](https://github.com/huonwe/webscreen/stargazers)
-[![Go Version](https://img.shields.io/github/go-mod/go-version/huonwe/webscreen?style=flat-square)](https://github.com/huonwe/webscreen)
-[![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg?style=flat-square)](https://www.gnu.org/licenses/agpl-3.0)
-
-[简体中文](README.zh.md) • [日本語](README.jp.md)
-
-<br/>
-
-**[▶️ Watch Demo Video (Android)](https://youtu.be/6WtbwaIk2aY)**
-**[▶️ Watch Demo Video (Orangepi5Plus HDMI-in)](https://youtu.be/XMpHG3clOMU)**
-
-
-</div>
-
-![screenshot](doc/assets/screenshot-wolf.png)
-![timer](doc/assets/timer-difference.png)
-
-## ✨ Features
-
-Webscreen can run on **Android Termux**, **Linux**, **Windows**, and **MacOS** (both `amd64` and `arm64`). It might support more devices in the future!
-
-### 🌟 Universal
-- Super Resolution (HTTPS required)
-- OCR Translate (LLM Endpoint required)
-- H.264 / H.265
-- Multi-Connection
-- WebRTC / WebSocket Streaming
-> **Note**: If you choose WebSocket, HTTPS is required.
-
-### ☀️ GameStream ([Sunshine](https://github.com/SunshineStream/Sunshine) / [Wolf](https://github.com/games-on-whales/wolf))
-- Video, Audio, Control
-- Touch, Mouse, Keyboard
-> [Quickstart with Wolf](doc/quick-start-wolf.md)
-
-### 📱 Android ([scrcpy](https://github.com/Genymobile/scrcpy))
-- Video, Audio, Control
-- UHID Devices (Mouse, Keyboard, Gamepad)
-- Clipboard Sync (HTTPS required)
-- Touch (Multi-finger, pressure)
-> [Quickstart with Redroid](doc/quick-start-redroid.md)
+<p align="center">
+  <a href="https://github.com/huonwe/webscreen/releases"><img src="https://img.shields.io/github/v/release/huonwe/webscreen?style=flat-square&color=blue" alt="GitHub Release"></a>
+  <a href="https://github.com/huonwe/webscreen/stargazers"><img src="https://img.shields.io/github/stars/huonwe/webscreen?style=flat-square&color=yellow" alt="GitHub Stars"></a>
+  <a href="https://hub.docker.com/r/dukihiroi/webscreen"><img src="https://img.shields.io/docker/pulls/dukihiroi/webscreen?style=flat-square&logo=docker&label=Docker%20Pulls" alt="Docker Pulls"></a>
+  <a href="https://github.com/huonwe/webscreen/commits/main"><img src="https://img.shields.io/github/last-commit/huonwe/webscreen?style=flat-square" alt="Last Commit"></a>
+  <a href="https://www.gnu.org/licenses/agpl-3.0"><img src="https://img.shields.io/badge/License-AGPL_v3-purple?style=flat-square" alt="License: AGPL v3"></a>
+</p>
+<p align="center">
+  <img src="https://img.shields.io/badge/Deployment-Single_Binary-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Single Binary">
+  <img src="https://img.shields.io/badge/Arch-amd64%20%7C%20arm64-success?style=flat-square" alt="Architectures">
+  <img src="https://img.shields.io/badge/Platform-Linux%20%7C%20Windows%20%7C%20macOS%20%7C%20Termux-lightgrey?style=flat-square" alt="Platforms">
+  <img src="https://img.shields.io/badge/AI-WebSR%20%2B%20LLM%20OCR-ff69b4?style=flat-square" alt="AI Enhanced">
+</p>
 
 
-> **Note**: For Android apk (rooted) and FnOS fpk, you might see [youyoudezhuzhu/webscreen](https://github.com/youyoudezhuzhu/webscreen).
-
-### 🐧 Linux (Xvfb / Xorg / Sway)
-- Video, Control
-- Touch
-- GPU support (Xorg/Sway)
-
-### 🛹 rk3588-hdmirx (OrangePi 5 Plus Armbian vendor kernel tested)
-- HDMI-in video streaming
-- H.264 / H.265 with RKMPP hardware encoding
-- *Note: Audio is not supported yet.*
+[简体中文](./README.zh.md) • [日本語](./README.jp.md)
 
 ---
+
+<!-- 💡 建议在此处直接拖入两段 5-8 秒的实机录屏（GitHub 会自动渲染为原生嵌入式视频播放器）：
+     1. 浏览器内开启/关闭 WebSR 超分前后的游戏画面锐度对比
+     2. 框选外语游戏/直播画面，触发 LLM OCR 实时翻译弹窗 -->
+<p align="center">
+  <img src="./doc/assets/screenshot.png" alt="Webscreen Showcase" width="85%">
+</p>
+
+## ⚡ Why Webscreen?
+
+Most remote streaming tools force you to juggle separate apps, suffer blurry low-bitrate streams, or manually screenshot foreign text. **Webscreen unifies everything into one lightweight web interface:**
+
+* 🔍 **Client-Side WebSR Super Resolution**: Upscale low-bitrate streams directly in your browser using WebGPU/WebGL shaders — get crisp text and sharp game graphics over bandwidth-limited networks without extra server GPU load.
+* 🌐 **Instant LLM OCR Translation**: Playing untranslated games or watching foreign streams? Select any region on screen to extract and translate text on the fly via your preferred LLM endpoint.
+* 🧩 **All-in-one Streaming Hub**: Manage physical Android phones, **Redroid** cloud phones, **Sunshine/Wolf** gaming rigs, headless **Linux** desktops, and **RK3588 HDMI-in** capture feeds from one unified dashboard.
+* 🚀 **Zero Client Setup**: Runs natively on Linux, Windows, macOS, Docker, and **Android Termux** (`amd64` & `arm64`). Access everything via WebRTC or WebSocket from any modern browser — no client app required.
+
+## 🎯 Built For
+
+* **NAS & Homelab Enthusiasts**: Host Redroid cloud phones, Linux workspaces, and Wolf game streaming inside a single container on Unraid, TrueNAS, or fnOS.
+* **Gamers & Stream Viewers**: Play foreign-language games or mobile titles from a desktop/tablet browser with real-time AI translation and visual upscaling.
+* **SBC & Hardware Tinkerers**: Stream hardware-encoded H.264/H.265 video directly from OrangePi 5 Plus (`rk3588-hdmirx`) into any browser.
+
+## ✨ Supported Backends & Capabilities
+
+| Backend | Video & Audio | Input & Control | Extras |
+| :--- | :--- | :--- | :--- |
+| **Android (`scrcpy`)** | Low-latency H.264 / H.265 + Audio | Multi-touch (pressure), UHID Mouse / Keyboard / Gamepad | Wireless ADB pairing, Clipboard sync, Redroid ready |
+| **GameStream (`Sunshine` / `Wolf`)** | Low-latency H.264 / H.265 + Audio | Mouse, Keyboard, Touch, Gamepad | Full desktop & cloud gaming support |
+| **Linux (`Xvfb` / `Xorg` / `Sway`)** | H.264 / H.265 (GPU accelerated on Xorg/Sway) | Mouse, Keyboard, Touch (`uinput` / `seatd`) | Headless virtual desktop |
+| **RK3588 (`rk3588-hdmirx`)** | HDMI-in via RKMPP hardware encoding | View-only | Tested on OrangePi 5 Plus Armbian vendor kernel |
+
 
 ## 🛠️ Prerequisites
 
