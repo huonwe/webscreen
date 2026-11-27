@@ -2,6 +2,7 @@ package gamestream
 
 import (
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 	"webscreen/sdriver"
@@ -43,8 +44,10 @@ type streamConfig struct {
 }
 
 func parseConfig(cfg map[string]string) (*streamConfig, error) {
+	log.Println("Parsing gamestream config: ", cfg)
 	c := &streamConfig{
-		ip:  strings.TrimSpace(cfg["ip"]),
+		ip: strings.TrimSpace(cfg["device_ip"]),
+		// port: strings.TrimSpace(cfg["device_port"]),
 		app: strings.TrimSpace(cfg["app"]),
 		// pin:       strings.TrimSpace(cfg["pin"]),
 		codec:     strings.ToLower(cfg["video_codec"]),
@@ -68,7 +71,7 @@ func parseConfig(cfg map[string]string) (*streamConfig, error) {
 		return nil, fmt.Errorf("gamestream: video_codec must be h264 or h265")
 	}
 	var err error
-	if c.port, err = positiveInt(cfg["port"], defaultHTTPPort, "port"); err != nil {
+	if c.port, err = positiveInt(cfg["device_port"], defaultHTTPPort, "port"); err != nil {
 		return nil, err
 	}
 	if c.fps, err = positiveInt(cfg["frame_rate"], 60, "frame_rate"); err != nil || c.fps > 240 {

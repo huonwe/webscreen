@@ -56,6 +56,8 @@ func (da *ScrcpyDriver) convertVideoFrame() {
 			nalTypeF = func(payloadBuf byte) byte { return (payloadBuf >> 1) & 0x3F }
 		case "h264":
 			nalTypeF = func(payloadBuf byte) byte { return payloadBuf & 0x1F }
+		case "av1":
+			nalTypeF = func(payloadBuf byte) byte { return (payloadBuf >> 3) & 0x0F }
 		default:
 			log.Println("Unknown codec type for NALU parsing:", da.mediaMeta.VideoCodec)
 			continue
