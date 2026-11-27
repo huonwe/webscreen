@@ -49,11 +49,18 @@ func ConfigDescription() []ConfigParamDescription {
 			Description: "Audio codec to use for the connection.",
 		},
 		{
+			Name:        "av_sync",
+			Type:        "boolean",
+			Required:    true,
+			Default:     false,
+			Description: "Enable A/V sync. Useful when watching videos. But it may introduce additional latency.",
+		},
+		{
 			Name:        "dont_trust_remote_timestamp",
 			Type:        "boolean",
 			Required:    true,
 			Default:     false,
-			Description: "Do not trust the remote timestamp. Useful for reducing latency in some cases.",
+			Description: "Do not trust the remote timestamp. Useful for reducing latency in some cases. But it may cause video to be less smooth, and also degrade A/V sync.",
 		},
 	}
 }

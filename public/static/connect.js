@@ -175,6 +175,7 @@ async function start() {
         console.log('WebSocket connected');
         const extra = {};
         if (pc) extra.sdp = pc.localDescription.sdp;
+        if (pc && CONFIG.av_sync) extra.av_sync = CONFIG.av_sync;
         const config = {
             protocol_transport: CONFIG.protocol_transport,
             video_codec: CONFIG.video_codec || getSetting('video_codec'),
