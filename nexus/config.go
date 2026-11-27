@@ -37,7 +37,7 @@ func ConfigDescription() []ConfigParamDescription {
 			Type:        "string",
 			Required:    true,
 			Default:     "h264",
-			Options:     []string{"h264", "h265", "av1"},
+			Options:     []string{"h264", "h265"},
 			Description: "Video codec to use for the connection.",
 		},
 		{
