@@ -55,7 +55,7 @@ Most remote streaming tools force you to juggle separate apps, suffer blurry low
 
 ## 🛠️ Prerequisites
 
-Webscreen follows a three-tier architecture: **Browser (Viewer)** ↔ **Webscreen Server (Relay/Host)** ↔ **Target Devices**.
+Webscreen follows a three-tier architecture: **Browser (Viewer)** ↔ **Webscreen Server (Relay/Host)** ↔ **Target Devices (Remote)**.
 
 ### 1. Browser Side (Client)
 * **Modern Web Browser**: Chrome, Edge, Safari, or Firefox with **WebRTC** hardware decoding support (**H.264 High Profile** or **H.265 Main Profile**).
