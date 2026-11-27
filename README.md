@@ -55,36 +55,56 @@ Most remote streaming tools force you to juggle separate apps, suffer blurry low
 
 ## 🛠️ Prerequisites
 
-### Client Side
-You need a modern web browser that supports WebRTC (H.264 High Profile, or H.265 Main Profile).
+Webscreen follows a three-tier architecture: **Browser (Viewer)** ↔ **Webscreen Server (Relay/Host)** ↔ **Target Devices**.
 
-### Server / Device Side
-For Android devices, please refer to the [scrcpy prerequisites](https://github.com/Genymobile/scrcpy/blob/master/README.md#prerequisites). 
-
-For Windows, Linux, MacOS, and Termux, you need `adb` (or `android-tools` in some distributions, which provides `adb`) in your PATH at least to stream Android devices. If the program didn't found `adb`, it will try to download it. Optionally, if you want to use Linux headless virtual desktop, make sure `ffmpeg` `xvfb`, `xfce4`, `sway`, and `wf-recorder` are in your `PATH`:
-```bash
-sudo apt install adb
-
-# If you want to stream the Linux display:
-sudo apt install xvfb ffmpeg xfce4 sway wf-recorder seatd
-```
-
-> **Note**: If you want to use Xorg, you might need to run this program as root.
-
-> **Note**: If you want to use Sway, `wf-recorder` is used.
-
-> **Note**: All of them need `uinput` and `seatd` and correct permissions if you want to have keyboard and mouse passthrough.
-
-
-
-#### rk3588 HDMI-in Requirements
-
-* A vendor kernel with HDMI RX support (`rk3588-hdmirx` enabled).
-* An FFmpeg build with RKMPP support (e.g., `/usr/lib/jellyfin-ffmpeg/ffmpeg`).
-* Correct read/write permissions for MPP service: `sudo chmod 666 /dev/mpp_service`.
-* System package `v4l-utils`.
+### 1. Browser Side (Client)
+* **Modern Web Browser**: Chrome, Edge, Safari, or Firefox with **WebRTC** hardware decoding support (**H.264 High Profile** or **H.265 Main Profile**).
+* **HTTPS Context** *(Recommended)*: Required if you want to use **WebSR Super Resolution**, **Clipboard Sync**, or **WebSocket** streaming mode.
 
 ---
+
+### 2. Server Side (Where Webscreen Runs)
+Depending on which backends you plan to host, prepare the corresponding environment on your server (Linux, Windows, macOS, Docker, or Termux):
+
+| Target Backend | Server Requirements |
+| :--- | :--- |
+| **GameStream (`Sunshine` / `Wolf`)** | **Zero extra dependencies** — works out of the box with the single Webscreen binary. |
+| **Android (`scrcpy`)** | `adb` (`android-tools`) in your `PATH`. *(If missing, Webscreen will attempt to download it automatically.)* |
+| **Linux Virtual Desktop** | `xvfb`, `ffmpeg`, `xfce4`, `sway`, `wf-recorder`, and `seatd` (plus `uinput` permissions for mouse/keyboard injection). |
+| **RK3588 HDMI-in** | Armbian/vendor kernel with `rk3588-hdmirx` enabled, FFmpeg with RKMPP support (e.g., `/usr/lib/jellyfin-ffmpeg/ffmpeg`), `v4l-utils`, and `sudo chmod 666 /dev/mpp_service`. |
+
+<details>
+<summary><b>📦 Quick Install & Run on Linux Servers (Debian / Ubuntu)</b></summary>
+
+```bash
+# 1. Install minimal dependency for Android streaming:
+sudo apt update && sudo apt install -y adb
+
+# Optional: Install dependencies for Linux headless virtual desktop (Xorg / Sway):
+# sudo apt install -y xvfb ffmpeg xfce4 sway wf-recorder seatd
+
+# 2. Download the latest Webscreen binary (amd64) and default config:
+mkdir -p webscreen/data && cd webscreen
+curl -fL https://github.com/huonwe/webscreen/releases/latest/download/webscreen-linux-amd64 -o webscreen
+curl -fsSL https://raw.githubusercontent.com/huonwe/webscreen/main/config.yml -o ./data/config.yml
+chmod +x webscreen
+
+# 3. Start Webscreen (visit http://<your-ip>:8081):
+./webscreen -D ./data
+```
+
+Notes for Linux Desktop Backend:
+- Xorg mode may require running Webscreen as root.
+- Sway mode relies on wf-recorder for screen capture.
+- Input passthrough (keyboard/mouse) requires uinput kernel module and proper seatd permissions.
+</details>
+
+### 3. Target Device Side (Controlled Devices)
+Android Devices: No app installation required on the phone. Simply enable Developer Options → USB Debugging or Wireless Debugging (supports pairing code).
+
+PC / Cloud Gaming Host: Must have Sunshine or Wolf installed and running.
+
+HDMI Source (for RK3588): Any standard HDMI output device (PC, console, camera, etc.) connected to the board's HDMI-in port.
 
 ## 🚀 Usage
 
