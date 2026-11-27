@@ -86,8 +86,13 @@ async function start() {
                 );
             } else if (event.track.kind === 'audio') {
                 const audioEl = document.createElement('audio');
-                audioEl.srcObject = event.streams[0];
+                const stream = (event.streams && event.streams[0]) || new MediaStream([event.track]);
                 audioEl.autoplay = true;
+                audioEl.srcObject = stream;
+                audioEl.play().catch(err => {
+                    console.warn('WebRTC audio autoplay blocked:', err);
+                    document.addEventListener('click', () => audioEl.play(), { once: true })
+                });
                 document.body.appendChild(audioEl);
             }
             pc.getReceivers().forEach(receiver => {
@@ -158,9 +163,7 @@ async function start() {
     }
 
     // This socket carries signaling; in WebSocket mode, it also carries media frames.
-    const wsPath = window.location.pathname.startsWith('/screen-ws')
-        ? '/screen-ws/wsn'
-        : '/screen/ws';
+    const wsPath = '/screen/ws';
     const wsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}${wsPath}`;
     window.ws = new WebSocket(wsUrl);
     window.ws.binaryType = 'arraybuffer';

@@ -369,7 +369,7 @@ func (v *ViewSession) connectToNexus(n *Nexus, cfg ConnectionConfig) error {
 		r, exists := n.bindings[cfg.RemoteUUID]
 		n.RUnlock()
 		if !exists {
-			videoTrack, audioTrack = createAVTrack(videoMimeType, cfg.Extra["av_sync"] == "true")
+			videoTrack, audioTrack = createAVTrack(videoMimeType, false)
 		} else {
 			n.RLock()
 			masterSession := n.sessions[r.masterSessionID]
@@ -379,7 +379,7 @@ func (v *ViewSession) connectToNexus(n *Nexus, cfg ConnectionConfig) error {
 			audioTrack = masterSession.audioTrack
 			if videoTrack == nil || audioTrack == nil {
 				// 这说明master session是websocket传输
-				videoTrack, audioTrack = createAVTrack(videoMimeType, cfg.Extra["av_sync"] == "true")
+				videoTrack, audioTrack = createAVTrack(videoMimeType, false)
 				masterSession.videoTrack = videoTrack
 				masterSession.audioTrack = audioTrack
 			}
