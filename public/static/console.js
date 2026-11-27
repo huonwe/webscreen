@@ -281,7 +281,8 @@ function launchStream(device) {
     const targetUrl = `/screen/${routeId}?${searchParams.toString()}`;
 
     setTimeout(() => {
-        window.location.href = targetUrl;
+        window.open(targetUrl, '_blank', 'noopener,noreferrer');
+        // window.location.href = targetUrl;
     }, 250);
 }
 
