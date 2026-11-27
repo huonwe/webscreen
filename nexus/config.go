@@ -53,7 +53,7 @@ func ConfigDescription() []ConfigParamDescription {
 			Type:        "boolean",
 			Required:    true,
 			Default:     false,
-			Description: "Enable A/V sync. Useful when watching videos. But it may introduce additional latency.",
+			Description: "Enable A/V sync. Only for WebRTC. Useful when watching videos. But it may introduce additional latency.",
 		},
 		{
 			Name:        "dont_trust_remote_timestamp",
