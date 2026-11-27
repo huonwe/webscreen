@@ -1,8 +1,5 @@
 # 📺 Webscreen
 
-**Turn any browser into an AI-enhanced universal remote screen.**  
-Stream **Android**, **GameStream (Sunshine/Wolf)**, **Linux Desktops**, and **RK3588 HDMI-in** from a single self-hosted Go binary — supercharged with client-side **WebSR Super Resolution (Anime4K models)** and **LLM OCR Translation**.
-
 <p align="center">
   <a href="https://github.com/huonwe/webscreen/releases"><img src="https://img.shields.io/github/v/release/huonwe/webscreen?style=flat-square&color=blue" alt="GitHub Release"></a>
   <a href="https://github.com/huonwe/webscreen/stargazers"><img src="https://img.shields.io/github/stars/huonwe/webscreen?style=flat-square&color=yellow" alt="GitHub Stars"></a>
@@ -17,6 +14,8 @@ Stream **Android**, **GameStream (Sunshine/Wolf)**, **Linux Desktops**, and **RK
   <img src="https://img.shields.io/badge/AI-WebSR%20%2B%20LLM%20OCR-ff69b4?style=flat-square" alt="AI Enhanced">
 </p>
 
+**Turn any browser into an AI-enhanced universal remote screen.**  
+Stream **Android**, **GameStream (Sunshine/Wolf)**, **Linux Desktops**, and **RK3588 HDMI-in** from a single self-hosted Go binary — supercharged with client-side **WebSR Super Resolution (Anime4K models)** and **LLM OCR Translation**.
 
 [简体中文](./README.zh.md) • [日本語](./README.jp.md)
 
