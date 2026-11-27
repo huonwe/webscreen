@@ -13,14 +13,8 @@ services:
     container_name: webscreen
     restart: unless-stopped
     network_mode: host
-    # ports:
-    #   - "8079:8079"
-    # udp range for WebRTC if needed, currently using host network is easier for webrtc. If you face problems, please try host network mode.
-    # - "51200-51299:51200-51299/udp"
-    environment:
-      - GIN_MODE=release
-      - PIN=123456
-      #- PORT=8079
+    volumes:
+      - ./data:/webscreen/data
     depends_on:
       - redroid
 
