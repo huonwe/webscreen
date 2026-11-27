@@ -25,7 +25,7 @@ Stream **Android**, **GameStream (Sunshine/Wolf)**, **Linux Desktops**, and **RK
      1. 浏览器内开启/关闭 WebSR 超分前后的游戏画面锐度对比
      2. 框选外语游戏/直播画面，触发 LLM OCR 实时翻译弹窗 -->
 <p align="center">
-  <img src="./doc/assets/screenshot.png" alt="Webscreen Showcase" width="85%">
+  <img src="./doc/assets/timer-difference.png" alt="Webscreen Showcase" width="85%">
 </p>
 
 ## ⚡ Why Webscreen?
