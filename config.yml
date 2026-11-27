@@ -1,9 +1,12 @@
 enableandroiddiscover: true
 host: 0.0.0.0
 port: 8081
+# Secret key for JWT authentication
 jwt_secret: change_before_use
+# Allowed IP addresses for PIN authentication
 trusted_ips:
 - 127.0.0.1
 - ::1
-pin: 0
+# Must be 6 digits
+pin: 000000
 mtu: 1400
