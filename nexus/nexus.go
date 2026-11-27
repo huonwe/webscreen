@@ -310,15 +310,14 @@ func (n *Nexus) NewViewSession(userID string, config ConnectionConfig) (*ViewSes
 	}
 	sessionID := uuid.New().String()
 	viewSession := &ViewSession{
-		SessionID:         sessionID,
-		UserID:            userID,
-		useLocalTimestamp: config.Extra["use_local_timestamp"] == "true",
-		videoTSMapper:     newVideoTimestampMapper(90000),
-		audioTSMapper:     newAudioTimestampMapper(),
-		CanControl:        true,
-		ConnectionConfig:  config,
-		cacheVideoCh:      make(chan sdriver.AVBox, 30),
-		cacheAudioCh:      make(chan sdriver.AVBox, 30),
+		SessionID:        sessionID,
+		UserID:           userID,
+		videoTSMapper:    newVideoTimestampMapper(90000, config.DontTrustRemoteTimestamp),
+		audioTSMapper:    newAudioTimestampMapper(),
+		CanControl:       true,
+		ConnectionConfig: config,
+		cacheVideoCh:     make(chan sdriver.AVBox, 30),
+		cacheAudioCh:     make(chan sdriver.AVBox, 30),
 		// cacheMsgCh:        make(chan []byte, 64),
 		done: make(chan struct{}),
 

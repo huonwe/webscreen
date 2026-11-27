@@ -7,17 +7,21 @@ import (
 )
 
 type videoTimestampMapper struct {
-	initialized bool
-	basePTS     uint64 // 首个有效帧的 PTS
-	lastPTS     uint64 // 上一帧 PTS（用于处理 NoDuration 帧）
-	baseRTP     uint32 // 初始随机 RTP 时间戳偏移（符合 RFC 3550）
-	clockRate   uint64 // 视频固定 90000，Opus 音频固定 48000
+	initialized              bool
+	basePTS                  uint64 // 首个有效帧的 PTS
+	lastPTS                  uint64 // 上一帧 PTS（用于处理 NoDuration 帧）
+	baseRTP                  uint32 // 初始随机 RTP 时间戳偏移（符合 RFC 3550）
+	lastRTP                  uint32 // 上一帧 RTP 时间戳
+	baseTime                 time.Time
+	clockRate                uint64 // 视频固定 90000，Opus 音频固定 48000
+	dontTrustRemoteTimestamp bool
 }
 
-func newVideoTimestampMapper(clockRate uint64) *videoTimestampMapper {
+func newVideoTimestampMapper(clockRate uint64, dontTrustRemoteTimestamp bool) *videoTimestampMapper {
 	return &videoTimestampMapper{
-		baseRTP:   rand.Uint32(),
-		clockRate: clockRate,
+		baseRTP:                  rand.Uint32(),
+		clockRate:                clockRate,
+		dontTrustRemoteTimestamp: dontTrustRemoteTimestamp,
 	}
 }
 
@@ -28,21 +32,39 @@ func (m *videoTimestampMapper) NextTimestamp(box sdriver.AVBox) uint32 {
 		m.initialized = true
 		m.basePTS = box.PTS
 		m.lastPTS = box.PTS
+		m.baseTime = time.Now()
+		m.lastRTP = m.baseRTP
 		return m.baseRTP
 	}
 
-	pts := box.PTS
-	// 如果是 SPS/PPS 等不占时间轴的配置帧，直接复用上一帧时间戳
-	if box.NoDuration || pts < m.lastPTS {
-		pts = m.lastPTS
-	} else {
-		m.lastPTS = pts
+	// SPS/PPS 等不占时间轴的配置帧，直接复用上一帧的 RTP 时间戳
+	if box.NoDuration {
+		return m.lastRTP
 	}
 
-	elapsedPTS := pts - m.basePTS
+	var elapsedMicro uint64
+	if m.dontTrustRemoteTimestamp {
+		// 使用 time.Since 利用 Go 的单调时钟（Monotonic Clock），防止 NTP 校时导致时间回退
+		elapsed := time.Since(m.baseTime)
+		if elapsed < 0 {
+			elapsed = 0
+		}
+		elapsedMicro = uint64(elapsed.Microseconds())
+	} else {
+		pts := box.PTS
+		if pts < m.lastPTS {
+			// 远端 PTS 异常回退时，保持上一帧时间戳
+			pts = m.lastPTS
+		} else {
+			m.lastPTS = pts
+		}
+		elapsedMicro = pts - m.basePTS
+	}
+
 	// 换算为对应时钟频率的 ticks，利用 uint32 自然回绕
-	rtpTicks := uint32((elapsedPTS * m.clockRate) / 1_000_000)
-	return m.baseRTP + rtpTicks
+	rtpTicks := uint32((elapsedMicro * m.clockRate) / 1_000_000)
+	m.lastRTP = m.baseRTP + rtpTicks
+	return m.lastRTP
 }
 
 type audioTimestampMapper struct {

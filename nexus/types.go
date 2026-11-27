@@ -31,6 +31,8 @@ type ConnectionConfig struct {
 	VideoCodec string `json:"video_codec"`
 	// Audio codec must be opus
 	AudioCodec string `json:"audio_codec"`
+	// Whether to trust the remote timestamp
+	DontTrustRemoteTimestamp bool `json:"dont_trust_remote_timestamp"`
 	// if use webrtc, sdp should be stored here
 	Extra map[string]string `json:"extra,omitempty"`
 

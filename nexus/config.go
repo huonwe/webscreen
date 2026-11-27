@@ -48,5 +48,12 @@ func ConfigDescription() []ConfigParamDescription {
 			Options:     []string{"opus"},
 			Description: "Audio codec to use for the connection.",
 		},
+		{
+			Name:        "dont_trust_remote_timestamp",
+			Type:        "boolean",
+			Required:    true,
+			Default:     false,
+			Description: "Do not trust the remote timestamp. Useful for reducing latency in some cases.",
+		},
 	}
 }
