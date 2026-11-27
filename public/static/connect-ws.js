@@ -104,21 +104,34 @@ async function initWebCodecs(mediaMeta, videoCodec) {
 }
 
 async function ensureAudioStarted() {
-    if (!window.AudioContext && !window.webkitAudioContext) {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) {
         status('This browser does not support Web Audio');
         return false;
     }
 
     if (!audioContext) {
-        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        // 移除强制 sampleRate: 48000，避免部分手机硬件采样率不匹配导致初始化异常
+        // createBufferSource 会自动重采样到设备原生采样率
         audioContext = new AudioContextClass({
-            sampleRate: 48000,
             latencyHint: 'interactive'
         });
         nextAudioTime = 0;
     }
 
-    if (audioContext.state === 'suspended') {
+    // 1. iOS 静音解锁补丁：同步播放一个 1 帧的静音 Buffer 激活底层音频通道
+    try {
+        const silentBuffer = audioContext.createBuffer(1, 1, 22050);
+        const silentSource = audioContext.createBufferSource();
+        silentSource.buffer = silentBuffer;
+        silentSource.connect(audioContext.destination);
+        silentSource.start(0);
+    } catch (e) {
+        console.warn('Silent buffer unlock warning:', e);
+    }
+
+    // 2. 兼容 iOS 切后台后产生的 'interrupted' 状态
+    if (audioContext.state === 'suspended' || audioContext.state === 'interrupted') {
         await audioContext.resume();
     }
 
@@ -127,10 +140,14 @@ async function ensureAudioStarted() {
         return false;
     }
 
+    // 解锁成功后移除监听，避免后续每次点击都重复触发
+    removeAudioStartListeners();
     status('Audio enabled');
     drainAudioQueue();
     return true;
 }
+
+
 
 function queueAudioData(audioData) {
     if (audioQueue.length >= 12) {
@@ -161,7 +178,7 @@ function drainAudioQueue() {
 function playAudioData(audioData) {
     if (!audioContext || audioContext.state !== 'running') {
         queueAudioData(audioData);
-        status('Click or tap to enable audio');
+        // status('Click or tap to enable audio');
         return;
     }
 
@@ -212,9 +229,19 @@ function requestAudioStart() {
 
 function enableAudioStart() {
     if (audioStartListenersAdded) return;
-    document.addEventListener('pointerdown', requestAudioStart);
+    // 3. 移动端必须监听 touchend / click，Safari 不会在 pointerdown 时放行 AudioContext
+    document.addEventListener('touchend', requestAudioStart, { passive: true });
+    document.addEventListener('click', requestAudioStart, { passive: true });
     document.addEventListener('keydown', requestAudioStart);
     audioStartListenersAdded = true;
+}
+
+function removeAudioStartListeners() {
+    if (!audioStartListenersAdded) return;
+    document.removeEventListener('touchend', requestAudioStart);
+    document.removeEventListener('click', requestAudioStart);
+    document.removeEventListener('keydown', requestAudioStart);
+    audioStartListenersAdded = false;
 }
 
 function handleMediaFrame(buffer) {
