@@ -36,9 +36,9 @@ docker compose up -d
 ## Accessing the Interface
 
 1.  Open your browser and navigate to:
-    [http://localhost:8079](http://localhost:8079)
+    [http://localhost:8081](http://localhost:8081)
     
-2.  Enter the PIN configured in the docker-compose file (default: `123456`).
+2.  You might want to edit ./data/config.yml. Remember to change jwt secret!
 
 3.  Inside the console, you should see the `redroid` device listed. Click to connect and control. If you can't see it, connect the device (ip: `127.0.0.1` if host mode, else `redroid`, port: `5555`) manually.
 
