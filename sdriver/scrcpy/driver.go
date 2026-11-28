@@ -72,10 +72,10 @@ type ScrcpyDriver struct {
 func New(config map[string]string) (*ScrcpyDriver, error) {
 	var err error
 	da := &ScrcpyDriver{
-		VideoChan:   make(chan sdriver.AVBox, 3),
-		AudioChan:   make(chan sdriver.AVBox, 3),
-		MsgChan:     make(chan sdriver.Event, 3),
-		ControlChan: make(chan sdriver.Event, 3),
+		VideoChan:   make(chan sdriver.AVBox, 2),
+		AudioChan:   make(chan sdriver.AVBox, 2),
+		MsgChan:     make(chan sdriver.Event, 10),
+		ControlChan: make(chan sdriver.Event, 2),
 		videoBuffer: comm.NewLinearBuffer(20 * 1024 * 1024), // 20MB 视频缓冲区
 		audioBuffer: comm.NewLinearBuffer(4 * 1024 * 1024),  // 4MB 音频缓冲区
 
