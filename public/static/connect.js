@@ -1,3 +1,4 @@
+import showToast from '/static/ui.js';
 // 获取当前页面 URL 参数，或传入任意查询字符串（如 "?a=1&b=2"）
 const params = new URLSearchParams(window.location.search);
 

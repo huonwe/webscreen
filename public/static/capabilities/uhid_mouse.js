@@ -1,4 +1,5 @@
-import { addControlButton, addControlSeparator } from './control_ui.js';
+import { addControlButton, addControlSeparator, getRemoteCanvas, PointerLocked, RequestPointerLock } from '../screen.js';
+import { SendPacket } from '../connect-new.js';
 
 const SC_CONTROL_MSG_TYPE_UHID_CREATE = 12;
 const SC_CONTROL_MSG_TYPE_UHID_INPUT = 13;
@@ -6,7 +7,6 @@ const SC_CONTROL_MSG_TYPE_UHID_DESTROY = 14; // 注意：并非所有版本都�
 
 // UHID 鼠标状态
 let uhidMouseEnabled = false;
-let uhidMouseInitialized = false;
 let lastMouseX = 0;
 let lastMouseY = 0;
 let mouseButtons = 0; // bit 0=左键, bit 1=右键, bit 2=中键
@@ -20,45 +20,35 @@ let mouseRafScheduled = false;
 const UHID_DEVICE_ID = 2;
 const UHID_DEVICE_NAME = "Virtual Mouse";
 
+export function UHIDMouseEnabled() {
+    return uhidMouseEnabled;
+}
+
 function initUHIDMouse() {
-    if (uhidMouseInitialized) {
-        window.isUHIDMouseEnabled = true;
+    if (uhidMouseEnabled) {
+        uhidMouseEnabled = true;
         console.log("UHID Mouse already initialized");
         return;
     }
-    if (window.ws && window.ws.readyState === WebSocket.OPEN) {
-        // window.ws.send(createUHIDDestroyPacket(1)); // 确保之前的设备被销毁
-        // window.ws.send(createUHIDDestroyPacket());
-        window.sendDataChannelMessage(window.dataChannelOrdered, createUHIDDestroyPacket());
-        console.log("UHID Mouse device destroyed (re-initializing)");
-    } else {
-        console.warn("WebSocket is not open. Cannot initialize UHID Mouse.");
-    }
-
-    const packet = createUHIDCreatePacket();
-    // if (window.ws && window.ws.readyState === WebSocket.OPEN) {
-    // window.ws.send(packet);
-    window.sendDataChannelMessage(window.dataChannelOrdered, packet);
-    uhidMouseInitialized = true;
-    window.isUHIDMouseEnabled = true;
+    SendPacket(createUHIDDestroyPacket());
+    SendPacket(createUHIDCreatePacket());
+    uhidMouseEnabled = true;
     console.log("UHID Mouse device created");
-    // } else {
-    //     console.warn("WebSocket is not open. Cannot initialize UHID Mouse.");
-    // }
 }
 
 function destroyUHIDMouse() {
-    if (!uhidMouseInitialized) {
+    if (!uhidMouseEnabled) {
         return;
     }
-
     const packet = createUHIDDestroyPacket();
     // if (window.ws && window.ws.readyState === WebSocket.OPEN) {
     //     window.ws.send(packet);
-    window.sendDataChannelMessage(window.dataChannelOrdered, packet);
-    uhidMouseInitialized = false;
+    SendPacket(packet);
     uhidMouseEnabled = false;
-    window.isUHIDMouseEnabled = false;
+    // lastMouseX = 0;
+    // lastMouseY = 0;
+    mouseButtons = 0; // bit 0=左键, bit 1=右键, bit 2=中键
+    uhidMouseEnabled = false;
     console.log("UHID Mouse device destroyed");
     // }
 }
@@ -85,7 +75,7 @@ addControlButton('uhidToggleBtn', 'UHID Mouse',
     .addEventListener('click', toggleUHIDMouse);
 
 function sendMouseMove() {
-    if (!uhidMouseEnabled || !uhidMouseInitialized) return;
+    if (!uhidMouseEnabled) return;
 
     if (pendingMouseMove.deltaX !== 0 || pendingMouseMove.deltaY !== 0 || pendingMouseMove.wheel !== 0) {
         const packet = createUHIDInputPacket(
@@ -95,10 +85,7 @@ function sendMouseMove() {
             pendingMouseMove.wheel
         );
 
-        // if (window.ws && window.ws.readyState === WebSocket.OPEN) {
-        //     window.ws.send(packet);
-        // }
-        window.sendDataChannelMessage(window.dataChannelUnordered, packet);
+        SendPacket(packet);
 
         // 重置累积值
         pendingMouseMove.deltaX = 0;
@@ -119,15 +106,11 @@ function scheduleMouseSend() {
 
 // ========== UHID 鼠标事件处理 ==========
 
-remoteCanvas.addEventListener('mousedown', (event) => {
+getRemoteCanvas().addEventListener('mousedown', (event) => {
     if (!uhidMouseEnabled) return;
 
     // 如果未锁定，点击时自动请求锁定
-    if (document.pointerLockElement !== remoteCanvas &&
-        document.mozPointerLockElement !== remoteCanvas &&
-        document.webkitPointerLockElement !== remoteCanvas) {
-        requestPointerLock();
-    }
+    if (!PointerLocked()) RequestPointerLock();
 
     event.preventDefault();
     event.stopPropagation();
@@ -142,10 +125,10 @@ remoteCanvas.addEventListener('mousedown', (event) => {
     // if (window.ws && window.ws.readyState === WebSocket.OPEN) {
     //     window.ws.send(packet);
     // }
-    window.sendDataChannelMessage(window.dataChannelUnordered, packet);
+    SendPacket(packet);
 });
 
-remoteCanvas.addEventListener('mouseup', (event) => {
+getRemoteCanvas().addEventListener('mouseup', (event) => {
     if (!uhidMouseEnabled) return;
 
     event.preventDefault();
@@ -158,13 +141,10 @@ remoteCanvas.addEventListener('mouseup', (event) => {
 
     // 发送按键状态变化
     const packet = createUHIDInputPacket(mouseButtons, 0, 0, 0);
-    // if (window.ws && window.ws.readyState === WebSocket.OPEN) {
-    //     window.ws.send(packet);
-    // }
-    window.sendDataChannelMessage(window.dataChannelUnordered, packet);
+    SendPacket(packet);
 });
 
-remoteCanvas.addEventListener('mousemove', (event) => {
+getRemoteCanvas().addEventListener('mousemove', (event) => {
     if (!uhidMouseEnabled) return;
 
     // 锁定模式下只信赖 movementX/Y
@@ -182,7 +162,7 @@ remoteCanvas.addEventListener('mousemove', (event) => {
 });
 
 // 右键菜单拦截（在 UHID 模式下）
-remoteCanvas.addEventListener('contextmenu', (event) => {
+getRemoteCanvas().addEventListener('contextmenu', (event) => {
     if (uhidMouseEnabled) {
         event.preventDefault();
         event.stopPropagation();
@@ -191,7 +171,7 @@ remoteCanvas.addEventListener('contextmenu', (event) => {
 
 // 滚轮事件已经在 scroll.js 中处理，但我们也可以在 UHID 模式下捕获
 // 注意：需要根据模式选择使用哪种滚轮处理方式
-remoteCanvas.addEventListener('wheel', (event) => {
+getRemoteCanvas().addEventListener('wheel', (event) => {
     if (!uhidMouseEnabled) return; // 让 scroll.js 处理
 
     event.preventDefault();
@@ -206,16 +186,9 @@ remoteCanvas.addEventListener('wheel', (event) => {
 
 
 // 监听指针锁定状态变化
-document.addEventListener('pointerlockchange', () => {
-    if (document.pointerLockElement === remoteCanvas) {
-        console.log("Pointer locked - relative mouse mode active");
-    } else {
-        console.log("Pointer unlocked");
-    }
-});
 
-document.addEventListener('pointerlockerror', () => {
-    console.error("Pointer lock failed");
+document.addEventListener('pointerlockerror', (e) => {
+    console.error("Pointer lock failed", e);
 });
 
 // UHID Mouse HID Report Descriptor (标准鼠标描述符)
@@ -331,7 +304,7 @@ function createUHIDCreatePacket(deviceID = UHID_DEVICE_ID) {
     // --- 关键修改 ---
     // Name Size (改成 1 字节!)
     view.setUint8(offset, nameBytes.length); offset += 1;
-    console.log("UHID Device Name Size:", nameBytes.length);
+    // console.log("UHID Device Name Size:", nameBytes.length);
     // Name Data
     if (nameBytes.length > 0) {
         uint8View.set(nameBytes, offset);

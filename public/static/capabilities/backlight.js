@@ -5,7 +5,8 @@
  * 与键盘/鼠标一样通过 HTTP API 调服务端执行（服务端再按部署形态
  * 决定走本机 su 还是 adb -s），不依赖 UHID 或 DataChannel。
  */
-import { addControlButton } from './control_ui.js';
+import { addControlButton } from '../screen.js';
+import { GetConfigValue } from '../connect-new.js';
 
 const btn = addControlButton('backlightToggleBtn',
     '黑屏（隐私保护：屏幕不显示，串流与触控照常）',
@@ -16,14 +17,6 @@ const TITLE_ON = '屏幕已黑（点击恢复显示）';
 
 let screenOff = false;
 let busy = false;
-
-// APK 内嵌模式下服务就在手机上，串号留空即可；
-// NAS 托管模式从页面标识取设备串号。
-function deviceSerial() {
-    if (window.deviceIdentifier) return String(window.deviceIdentifier);
-    const m = location.pathname.match(/^\/screen\/([^/]+)/);
-    return m ? decodeURIComponent(m[1]) : '';
-}
 
 function flashError() {
     btn.classList.add('ctrl-error');
@@ -60,7 +53,7 @@ async function setBacklight(off) {
         const res = await fetch('/api/screen/backlight', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ serial: deviceSerial(), off: !!off })
+            body: JSON.stringify({ serial: GetConfigValue('device_id'), off: !!off })
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok || data.result !== 'success') {
@@ -86,7 +79,7 @@ btn.addEventListener('click', () => setBacklight(!screenOff));
 // 离开页面时恢复背光，避免把手机留在黑屏状态
 window.addEventListener('beforeunload', () => {
     if (!screenOff) return;
-    const body = JSON.stringify({ serial: deviceSerial(), off: false });
+    const body = JSON.stringify({ serial: GetConfigValue('device_id'), off: false });
     try {
         if (navigator.sendBeacon) {
             navigator.sendBeacon('/api/screen/backlight', new Blob([body], { type: 'application/json' }));

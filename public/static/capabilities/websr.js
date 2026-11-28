@@ -1,3 +1,5 @@
+import { showToast } from '../screen.js';
+
 let worker = null;
 let outputCanvas = null;
 let renderGeneration = 0;

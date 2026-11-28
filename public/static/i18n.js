@@ -618,7 +618,6 @@ class I18n {
 
 export const i18n = new I18n();
 export default i18n;
-window.i18n = i18n; // 保留全局引用以兼容未改造的旧脚本
 
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => i18n.apply());

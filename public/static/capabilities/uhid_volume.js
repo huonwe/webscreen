@@ -1,3 +1,4 @@
+import { SendPacket } from '../connect-new.js';
 /* UHID 音量键 —— 内核级虚拟 Consumer Control 设备
  *
  * 为什么不用 scrcpy 的按键注入（TYPE_INJECT_KEYCODE）：
@@ -24,8 +25,9 @@ const UHID_VOLUME_NAME = "Virtual Volume Keys";
 const UHID_VOLUME_VENDOR = 0x18d1;
 const UHID_VOLUME_PRODUCT = 0x0003;
 
-const VOLUME_BIT_UP = 0x01;
-const VOLUME_BIT_DOWN = 0x02;
+const VOLUME_BUTTON_RELEASE = 0x00;
+const VOLUME_UP_BIT = 0x01;
+const VOLUME_DOWN_BIT = 0x02;
 
 // Consumer Control 报告描述符
 const VOLUME_REPORT_DESCRIPTOR = new Uint8Array([
@@ -45,25 +47,6 @@ const VOLUME_REPORT_DESCRIPTOR = new Uint8Array([
 ]);
 
 let deviceCreated = false;
-let boundChannel = null;
-
-function channel() {
-    const ch = window.dataChannelOrdered;
-    if (!ch || ch.readyState !== 'open') return null;
-    return ch;
-}
-
-function send(buffer) {
-    const ch = channel();
-    if (!ch) return false;
-    try {
-        ch.send(buffer);
-        return true;
-    } catch (e) {
-        console.warn('[uhid-volume] send failed:', e);
-        return false;
-    }
-}
 
 function createPacket() {
     const nameBytes = new TextEncoder().encode(UHID_VOLUME_NAME).slice(0, 255);
@@ -103,43 +86,30 @@ function destroyPacket() {
     return buffer;
 }
 
-// 确保设备存在；重连（dataChannel 换对象）后服务端设备已消失，需重建
-function ensureDevice() {
-    const ch = channel();
-    if (!ch) return false;
-    if (ch !== boundChannel) {
-        boundChannel = ch;
-        deviceCreated = false;
-    }
-    if (deviceCreated) return true;
-    if (!send(createPacket())) return false;
-    deviceCreated = true;
-    console.log('[uhid-volume] Consumer Control 设备已创建 (id=' + UHID_VOLUME_ID + ')');
-    return true;
-}
-
 /**
  * 发音量键（内核虚拟 HID，与物理音量键同源）
  * @param {'up'|'down'} direction
- * @returns {boolean} 是否已通过 UHID 发出（false 时调用方可回退到按键注入）
  */
-window.uhidVolumePress = function (direction) {
+export function UHIDVolumePress(direction) {
     const fresh = !deviceCreated;
-    if (!ensureDevice()) return false;
+    if (!deviceCreated) {
+        SendPacket(destroyPacket());
+        SendPacket(createPacket());
+        deviceCreated = true;
+    }
 
-    const bit = direction === 'down' ? VOLUME_BIT_DOWN : VOLUME_BIT_UP;
     // 刚创建设备时稍等其就绪，否则首个 report 可能被丢弃
     const start = fresh ? 150 : 0;
+    const bit = direction === 'down' ? VOLUME_DOWN_BIT : VOLUME_UP_BIT;
 
-    setTimeout(function () { send(inputPacket(bit)); }, start);          // 按下
-    setTimeout(function () { send(inputPacket(0)); }, start + 100);      // 抬起
+    setTimeout(function () { SendPacket(inputPacket(bit)); }, start);          // 按下
+    setTimeout(function () { SendPacket(inputPacket(VOLUME_BUTTON_RELEASE)); }, start + 100);      // 抬起
     return true;
 };
 
 // 提供给外部：主动销毁（例如关闭串流前）
-window.uhidVolumeDestroy = function () {
+export function UHIDVolumeDestroy() {
     if (!deviceCreated) return;
-    send(destroyPacket());
+    SendPacket(destroyPacket());
     deviceCreated = false;
-    boundChannel = null;
 };

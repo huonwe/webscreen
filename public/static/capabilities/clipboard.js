@@ -1,7 +1,7 @@
-import { addControlButton } from './control_ui.js';
+import { addControlButton } from '../screen.js';
+import { SendPacket } from '../connect-new.js';
 
 function setClipboard(text) {
-    if (!window.ws || window.ws.readyState !== WebSocket.OPEN) return;
     const encoder = new TextEncoder();
     const data = encoder.encode(text);
 
@@ -30,8 +30,7 @@ function setClipboard(text) {
     packet.set(data, 14);
 
     // window.ws.send(packet);
-    window.sendDataChannelMessage(window.dataChannelOrdered, packet);
-    console.log("set clipboard to device:", text);
+    SendPacket(packet);
 }
 
 function getClipboard() {
@@ -39,7 +38,7 @@ function getClipboard() {
     const packet = new Uint8Array(2);
     packet[0] = 8; // WS_TYPE_GET_CLIPBOARD
     packet[1] = 0; // COPY_KEY_NONE
-    window.sendDataChannelMessage(window.dataChannelOrdered, packet);
+    SendPacket(packet);
     // window.ws.send(packet);
 }
 

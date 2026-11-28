@@ -1,5 +1,8 @@
-import { addControlButton, addControlSeparator } from './control_ui.js';
-
+import { addControlButton, addControlSeparator } from '../screen.js';
+import { SendPacket } from '../connect-new.js';
+import { UHIDKeyboardEnabled } from './uhid_keyboard.js';
+import { UHIDVolumePress } from './uhid_volume.js';
+import { SetMannualRotate, updateVideoCache } from '../screen.js';
 const TYPE_KEY = 0x00; // key event
 const TYPE_KEY_ACTION_DOWN = 0;
 const TYPE_KEY_ACTION_UP = 1;
@@ -19,69 +22,71 @@ function homeButton() {
 function volumeUpButton() {
     // 优先走内核 UHID 虚拟音量键（Consumer Control）——对系统而言等同真实
     // 外接键盘，系统级界面也接受；不可用时回退到 scrcpy 按键注入。
-    if (window.uhidVolumePress && window.uhidVolumePress('up')) return;
+    if (UHIDKeyboardEnabled()) {
+        UHIDVolumePress('up')
+    }
     const KEYCODE_VOLUME_UP = 24;
     let p = createKeyPacket(TYPE_KEY_ACTION_DOWN, KEYCODE_VOLUME_UP);
-    sendButtonEvent(p);
+    SendPacket(p);
     p = createKeyPacket(TYPE_KEY_ACTION_UP, KEYCODE_VOLUME_UP);
-    sendButtonEvent(p);
+    SendPacket(p);
 }
 
 function volumeDownButton() {
-    if (window.uhidVolumePress && window.uhidVolumePress('down')) return;
+    if (UHIDKeyboardEnabled()) {
+        UHIDVolumePress('down');
+    }
     const KEYCODE_VOLUME_DOWN = 25;
     let p = createKeyPacket(TYPE_KEY_ACTION_DOWN, KEYCODE_VOLUME_DOWN);
-    sendButtonEvent(p);
+    SendPacket(p);
     p = createKeyPacket(TYPE_KEY_ACTION_UP, KEYCODE_VOLUME_DOWN);
-    sendButtonEvent(p);
+    SendPacket(p);
 }
 
 function powerButton() {
     const KEYCODE_POWER = 26;
     let p = createKeyPacket(TYPE_KEY_ACTION_DOWN, KEYCODE_POWER);
-    sendButtonEvent(p);
+    SendPacket(p);
     p = createKeyPacket(TYPE_KEY_ACTION_UP, KEYCODE_POWER);
-    sendButtonEvent(p);
+    SendPacket(p);
 }
 
 function pressButton(keyCode) {
     let p = createKeyPacket(TYPE_KEY_ACTION_DOWN, keyCode);
-    sendButtonEvent(p);
+    SendPacket(p);
 }
 
 function releaseButton(keyCode) {
     let p = createKeyPacket(TYPE_KEY_ACTION_UP, keyCode);
-    sendButtonEvent(p);
+    SendPacket(p);
 }
 
 function backButton() {
     const KEYCODE_BACK = 4;
     let p = createKeyPacket(TYPE_KEY_ACTION_DOWN, KEYCODE_BACK);
-    sendButtonEvent(p);
+    SendPacket(p);
     p = createKeyPacket(TYPE_KEY_ACTION_UP, KEYCODE_BACK);
-    sendButtonEvent(p);
+    SendPacket(p);
 }
 
 function menuButton() {
     const KEYCODE_APP_SWITCH = 187;
     let p = createKeyPacket(TYPE_KEY_ACTION_DOWN, KEYCODE_APP_SWITCH);
-    sendButtonEvent(p);
+    SendPacket(p);
     p = createKeyPacket(TYPE_KEY_ACTION_UP, KEYCODE_APP_SWITCH);
-    sendButtonEvent(p);
+    SendPacket(p);
 }
 
 function rotateButton() {
     let p = createRotatePacket();
-    sendButtonEvent(p);
-    window.MANNUAL_ROTATE = true;
+    SendPacket(p);
+    SetMannualRotate(true);
     setTimeout(() => {
         updateVideoCache();
     }, 500);
 }
 
-function sendButtonEvent(packet) {
-    window.sendDataChannelMessage(window.dataChannelOrdered, packet);
-}
+
 
 const TYPE_ROTATE = 0x0B; // rotate event
 function createRotatePacket() {
@@ -99,15 +104,12 @@ function createKeyPacket(action, keyCode) {
     return buffer;
 }
 
-window.sendButtonEvent = sendButtonEvent;
-window.createRotatePacket = createRotatePacket;
-
-addControlSeparator();
+// addControlSeparator();
 addControlButton('volumeUpButton', 'volume up',
-    'M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z')
+    'M3 9v6h4l5 5V4L7 9H3zm13 2h2V9h2v2h2v2h-2v2h-2v-2h-2z')
     .addEventListener('click', volumeUpButton);
 addControlButton('volumeDownButton', 'volume down',
-    'M18.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25-2.5-4.02zM5 9v6h4l5 5V4L9 9H5z')
+    'M3 9v6h4l5 5V4L7 9H3zm13 2h5v2h-5z')
     .addEventListener('click', volumeDownButton);
 // window.document.querySelector('#powerButton').addEventListener('click', powerButton);
 const power = addControlButton('powerButton', 'power',

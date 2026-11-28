@@ -1,6 +1,5 @@
-import { addControlButton } from './control_ui.js';
+import { addControlButton, showToast, getRemoteCanvas, getCanvasContainer } from '../screen.js';
 import { getSetting } from '../global-settings.js';
-
 
 const CAPTURE_INTERVAL_MS = 200; // 采样周期（Worker 内部会自动跳过未变化帧）
 const WORKER_SCRIPT_URL = new URL('../paddleocr/worker.js', import.meta.url);
@@ -26,13 +25,7 @@ function getTargetCanvas() {
         return websrCanvas;
     }
 
-    return document.getElementById('remoteCanvas');
-}
-
-function getVideoContainer(canvas) {
-    return (canvas && canvas.closest('.video-container')) ||
-        document.querySelector('.video-container') ||
-        document.body;
+    return getRemoteCanvas();
 }
 
 /**
@@ -75,9 +68,7 @@ function getRenderedContentRect(canvas) {
 }
 
 function notifyToast(msg, duration = 1800) {
-    if (typeof showToast === 'function') {
-        showToast(msg, duration);
-    }
+    showToast(msg, duration);
 }
 
 function setButtonActive(active) {
@@ -152,7 +143,7 @@ function startRegionSelection() {
     translateState = 'selecting';
     setButtonActive(true);
 
-    const container = getVideoContainer(canvas);
+    const container = getCanvasContainer();
     if (getComputedStyle(container).position === 'static') {
         container.style.position = 'relative';
     }
@@ -493,7 +484,7 @@ function startAutoTranslate() {
     const worker = ensureWorker();
     worker.postMessage({ type: 'RESET_DIFF' });
 
-    createSubtitleOverlay(getVideoContainer(canvas));
+    createSubtitleOverlay(getCanvasContainer());
     notifyToast('Auto-translate started (click the sidebar button to stop)');
 
     // 立即抓取首帧并开启定时循环

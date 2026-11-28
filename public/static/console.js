@@ -1,5 +1,6 @@
 // /static/console.js
 import { i18n } from './i18n.js';
+// import showToast from '/static/ui.js';
 import { getSetting } from './global-settings.js';
 import {
     t,

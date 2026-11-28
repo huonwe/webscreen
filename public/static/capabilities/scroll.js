@@ -1,3 +1,6 @@
+import { getRemoteCanvas, getCachedRect, updateVideoCache } from '../screen.js';
+import { SendPacket } from '../connect-new.js';
+import { NormalizeCoords } from './coordinate.js';
 const TYPE_SCROLL = 0x03; // scroll event
 const SCROLL_SCALE = 30; // 调整此值以改变滚动灵敏度
 
@@ -8,61 +11,67 @@ let lastScrollCoords = null;
 
 function sendPendingScroll() {
     if (pendingScroll.hScroll !== 0 || pendingScroll.vScroll !== 0) {
+        const vStep = Math.trunc(pendingScroll.vScroll);
+        if (vStep !== 0) {
+            pendingScroll.vScroll -= vStep; // 减去已发送的整数部分，保留零头给下一帧
+        }
         const packet = createScrollPacket(
             pendingScroll.x,
             pendingScroll.y,
             pendingScroll.hScroll,
-            pendingScroll.vScroll
+            vStep,
         );
 
-        // if (window.ws && window.ws.readyState === WebSocket.OPEN) {
-        //     window.ws.send(packet);
-        // }
-        window.sendDataChannelMessage(window.dataChannelUnordered, packet);
+        SendPacket(packet);
 
         // 重置累积的滚动量
         pendingScroll.hScroll = 0;
-        pendingScroll.vScroll = 0;
+        // pendingScroll.vScroll = 0;
     }
 }
 
-function getScreenCoordinates(clientX, clientY) {
-    const dimensions = getMediaDimensions(remoteCanvas);
-    if (!dimensions.width || !dimensions.height) {
-        return null;
-    }
-    const cache = window.cachedRect;
-    if (!cache.VideoRect ||
-        cache.MediaWidth !== dimensions.width ||
-        cache.MediaHeight !== dimensions.height) {
-        if (!updateVideoCache()) {
-            return null;
-        }
-    }
+// function getScreenCoordinates(clientX, clientY) {
+//     const remoteCanvas = getRemoteCanvas();
+//     if (!remoteCanvas) return null;
+//     const dimensions = {
+//             width: remoteCanvas.width,
+//             height: remoteCanvas.height
+//         };
+//     if (!dimensions.width || !dimensions.height) {
+//         return null;
+//     }
+//     const cache = getCachedRect();
+//     if (!cache.VideoRect ||
+//         cache.MediaWidth !== dimensions.width ||
+//         cache.MediaHeight !== dimensions.height) {
+//         if (!updateVideoCache()) {
+//             return null;
+//         }
+//     }
 
-    const offsetX = clientX - cache.VideoRect.left;
-    const offsetY = clientY - cache.VideoRect.top;
+//     const offsetX = clientX - cache.VideoRect.left;
+//     const offsetY = clientY - cache.VideoRect.top;
 
-    // 相对于视频内容区域的坐标
-    const contentX = offsetX - cache.ContentRect.left;
-    const contentY = offsetY - cache.ContentRect.top;
+//     // 相对于视频内容区域的坐标
+//     const contentX = offsetX - cache.ContentRect.left;
+//     const contentY = offsetY - cache.ContentRect.top;
 
-    // 映射到视频源分辨率
-    const x = (contentX / cache.ContentRect.width) * dimensions.width;
-    const y = (contentY / cache.ContentRect.height) * dimensions.height;
+//     // 映射到视频源分辨率
+//     const x = (contentX / cache.ContentRect.width) * dimensions.width;
+//     const y = (contentY / cache.ContentRect.height) * dimensions.height;
 
-    // Clamp coordinates to be within video bounds
-    const clampedX = Math.max(0, Math.min(Math.round(x), dimensions.width));
-    const clampedY = Math.max(0, Math.min(Math.round(y), dimensions.height));
+//     // Clamp coordinates to be within video bounds
+//     const clampedX = Math.max(0, Math.min(Math.round(x), dimensions.width));
+//     const clampedY = Math.max(0, Math.min(Math.round(y), dimensions.height));
 
-    return { x: clampedX, y: clampedY };
-}
+//     return { x: clampedX, y: clampedY };
+// }
 
 const handleWheel = (event) => {
     // 阻止默认的页面滚动行为
     event.preventDefault();
 
-    const coords = getScreenCoordinates(event.clientX, event.clientY);
+    const coords = NormalizeCoords(event.clientX, event.clientY);
     if (!coords) return;
 
     // 缓存坐标位置，用于后续批量发送
@@ -74,7 +83,7 @@ const handleWheel = (event) => {
     pendingScroll.x = coords.x;
     pendingScroll.y = coords.y;
     pendingScroll.hScroll += Math.round(event.deltaX * SCROLL_SCALE);
-    pendingScroll.vScroll += -Math.round(event.deltaY * SCROLL_SCALE);
+    pendingScroll.vScroll += -event.deltaY * SCROLL_SCALE;
 
     // 使用 requestAnimationFrame 批量发送，减少消息数量
     if (!scrollRafScheduled) {
@@ -86,7 +95,7 @@ const handleWheel = (event) => {
     }
 };
 
-remoteCanvas.addEventListener('wheel', handleWheel, { passive: false });
+getRemoteCanvas().addEventListener('wheel', handleWheel, { passive: false });
 
 
 function createScrollPacket(x, y, hScroll, vScroll) {

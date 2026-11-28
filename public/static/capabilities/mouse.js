@@ -1,3 +1,5 @@
+import { SendPacket } from '../connect-new.js'
+import { getRemoteCanvas, RequestPointerLock, PointerLocked } from '../screen.js'
 // 动作常量定义 (必须与 Go 后端 InputController 保持一致)
 // Go端: 0=Down, 1=Up, 2=Move
 const TYPE_MOUSE = 0x01;
@@ -15,6 +17,7 @@ const MOUSE_ACTION_MOVE = 2;
 const MOUSE_SENSITIVITY = 1.0;
 
 // 状态变量
+let mouseControlEnabled = false;
 let isPointerLocked = false;
 let mouseButtonsMask = 0; // Bitmask: 1=Left, 2=Right, 4=Middle
 let pendingMovement = { x: 0, y: 0, wheelY: 0 };
@@ -22,6 +25,10 @@ let rafScheduled = false;
 
 let accumX = 0;
 let accumY = 0;
+
+export function MouseControlEnabled() {
+    return mouseControlEnabled;
+}
 
 function getMouseButtonMask(button) {
     switch (button) {
@@ -35,20 +42,21 @@ function getMouseButtonMask(button) {
 }
 
 function initRemoteControl() {
+    const remoteCanvas = getRemoteCanvas();
     if (!remoteCanvas) {
         console.error(`Video element not found.`);
         return;
     }
 
     // 防止重复初始化
-    if (window.mouseControlInitialized) return;
-    window.mouseControlInitialized = true;
+    if (mouseControlEnabled) return;
+    mouseControlEnabled = true;
 
     // 1. 点击视频区域请求锁定鼠标
     remoteCanvas.addEventListener('mousedown', (e) => {
-        if (!isPointerLocked) {
-            console.log("Requesting pointer lock...");
-            requestPointerLock();
+        if (!PointerLocked()) {
+        //     console.log("Requesting pointer lock...");
+        RequestPointerLock();
         }
     });
 
@@ -64,15 +72,15 @@ function initRemoteControl() {
     document.addEventListener('wheel', handleWheel, { passive: false });
     // 鼠标侧键
     document.addEventListener('auxclick', (e) => {
-    if (isPointerLocked) {
-        e.preventDefault();
-        e.stopPropagation();
-    }
-});
+        if (PointerLocked()) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+    });
 
     // 4. 阻止右键菜单
     document.addEventListener('contextmenu', (e) => {
-        if (isPointerLocked) {
+        if (PointerLocked()) {
             e.preventDefault();
             e.stopPropagation();
         }
@@ -83,14 +91,7 @@ function initRemoteControl() {
 
 
 function handlePointerLockChange() {
-    const lockedElement = document.pointerLockElement ||
-        document.mozPointerLockElement ||
-        document.webkitPointerLockElement;
-
-    if (lockedElement === remoteCanvas) {
-        isPointerLocked = true;
-    } else {
-        isPointerLocked = false;
+    if (!PointerLocked()) {
         // 退出指针锁定时，若仍有按键未抬起，强制补发 UP 防止远端卡键
         if (mouseButtonsMask !== 0) {
             for (const bit of [1, 2, 4, 8, 16]) {
@@ -110,7 +111,7 @@ function handlePointerLockChange() {
 
 
 function handleMouseMove(e) {
-    if (!isPointerLocked) return;
+    if (!PointerLocked()) return;
 
     const dx = e.movementX || e.mozMovementX || e.webkitMovementX || 0;
     const dy = e.movementY || e.mozMovementY || e.webkitMovementY || 0;
@@ -122,7 +123,7 @@ function handleMouseMove(e) {
 }
 
 function handleMouseDown(e) {
-    if (!isPointerLocked) return;
+    if (!PointerLocked()) return;
     e.preventDefault();
     e.stopPropagation();
 
@@ -136,7 +137,7 @@ function handleMouseDown(e) {
 }
 
 function handleMouseUp(e) {
-    if (!isPointerLocked) return;
+    if (!PointerLocked()) return;
     e.preventDefault();
     e.stopPropagation();
 
@@ -150,7 +151,7 @@ function handleMouseUp(e) {
 }
 
 function handleWheel(e) {
-    if (!isPointerLocked) return;
+    if (!PointerLocked()) return;
     e.preventDefault();
 
     // 保持原始方向（向下为 +1，向上为 -1），由 Go 后端统一转换为 Windows 符号
@@ -209,7 +210,7 @@ function flushPendingEvents(actionType, buttonsOverride) {
  */
 function sendControlPacket(action, dx, dy, buttons, wheel) {
     const packet = createMousePacket(action, dx, dy, buttons, 0, wheel);
-    sendReliableOrUnreliable(action, packet, wheel !== 0);
+    SendPacket(packet);
 }
 
 
@@ -236,32 +237,22 @@ function createMousePacket(action, deltaX, deltaY, buttons, wheelDeltaX = 0, whe
     return buffer;
 }
 
-function sendReliableOrUnreliable(action, packet, hasWheel) {
-    const isPureMove = (action === MOUSE_ACTION_MOVE && !hasWheel);
-    if (isPureMove && window.dataChannelUnordered) {
-        window.sendDataChannelMessage(window.dataChannelUnordered, packet);
-    } else if (window.dataChannelOrdered) {
-        window.sendDataChannelMessage(window.dataChannelOrdered, packet);
-    } else if (window.ws && window.ws.readyState === WebSocket.OPEN) {
-        window.ws.send(packet);
-    }
-}
 
-// 如果在全屏模式下，尝试锁定键盘以拦截 Escape 和 F11，防止意外退出全屏或打断指针锁定
-document.addEventListener('fullscreenchange', async () => {
-    if (!navigator.keyboard || typeof navigator.keyboard.lock !== 'function') return;
+// // 如果在全屏模式下，尝试锁定键盘以拦截 Escape 和 F11，防止意外退出全屏或打断指针锁定
+// document.addEventListener('fullscreenchange', async () => {
+//     if (!navigator.keyboard || typeof navigator.keyboard.lock !== 'function') return;
 
-    if (document.fullscreenElement) {
-        try {
-            // 全屏时接管 Escape 和 F11，防止单按 Esc 退出全屏或打断指针锁定
-            await navigator.keyboard.lock(["Escape", "F11"]);
-        } catch (err) {
-            console.warn("Keyboard lock failed:", err);
-        }
-    } else {
-        navigator.keyboard.unlock();
-    }
-});
+//     if (document.fullscreenElement) {
+//         try {
+//             // 全屏时接管 Escape 和 F11，防止单按 Esc 退出全屏或打断指针锁定
+//             await navigator.keyboard.lock(["Escape", "F11"]);
+//         } catch (err) {
+//             console.warn("Keyboard lock failed:", err);
+//         }
+//     } else {
+//         navigator.keyboard.unlock();
+//     }
+// });
 
 // 启动
 initRemoteControl();

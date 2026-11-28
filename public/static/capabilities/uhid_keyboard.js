@@ -1,5 +1,6 @@
 
-import { addControlButton } from './control_ui.js';
+import { addControlButton, getCanvasContainer } from '../screen.js';
+import { SendPacket } from '../connect-new.js';
 
 const UHID_KEYBOARD_MSG_CREATE = 12;
 const UHID_KEYBOARD_MSG_INPUT = 13;
@@ -8,9 +9,10 @@ const UHID_KEYBOARD_MSG_DESTROY = 14;
 const UHID_KEYBOARD_ID = 1;
 const UHID_KEYBOARD_NAME = "Virtual Keyboard";
 
-window.uhidKeyboardEnabled = false;
-let uhidKeyboardInitialized = false;
-
+let uhidKeyboardEnabled = false;
+export function UHIDKeyboardEnabled() {
+    return uhidKeyboardEnabled;
+}
 // 记录当前按下的键 (HID Usage IDs)
 let pressedKeys = new Set();
 let currentModifiers = 0;
@@ -78,41 +80,35 @@ const KEY_MAP = {
 
 const MODIFIER_MAP = {
     'ControlLeft': 0x01, 'ShiftLeft': 0x02, 'AltLeft': 0x04, 'MetaLeft': 0x08,
-    'ControlRight': 0x10, 'ShiftRight': 0x20, 'AltRight': 0x40, 'MetaRight': 0x80
+    'ControlRight': 0x10, 'ShiftRight': 0x02, 'AltRight': 0x40, 'MetaRight': 0x80
 };
 
 function initUHIDKeyboard() {
-    if (uhidKeyboardInitialized) return;
-
-    window.sendDataChannelMessage(window.dataChannelOrdered, createUHIDKeyboardDestroyPacket());
-
+    SendPacket(createUHIDKeyboardDestroyPacket());
     const packet = createUHIDKeyboardCreatePacket();
-    window.sendDataChannelMessage(window.dataChannelOrdered, packet);
-    uhidKeyboardInitialized = true;
+    SendPacket(packet);
+    uhidKeyboardEnabled = true;
     console.log("UHID Keyboard device created");
 }
 
 function destroyUHIDKeyboard() {
-    if (!uhidKeyboardInitialized) return;
-
     const packet = createUHIDKeyboardDestroyPacket();
-    window.sendDataChannelMessage(window.dataChannelOrdered, packet);
-    uhidKeyboardInitialized = false;
-    window.uhidKeyboardEnabled = false;
+    SendPacket(packet);
+    uhidKeyboardEnabled = false;
     console.log("UHID Keyboard device destroyed");
 }
 
 function toggleUHIDKeyboard() {
     const btn = document.getElementById('uhidKeyboardToggleBtn');
-    if (!window.uhidKeyboardEnabled) {
+    if (!uhidKeyboardEnabled) {
         initUHIDKeyboard();
-        window.uhidKeyboardEnabled = true;
+        uhidKeyboardEnabled = true;
         console.log("UHID Keyboard enabled");
         if (btn) btn.classList.add('active');
         showVirtualKeyboard();
     } else {
         destroyUHIDKeyboard();
-        window.uhidKeyboardEnabled = false;
+        uhidKeyboardEnabled = false;
         console.log("UHID Keyboard disabled");
         if (btn) btn.classList.remove('active');
         hideVirtualKeyboard();
@@ -124,18 +120,15 @@ addControlButton('uhidKeyboardToggleBtn', 'UHID Keyboard',
     .addEventListener('click', toggleUHIDKeyboard);
 
 function sendKeyboardReport() {
-    if (!window.uhidKeyboardEnabled || !uhidKeyboardInitialized) return;
+    if (!uhidKeyboardEnabled) return;
 
     const packet = createUHIDKeyboardInputPacket(currentModifiers, Array.from(pressedKeys));
-    // if (window.ws && window.ws.readyState === WebSocket.OPEN) {
-    //     window.ws.send(packet);
-    // }
-    window.sendDataChannelMessage(window.dataChannelOrdered, packet);
+    SendPacket(packet);
 }
 
 // 事件监听
 window.addEventListener('keydown', (event) => {
-    if (!window.uhidKeyboardEnabled) return;
+    if (!uhidKeyboardEnabled) return;
 
     // 阻止默认行为 (拦截所有按键，包括 F1-F12)
     event.preventDefault();
@@ -165,7 +158,7 @@ window.addEventListener('keydown', (event) => {
 });
 
 window.addEventListener('keyup', (event) => {
-    if (!window.uhidKeyboardEnabled) return;
+    if (!uhidKeyboardEnabled) return;
 
     event.preventDefault();
 
@@ -195,7 +188,7 @@ window.addEventListener('keyup', (event) => {
 
 // 窗口失去焦点时重置所有按键
 window.addEventListener('blur', () => {
-    if (window.uhidKeyboardEnabled && (pressedKeys.size > 0 || currentModifiers !== 0)) {
+    if (uhidKeyboardEnabled && (pressedKeys.size > 0 || currentModifiers !== 0)) {
         pressedKeys.clear();
         currentModifiers = 0;
         sendKeyboardReport();
@@ -242,7 +235,7 @@ function createUHIDKeyboardInputPacket(modifiers, keys) {
     const reportSize = 8;
     const buffer = new ArrayBuffer(1 + 2 + 2 + reportSize);
     const view = new DataView(buffer);
-    const uint8View = new Uint8Array(buffer);
+    // const uint8View = new Uint8Array(buffer);
 
     let offset = 0;
     view.setUint8(offset, UHID_KEYBOARD_MSG_INPUT); offset += 1;
@@ -341,6 +334,18 @@ function vkInjectStyles() {
                 background: linear-gradient(180deg, rgba(255,255,255,0.16), rgba(255,255,255,0.04));
                 display: flex; align-items: center; justify-content: center;
                 font-size: 11px; letter-spacing: 2px; color: rgba(255,255,255,0.55);
+            }
+            /* 新增：右上角关闭按钮样式 */
+            #vk-close {
+                position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+                width: 24px; height: 20px; padding: 0; border: none; border-radius: 4px;
+                background: transparent; color: rgba(255, 255, 255, 0.7);
+                font-size: 16px; line-height: 1; cursor: pointer;
+                display: flex; align-items: center; justify-content: center;
+            }
+            #vk-close:hover, #vk-close:active {
+                background: rgba(255, 255, 255, 0.18);
+                color: #ffffff;
             }
             #vk-rows { display: flex; flex-direction: column; gap: 4px; }
             .vk-row { display: flex; gap: 4px; justify-content: center; }
@@ -447,6 +452,21 @@ function buildVirtualKeyboard() {
     const handle = document.createElement('div');
     handle.id = 'vk-drag';
     handle.textContent = '⋯⋯';
+
+    // 新增：关闭按钮
+    const closeBtn = document.createElement('button');
+    closeBtn.id = 'vk-close';
+    closeBtn.type = 'button';
+    closeBtn.textContent = '×';
+    closeBtn.title = '隐藏键盘';
+    // 关键：阻止事件冒泡，避免触发 handle 的拖拽逻辑
+    closeBtn.addEventListener('pointerdown', (ev) => ev.stopPropagation());
+    closeBtn.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        hideVirtualKeyboard();
+    });
+    handle.appendChild(closeBtn);
+
     vkRoot.appendChild(handle);
 
     const rows = document.createElement('div');
@@ -459,7 +479,7 @@ function buildVirtualKeyboard() {
     });
     vkRoot.appendChild(rows);
 
-    (document.body || document.documentElement).appendChild(vkRoot);
+    getCanvasContainer().appendChild(vkRoot);
     vkSetupDrag(handle);
 }
 
@@ -502,6 +522,5 @@ function hideVirtualKeyboard() {
     vkReleaseAll();
 }
 
-// 供其它模块调用（例如切到别的输入方式时强制收起）
-window.showVirtualKeyboard = showVirtualKeyboard;
-window.hideVirtualKeyboard = hideVirtualKeyboard;
+// // 供其它模块调用（例如切到别的输入方式时强制收起）
+export { showVirtualKeyboard, hideVirtualKeyboard };

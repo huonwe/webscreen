@@ -1,3 +1,5 @@
+import { getRemoteCanvas, getCachedRect, updateVideoCache, isUHIDMouseEnabled, PointerLocked } from '../screen.js';
+import { NormalizeCoords } from './coordinate.js';
 const TYPE_TOUCH = 0x02; // touch event
 // All Big Endian
 // Touch Packet Structure:
@@ -32,37 +34,41 @@ function scheduleMoveSend() {
     }
 }
 
-function getScreenCoordinates(clientX, clientY) {
-    const dimensions = getMediaDimensions(remoteCanvas);
-    if (!dimensions.width || !dimensions.height) {
-        return null;
-    }
-    const cache = window.cachedRect;
-    if (!cache.VideoRect ||
-        cache.MediaWidth !== dimensions.width ||
-        cache.MediaHeight !== dimensions.height) {
-        if (!updateVideoCache()) {
-            return null;
-        }
-    }
+// function getScreenCoordinates(clientX, clientY) {
+//     const remoteCanvas = getRemoteCanvas();
+//     const dimensions = {
+//         width: remoteCanvas.width,
+//         height: remoteCanvas.height
+//     };
+//     if (!dimensions.width || !dimensions.height) {
+//         return null;
+//     }
+//     const cache = getCachedRect();
+//     if (!cache.VideoRect ||
+//         cache.MediaWidth !== dimensions.width ||
+//         cache.MediaHeight !== dimensions.height) {
+//         if (!updateVideoCache()) {
+//             return null;
+//         }
+//     }
 
-    const offsetX = clientX - cache.VideoRect.left;
-    const offsetY = clientY - cache.VideoRect.top;
+//     const offsetX = clientX - cache.VideoRect.left;
+//     const offsetY = clientY - cache.VideoRect.top;
 
-    // 相对于视频内容区域的坐标
-    const contentX = offsetX - cache.ContentRect.left;
-    const contentY = offsetY - cache.ContentRect.top;
+//     // 相对于视频内容区域的坐标
+//     const contentX = offsetX - cache.ContentRect.left;
+//     const contentY = offsetY - cache.ContentRect.top;
 
-    // 映射到视频源分辨率
-    const x = (contentX / cache.ContentRect.width) * dimensions.width;
-    const y = (contentY / cache.ContentRect.height) * dimensions.height;
+//     // 映射到视频源分辨率
+//     const x = (contentX / cache.ContentRect.width) * dimensions.width;
+//     const y = (contentY / cache.ContentRect.height) * dimensions.height;
 
-    // Clamp coordinates to be within video bounds
-    const clampedX = Math.max(0, Math.min(Math.round(x), dimensions.width));
-    const clampedY = Math.max(0, Math.min(Math.round(y), dimensions.height));
+//     // Clamp coordinates to be within video bounds
+//     const clampedX = Math.max(0, Math.min(Math.round(x), dimensions.width));
+//     const clampedY = Math.max(0, Math.min(Math.round(y), dimensions.height));
 
-    return { x: clampedX, y: clampedY };
-}
+//     return { x: clampedX, y: clampedY };
+// }
 
 // 获取触摸压力值
 function getTouchPressure(touch) {
@@ -82,22 +88,24 @@ function getTouchPressure(touch) {
 // ========== 鼠标事件处理 (单点) ==========
 let activeMousePointer = null;
 
-remoteCanvas.addEventListener('mousedown', (event) => {
+getRemoteCanvas().addEventListener('mousedown', (event) => {
     // console.log("Mouse down event:", event);
-    if (document.pointerLockElement === remoteCanvas) return;
-    if (event.button !== 0 || window.isUHIDMouseEnabled) return; // Only Left Click
+    // const remoteCanvas = getRemoteCanvas();
+    // if (PointerLocked()) return;
+    if (event.button !== 0) return; // Only Left Click
     activeMousePointer = 0; // 使用 pointerId 0 表示鼠标
-    const coords = getScreenCoordinates(event.clientX, event.clientY);
+    const coords = NormalizeCoords(event.clientX, event.clientY);
     if (coords) {
         sendTouchEvent(TOUCH_ACTION_DOWN, 0, coords.x, coords.y);
     }
 });
 
-remoteCanvas.addEventListener('mouseup', (event) => {
-    if (document.pointerLockElement === remoteCanvas) return;
-    if (window.isUHIDMouseEnabled) return;
+getRemoteCanvas().addEventListener('mouseup', (event) => {
+    // const remoteCanvas = getRemoteCanvas();
+    // if (document.pointerLockElement === remoteCanvas) return;
+    // if (isUHIDMouseEnabled()) return;
     if (activeMousePointer !== null) {
-        const coords = getScreenCoordinates(event.clientX, event.clientY);
+        const coords = NormalizeCoords(event.clientX, event.clientY);
         if (coords) {
             sendTouchEvent(TOUCH_ACTION_UP, 0, coords.x, coords.y);
         }
@@ -105,12 +113,13 @@ remoteCanvas.addEventListener('mouseup', (event) => {
     }
 });
 
-remoteCanvas.addEventListener('mousemove', (event) => {
-    if (document.pointerLockElement === remoteCanvas) return;
-    if (window.isUHIDMouseEnabled) return;
+getRemoteCanvas().addEventListener('mousemove', (event) => {
+    // const remoteCanvas = getRemoteCanvas();
+    // if (document.pointerLockElement === remoteCanvas) return;
+    // if (isUHIDMouseEnabled()) return;
     if (activeMousePointer !== null && event.buttons === 1) {
         // console.log("Mouse move event:", event);
-        const coords = getScreenCoordinates(event.clientX, event.clientY);
+        const coords = NormalizeCoords(event.clientX, event.clientY);
         if (coords) {
             pendingMoveEvents.set(0, { ...coords, pressure: 65535 });
             scheduleMoveSend();
@@ -119,10 +128,11 @@ remoteCanvas.addEventListener('mousemove', (event) => {
 });
 
 // 处理鼠标移出视频区域后释放的情况
-remoteCanvas.addEventListener('mouseleave', (event) => {
-    if (document.pointerLockElement === remoteCanvas) return;
+getRemoteCanvas().addEventListener('mouseleave', (event) => {
+    // const remoteCanvas = getRemoteCanvas();
+    // if (document.pointerLockElement === remoteCanvas) return;
     if (activeMousePointer !== null && event.buttons !== 1) {
-        const coords = getScreenCoordinates(event.clientX, event.clientY);
+        const coords = NormalizeCoords(event.clientX, event.clientY);
         if (coords) {
             sendTouchEvent(TOUCH_ACTION_UP, 0, coords.x, coords.y);
         }
@@ -133,7 +143,7 @@ remoteCanvas.addEventListener('mouseleave', (event) => {
 // ========== 触摸事件处理 (多点触控) ==========
 const activeTouches = new Map(); // touchIdentifier -> pointerId
 
-remoteCanvas.addEventListener('touchstart', (event) => {
+getRemoteCanvas().addEventListener('touchstart', (event) => {
     event.preventDefault();
     updateVideoCache(); // 触摸开始时更新缓存
 
@@ -142,7 +152,7 @@ remoteCanvas.addEventListener('touchstart', (event) => {
         const pointerId = touch.identifier % 10; // 限制在 0-9 范围内
         activeTouches.set(touch.identifier, pointerId);
 
-        const coords = getScreenCoordinates(touch.clientX, touch.clientY);
+        const coords = NormalizeCoords(touch.clientX, touch.clientY);
         if (coords) {
             const pressure = getTouchPressure(touch);
             sendTouchEvent(TOUCH_ACTION_DOWN, pointerId, coords.x, coords.y, pressure);
@@ -150,7 +160,7 @@ remoteCanvas.addEventListener('touchstart', (event) => {
     }
 }, { passive: false });
 
-remoteCanvas.addEventListener('touchend', (event) => {
+getRemoteCanvas().addEventListener('touchend', (event) => {
     event.preventDefault();
 
     for (let i = 0; i < event.changedTouches.length; i++) {
@@ -158,7 +168,7 @@ remoteCanvas.addEventListener('touchend', (event) => {
         const pointerId = activeTouches.get(touch.identifier);
 
         if (pointerId !== undefined) {
-            const coords = getScreenCoordinates(touch.clientX, touch.clientY);
+            const coords = NormalizeCoords(touch.clientX, touch.clientY);
             if (coords) {
                 sendTouchEvent(TOUCH_ACTION_UP, pointerId, coords.x, coords.y);
             }
@@ -167,7 +177,7 @@ remoteCanvas.addEventListener('touchend', (event) => {
     }
 }, { passive: false });
 
-remoteCanvas.addEventListener('touchmove', (event) => {
+getRemoteCanvas().addEventListener('touchmove', (event) => {
     event.preventDefault();
 
     for (let i = 0; i < event.changedTouches.length; i++) {
@@ -175,7 +185,7 @@ remoteCanvas.addEventListener('touchmove', (event) => {
         const pointerId = activeTouches.get(touch.identifier);
 
         if (pointerId !== undefined) {
-            const coords = getScreenCoordinates(touch.clientX, touch.clientY);
+            const coords = NormalizeCoords(touch.clientX, touch.clientY);
             if (coords) {
                 const pressure = getTouchPressure(touch);
                 pendingMoveEvents.set(pointerId, { ...coords, pressure });
@@ -185,7 +195,7 @@ remoteCanvas.addEventListener('touchmove', (event) => {
     scheduleMoveSend();
 }, { passive: false });
 
-remoteCanvas.addEventListener('touchcancel', (event) => {
+getRemoteCanvas().addEventListener('touchcancel', (event) => {
     event.preventDefault();
 
     for (let i = 0; i < event.changedTouches.length; i++) {
@@ -193,7 +203,7 @@ remoteCanvas.addEventListener('touchcancel', (event) => {
         const pointerId = activeTouches.get(touch.identifier);
 
         if (pointerId !== undefined) {
-            const coords = getScreenCoordinates(touch.clientX, touch.clientY);
+            const coords = NormalizeCoords(touch.clientX, touch.clientY);
             if (coords) {
                 sendTouchEvent(TOUCH_ACTION_UP, pointerId, coords.x, coords.y);
             }
@@ -203,16 +213,8 @@ remoteCanvas.addEventListener('touchcancel', (event) => {
 }, { passive: false });
 
 function sendTouchEvent(action, ptrId, x, y, pressure = 65535, buttons = 1) {
-    // if (!window.ws || window.ws.readyState !== WebSocket.OPEN) {
-    //     console.warn("WebSocket is not open. Cannot send message.");
-    //     return;
-    // }
     // console.log(`Sending touch event: action=${action}, ptrId=${ptrId}, x=${x}, y=${y}`);
-    const p = createTouchPacket(action, ptrId, x, y, pressure, buttons);
-    // praseTouchEvent(p);
-    // window.ws.send(p);
-    // console.log("Sending touch event packet:", p);
-    window.sendDataChannelMessage(window.dataChannelUnordered, p);
+    SendPacket(createTouchPacket(action, ptrId, x, y, pressure, buttons));
 }
 
 
@@ -227,27 +229,4 @@ function createTouchPacket(action, ptrId, x, y, pressure = 65535, buttons = 1) {
     view.setUint16(7, pressure);
     view.setUint8(9, buttons);
     return buffer;
-}
-
-function praseTouchEvent(packet) {
-    const view = new DataView(packet);
-    const type = view.getUint8(0);
-    if (type !== TYPE_TOUCH) {
-        throw new Error("Not a touch event packet");
-    }
-    const action = view.getUint8(1);
-    const ptrId = view.getUint8(2);
-    const x = view.getUint16(3);
-    const y = view.getUint16(5);
-    const pressure = view.getUint16(7);
-    const buttons = view.getUint8(9);
-    console.log("Parsed Touch Event:", { action, ptrId, x, y, pressure, buttons });
-    return {
-        action,
-        ptrId,
-        x,
-        y,
-        pressure,
-        buttons
-    };
 }

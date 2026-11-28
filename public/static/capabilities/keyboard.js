@@ -1,3 +1,5 @@
+import { UHIDKeyboardEnabled } from './uhid_keyboard.js'
+import { SendPacket } from '../connect-new.js'
 const TYPE_KEY = 0x00;
 const TYPE_KEY_ACTION_DOWN = 0;
 const TYPE_KEY_ACTION_UP = 1;
@@ -61,13 +63,10 @@ const INTERCEPT_CODES = new Set([
 ]);
 
 document.addEventListener('keydown', (e) => {
-    // 仅在存在远程视频容器的页面生效，避免全局加载影响其他页面
-    if (!document.getElementById('remoteCanvas')) return;
-
-    if (typeof window.uhidKeyboardEnabled !== 'undefined' && window.uhidKeyboardEnabled) {
+    if (UHIDKeyboardEnabled()) {
         return;
     }
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) {
         return;
     }
 
@@ -108,10 +107,10 @@ function releaseAllKeys() {
 }
 
 document.addEventListener('keydown', (e) => {
-    if (typeof window.uhidKeyboardEnabled !== 'undefined' && window.uhidKeyboardEnabled) {
+    if (UHIDKeyboardEnabled()) {
         return;
     }
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) {
         return;
     }
 
@@ -133,7 +132,7 @@ document.addEventListener('keydown', (e) => {
 });
 
 document.addEventListener('keyup', (e) => {
-    if (typeof window.uhidKeyboardEnabled !== 'undefined' && window.uhidKeyboardEnabled) {
+    if (UHIDKeyboardEnabled()) {
         return;
     }
 
@@ -154,15 +153,8 @@ document.addEventListener('pointerlockchange', () => {
 });
 
 function sendKeyboardEvent(action, keyCode) {
-    if (typeof window.uhidKeyboardEnabled !== 'undefined' && window.uhidKeyboardEnabled) {
-        return;
-    }
     const packet = createKeyPacket(action, keyCode);
-    if (typeof window.sendDataChannelMessage === 'function' && window.dataChannelOrdered) {
-        window.sendDataChannelMessage(window.dataChannelOrdered, packet);
-    } else if (window.ws && window.ws.readyState === WebSocket.OPEN) {
-        window.ws.send(packet);
-    }
+    SendPacket(packet);
 }
 
 function createKeyPacket(action, keyCode) {

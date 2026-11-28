@@ -1,4 +1,5 @@
-import { addControlButton } from './control_ui.js';
+import { addControlButton, getCanvasContainer } from '../screen.js';
+import { SendPacket } from '../connect-new.js'
 
 /**
  * UHID Virtual Gamepad
@@ -16,7 +17,9 @@ const UHID_GAMEPAD_NAME = "Virtual Gamepad";
 
 // 状态变量
 let uhidGamepadEnabled = false;
-let uhidGamepadInitialized = false;
+export function UHIDGamepadEnabled() {
+    return uhidGamepadEnabled;
+}
 
 // 手柄状态 (Buttons: 32 bits, Axes: 4 bytes, Hat: 4 bits)
 // hat 取值: 0=N, 1=NE, 2=E, 3=SE, 4=S, 5=SW, 6=W, 7=NW, 8=Null(居中)
@@ -103,24 +106,16 @@ const GAMEPAD_REPORT_DESCRIPTOR = new Uint8Array([
 // --- 2. 核心通信函数 ---
 
 function initUHIDGamepad() {
-    if (uhidGamepadInitialized) return;
-
-    // 尝试先销毁旧设备 (如果存在)
-    window.sendDataChannelMessage(window.dataChannelOrdered, createUHIDGamepadDestroyPacket());
-
+    SendPacket(createUHIDGamepadDestroyPacket());
     const packet = createUHIDGamepadCreatePacket();
-    window.sendDataChannelMessage(window.dataChannelOrdered, packet);
-    uhidGamepadInitialized = true;
+    SendPacket(packet);
+    
     console.log("UHID Gamepad device created");
 }
 
 function destroyUHIDGamepad() {
-    if (!uhidGamepadInitialized) return;
-
     const packet = createUHIDGamepadDestroyPacket();
-    window.sendDataChannelMessage(window.dataChannelOrdered, packet);
-    uhidGamepadInitialized = false;
-    uhidGamepadEnabled = false;
+    SendPacket(packet);
     console.log("UHID Gamepad device destroyed");
 }
 
@@ -130,8 +125,8 @@ function toggleUHIDGamepad() {
 
     if (!uhidGamepadEnabled) {
         initUHIDGamepad();
-        uhidGamepadEnabled = true;
         createVirtualGamepadUI();
+        uhidGamepadEnabled = true;
         console.log("UHID Gamepad enabled");
         if (btn) btn.classList.add('active');
     } else {
@@ -147,13 +142,13 @@ addControlButton('uhidGamepadToggleBtn', 'UHID Gamepad',
     .addEventListener('click', toggleUHIDGamepad);
 
 function sendGamepadReport() {
-    if (!uhidGamepadEnabled || !uhidGamepadInitialized) return;
+    if (!uhidGamepadEnabled) return;
 
     const packet = createUHIDGamepadInputPacket(gamepadState);
     // if (window.ws && window.ws.readyState === WebSocket.OPEN) {
     //     window.ws.send(packet);
     // }
-    window.sendDataChannelMessage(window.dataChannelUnordered, packet);
+    SendPacket(packet);
 }
 
 // --- 3. 协议包构造函数 ---
@@ -227,7 +222,7 @@ function createUHIDGamepadDestroyPacket() {
 function createVirtualGamepadUI() {
     // 必须挂到视频容器内部, 这样进入全屏(.canvas-container 被 requestFullscreen)时
     // 叠加层会跟随进入全屏子树, 否则只显示在 body 上会被全屏元素遮住
-    let container = document.querySelector('.canvas-container');
+    let container = getCanvasContainer();
     if (!container) container = document.body;
 
     // gamepad 使用 position:absolute + 100% 尺寸, 容器必须是定位上下文

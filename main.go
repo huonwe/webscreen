@@ -51,6 +51,7 @@ func main() {
 	}
 	consts.DATA_DIR = DATA_DIR
 
+	log.Printf("Loading database from: %s", filepath.Join(DATA_DIR, "scrmux.db"))
 	MyDataBase, err := db.InitDB(filepath.Join(DATA_DIR, "scrmux.db"))
 	if err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)

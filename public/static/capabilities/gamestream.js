@@ -1,5 +1,6 @@
-import { addControlButton } from './control_ui.js';
-
+import { addControlButton, showToast, getRemoteCanvas, getCachedRect, updateVideoCache } from '../screen.js';
+import { showToast } from '../screen.js';
+import { NormalizeCoords } from './coordinate.js';
 const TYPE_MOUSE = 0x01;
 const TYPE_TOUCH = 0x02;
 const TYPE_GAMEPAD = 0x11;
@@ -48,23 +49,7 @@ const gsPadState = {
     ry: 0,
 };
 
-function sendOrderedPacket(buf) {
-    if (typeof window.sendDataChannelMessage === 'function' && window.dataChannelOrdered) {
-        window.sendDataChannelMessage(window.dataChannelOrdered, buf);
-        return
-    }
-    if (window.ws && window.ws.readyState === WebSocket.OPEN) {
-        window.ws.send(buf);
-    }
-}
-
-function sendUnorderedPacket(buf) {
-    if (typeof window.sendDataChannelMessage === 'function' && window.dataChannelUnordered) {
-        window.sendDataChannelMessage(window.dataChannelUnordered, buf);
-    } else {
-        sendOrderedPacket(buf);
-    }
-}
+import { SendPacket } from '../connect-new.js';
 
 // =========================================================================
 // 1. GameStream Trackpad (Default) & Touch Screen (Toggleable)
@@ -81,34 +66,30 @@ function sendMousePacket(action, dx, dy, buttons, wheelX, wheelY) {
     v.setInt16(14, Math.round(wheelX), false);
     v.setInt16(16, Math.round(wheelY), false);
     // console.log("[gamestream] sending mouse packet:", { action, dx, dy, buttons, wheelX, wheelY });
-    if (action === MOUSE_MOVE && wheelX === 0 && wheelY === 0) {
-        sendUnorderedPacket(buf);
-    } else {
-        sendOrderedPacket(buf);
-    }
+    SendPacket(buf);
 }
 
 // 前端：直接返回 0 ~ 65535 的归一化坐标，彻底免疫分辨率切换和 CSS 缩放
-function getNormalizedTouchCoords(clientX, clientY) {
-    const canvas = document.getElementById('remoteCanvas');
-    if (!canvas) return null;
-    if ((!window.cachedRect || !window.cachedRect.ContentRect) && typeof window.updateVideoCache === 'function') {
-        window.updateVideoCache();
-    }
-    const rect = canvas.getBoundingClientRect();
-    const content = (window.cachedRect && window.cachedRect.ContentRect && window.cachedRect.ContentRect.width > 0)
-        ? window.cachedRect.ContentRect
-        : { left: 0, top: 0, width: rect.width, height: rect.height };
+// function getNormalizedTouchCoords(clientX, clientY) {
+//     const canvas = getRemoteCanvas();
+//     if (!canvas) return null;
+//     let cachedRect = getCachedRect();
+//     if (cachedRect === null) {
+//         updateVideoCache();
+//     }
+//     cachedRect = getCachedRect();
+//     const rect = canvas.getBoundingClientRect();
+//     const content = cachedRect.ContentRect
 
-    const relX = clientX - rect.left - content.left;
-    const relY = clientY - rect.top - content.top;
-    if (relX < 0 || relY < 0 || relX > content.width || relY > content.height) return null;
+//     const relX = clientX - rect.left - content.left;
+//     const relY = clientY - rect.top - content.top;
+//     if (relX < 0 || relY < 0 || relX > content.width || relY > content.height) return null;
 
-    return {
-        x: Math.max(0, Math.min(65535, Math.round((relX / content.width) * 65535))),
-        y: Math.max(0, Math.min(65535, Math.round((relY / content.height) * 65535))),
-    };
-}
+//     return {
+//         x: Math.max(0, Math.min(65535, Math.round((relX / content.width) * 65535))),
+//         y: Math.max(0, Math.min(65535, Math.round((relY / content.height) * 65535))),
+//     };
+// }
 
 function sendTouchPacket(action, ptrId, x, y, pressure) {
     const buf = new ArrayBuffer(10);
@@ -120,17 +101,12 @@ function sendTouchPacket(action, ptrId, x, y, pressure) {
     v.setUint16(5, y, false);
     v.setUint16(7, pressure, false);
     v.setUint8(9, action === TOUCH_UP ? 0 : 1);
-    if (action === TOUCH_MOVE) {
-        sendUnorderedPacket(buf);
-    } else {
-        sendOrderedPacket(buf);
-    }
+    SendPacket(buf);
 }
 
 const activeTouches = new Map();
-
 function initGameStreamTouchAndTrackpad() {
-    const canvas = document.getElementById('remoteCanvas');
+    const canvas = getRemoteCanvas();
     if (!canvas) return;
 
     // --- Trackpad state (active when !gsTouchEnabled) ---
@@ -161,7 +137,7 @@ function initGameStreamTouchAndTrackpad() {
             } else if (ptrId === undefined) {
                 continue;
             }
-            const coords = getNormalizedTouchCoords(t.clientX, t.clientY);
+            const coords = NormalizeCoords(t.clientX, t.clientY);
             if (coords) {
                 const force = typeof t.force === 'number' && t.force > 0 ? t.force : 1.0;
                 const pressure = action === TOUCH_UP ? 0 : Math.min(65535, Math.round(force * 65535));
@@ -286,14 +262,10 @@ function createGamepadPacket(state) {
     return buf;
 }
 
-function sendGamepadState(reliable = false) {
+function sendGamepadState() {
     if (!gsGamepadEnabled) return;
     const pkt = createGamepadPacket(gsPadState);
-    if (reliable) {
-        sendOrderedPacket(pkt);
-    } else {
-        sendUnorderedPacket(pkt);
-    }
+    SendPacket(pkt);
 }
 
 function disconnectGamepad() {
@@ -308,7 +280,7 @@ function disconnectGamepad() {
         rx: 0,
         ry: 0,
     };
-    sendOrderedPacket(createGamepadPacket(offState));
+    SendPacket(createGamepadPacket(offState));
 }
 
 function injectGamepadStyles() {
@@ -423,7 +395,7 @@ function bindPadButton(el, bit, triggerKey) {
         el.classList.add('active');
         if (bit) gsPadState.buttons |= bit;
         if (triggerKey) gsPadState[triggerKey] = 255;
-        sendGamepadState(true);
+        sendGamepadState();
     };
     const up = (e) => {
         e.preventDefault();
@@ -431,7 +403,7 @@ function bindPadButton(el, bit, triggerKey) {
         el.classList.remove('active');
         if (bit) gsPadState.buttons &= ~bit;
         if (triggerKey) gsPadState[triggerKey] = 0;
-        sendGamepadState(true);
+        sendGamepadState();
     };
     el.addEventListener('touchstart', down, { passive: false });
     el.addEventListener('touchend', up, { passive: false });
@@ -483,7 +455,7 @@ function makeStick(isLeft) {
             gsPadState.rx = nx;
             gsPadState.ry = ny;
         }
-        sendGamepadState(false);
+        sendGamepadState();
     };
 
     const reset = () => {
@@ -496,7 +468,7 @@ function makeStick(isLeft) {
             gsPadState.rx = 0;
             gsPadState.ry = 0;
         }
-        sendGamepadState(true);
+        sendGamepadState();
     };
 
     base.addEventListener('touchstart', (e) => {
@@ -648,7 +620,7 @@ function pollPhysicalGamepads() {
                 gsPadState.ly = ly;
                 gsPadState.rx = rx;
                 gsPadState.ry = ry;
-                sendGamepadState(false);
+                sendGamepadState();
             }
         }
     }
