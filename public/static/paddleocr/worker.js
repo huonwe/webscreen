@@ -7,9 +7,9 @@ const OCR_MODEL_SETTINGS = {
     wasmBasePath: 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.1/dist/',
 
     // PaddleOCR (PP-OCRv4 Mobile) 模型与字典路径，请替换为你的实际部署路径
-    detModelUrl: 'https://huggingface.co/breezedeus/cnstd-ppocr-ch_PP-OCRv4_det/resolve/main/ch_PP-OCRv4_det_infer.onnx',
-    recModelUrl: 'https://huggingface.co/cycloneboy/japan_PP-OCRv4_rec_infer/resolve/main/fp16_model.onnx',
-    dictUrl: 'https://huggingface.co/cycloneboy/japan_PP-OCRv4_rec_infer/resolve/main/japan_dict.txt',
+    detModelUrl: 'https://huggingface.co/PaddlePaddle/PP-OCRv6_small_det_onnx/resolve/main/inference.onnx',
+    recModelUrl: 'https://huggingface.co/PaddlePaddle/PP-OCRv6_small_rec_onnx/resolve/main/inference.onnx',
+    dictUrl: 'https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/refs/heads/main/ppocr/utils/dict/ppocrv6_dict.txt',
     detThreshold: 0.3,
     recImgHeight: 48,
 };
@@ -250,14 +250,17 @@ async function translateText(text) {
         clearTimeout(timer);
     }
 }
+
 // =========================================================================
-// 2. 高灵敏度局部网格帧差检测 + 上一次结果缓存
+// 2. 抗光标干扰的局部网格帧差检测 + 上一次结果缓存
 // =========================================================================
 const DIFF_SAMPLE_W = 128;
 const DIFF_SAMPLE_H = 64;
 const BLOCK_SIZE = 8;               // 将采样图划分为 8x8 局部网格检测变化
-const BLOCK_DIFF_THRESHOLD = 5;   // 单个网格内平均亮度变化阈值（越小越灵敏，推荐 2.5~5.0）
-const STABLE_DURATION_MS = 700;     // 画面停止变化后等待 700ms 触发（可按需改为 1000）
+const BLOCK_DIFF_THRESHOLD = 3;   // 单个网格内平均亮度变化阈值
+const CURSOR_MAX_BLOCKS = 3;        // 仅 1~3 个网格变化时视为等待光标旋转/闪烁，忽略干扰
+const STABLE_DURATION_MS = 700;     // 文本停止变化后等待 700ms 触发
+const MAX_WAIT_MS = 1500;           // 兜底：若背景持续有动态特效，最长等待 1.5s 强制识别
 
 const diffCanvas = new OffscreenCanvas(DIFF_SAMPLE_W, DIFF_SAMPLE_H);
 const diffCtx = diffCanvas.getContext('2d', { willReadFrequently: true });
@@ -265,9 +268,11 @@ const diffCtx = diffCanvas.getContext('2d', { willReadFrequently: true });
 const workCanvas = new OffscreenCanvas(1, 1);
 const workCtx = workCanvas.getContext('2d', { willReadFrequently: true });
 
-let prevSample = null;          // 上一帧缩略图
-let lastMotionTime = 0;         // 最近一次检测到画面变化的时间戳
-let hasPendingChange = false;   // 标记是否有待处理的画面变化
+let prevSample = null;              // 上一帧缩略图
+let lastOcrSample = null;           // 上一次实际执行 OCR 时的画面基准
+let lastMotionTime = 0;             // 最近一次检测到有效文本变化的时间戳
+let pendingStartTime = 0;           // 本轮变化开始的时间戳（用于兜底计时）
+let hasPendingChange = false;       // 标记是否有待处理的画面变化
 
 // 显式保存上一次的原文与翻译结果
 let lastOriginalText = '';
@@ -289,12 +294,11 @@ function sampleLuma(bitmap) {
 }
 
 /**
- * 计算局部 8x8 网格的最大平均差异
- * 只要选区内任意一小块区域出现新文字，就能返回较大的差值，不会被大片背景稀释
+ * 统计亮度变化超过阈值的 8x8 网格数量
  */
-function calcMaxBlockDiff(a, b) {
-    if (!a || !b || a.length !== b.length) return 255;
-    let maxBlockDiff = 0;
+function countChangedBlocks(a, b) {
+    if (!a || !b || a.length !== b.length) return 999;
+    let changedBlocks = 0;
     const pixelsPerBlock = BLOCK_SIZE * BLOCK_SIZE;
 
     for (let by = 0; by < DIFF_SAMPLE_H; by += BLOCK_SIZE) {
@@ -306,13 +310,12 @@ function calcMaxBlockDiff(a, b) {
                     sum += Math.abs(a[rowOffset + x] - b[rowOffset + x]);
                 }
             }
-            const blockMean = sum / pixelsPerBlock;
-            if (blockMean > maxBlockDiff) {
-                maxBlockDiff = blockMean;
+            if (sum / pixelsPerBlock > BLOCK_DIFF_THRESHOLD) {
+                changedBlocks++;
             }
         }
     }
-    return maxBlockDiff;
+    return changedBlocks;
 }
 // =========================================================================
 // 3. PaddleOCR (PP-OCRv4 ONNX) 初始化与推理管线
@@ -347,7 +350,7 @@ async function ensurePaddleOCR() {
             ort.InferenceSession.create(detBuffer, sessionOpts),
             ort.InferenceSession.create(recBuffer, sessionOpts),
         ]);
-        
+
         // PaddleOCR 字典：索引 0 为 CTC blank，1..N 对应字典每行字符，末尾追加空格
         const lines = dictText.replace(/\r\n/g, '\n').split('\n');
         if (lines[lines.length - 1] === '') lines.pop();
@@ -409,6 +412,9 @@ async function detectTextBoxes(imgData, width, height) {
             visited[idx] = 1;
             top++;
 
+            const DX = [-1, 1, 0, 0];
+            const DY = [0, 0, -1, 1];
+            const detThreshold = OCR_MODEL_SETTINGS.detThreshold;
             while (top > 0) {
                 top--;
                 const cx = stackX[top];
@@ -418,16 +424,12 @@ async function detectTextBoxes(imgData, width, height) {
                 if (cy < minY) minY = cy;
                 if (cy > maxY) maxY = cy;
 
-                const neighbors = [
-                    [cx - 1, cy], [cx + 1, cy],
-                    [cx, cy - 1], [cx, cy + 1],
-                ];
                 for (let k = 0; k < 4; k++) {
-                    const nx = neighbors[k][0];
-                    const ny = neighbors[k][1];
+                    const nx = cx + DX[k];
+                    const ny = cy + DY[k];
                     if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
                     const nIdx = ny * width + nx;
-                    if (!visited[nIdx] && probMap[ny * padW + nx] >= OCR_MODEL_SETTINGS.detThreshold) {
+                    if (!visited[nIdx] && probMap[ny * padW + nx] >= detThreshold) {
                         visited[nIdx] = 1;
                         stackX[top] = nx;
                         stackY[top] = ny;
@@ -442,7 +444,7 @@ async function detectTextBoxes(imgData, width, height) {
 
             // 适度外扩包围盒，避免裁掉文字边缘笔画
             const padX = Math.round(bh * 0.45);
-            const padY = Math.round(bh * 0.35);
+            const padY = Math.round(bh * 0.25);
             const x1 = Math.max(0, minX - padX);
             const y1 = Math.max(0, minY - padY);
             const x2 = Math.min(width, maxX + padX);
@@ -454,9 +456,11 @@ async function detectTextBoxes(imgData, width, height) {
 
     // Galgame 对话按行从上到下排序，同一行按从左到右排序
     boxes.sort((a, b) => {
-        const lineTol = Math.min(a.h, b.h) * 0.5;
-        if (Math.abs(a.y - b.y) > lineTol) {
-            return a.y - b.y;
+        const aCy = a.y + a.h * 0.5;
+        const bCy = b.y + b.h * 0.5;
+        const lineTol = Math.max(a.h, b.h) * 0.5;
+        if (Math.abs(aCy - bCy) > lineTol) {
+            return aCy - bCy;
         }
         return a.x - b.x;
     });
@@ -551,20 +555,20 @@ self.onmessage = async (e) => {
     const msg = e.data || {};
     if (msg.type === 'UPDATE_SETTINGS' && msg.settings) {
         console.log('Updating translate settings', msg);
-        if (msg.settings) {
-            TRANSLATE_SETTINGS.llm_endpoint = msg.settings.translate_llm_endpoint;
-            TRANSLATE_SETTINGS.llm_prompt = msg.settings.translate_llm_prompt;
-            TRANSLATE_SETTINGS.llm_secret = msg.settings.translate_llm_secret;
-            TRANSLATE_SETTINGS.llm_model = msg.settings.translate_llm_model;
-            TRANSLATE_SETTINGS.user_language = msg.settings.user_language;
-            TRANSLATE_SETTINGS.llm_system_prompt = msg.settings.translate_llm_system_prompt;
-        }
+        TRANSLATE_SETTINGS.llm_endpoint = msg.settings.translate_llm_endpoint;
+        TRANSLATE_SETTINGS.llm_prompt = msg.settings.translate_llm_prompt;
+        TRANSLATE_SETTINGS.llm_secret = msg.settings.translate_llm_secret;
+        TRANSLATE_SETTINGS.llm_model = msg.settings.translate_llm_model;
+        TRANSLATE_SETTINGS.user_language = msg.settings.user_language;
+        TRANSLATE_SETTINGS.llm_system_prompt = msg.settings.translate_llm_system_prompt;
         return;
     }
 
     if (msg.type === 'RESET_DIFF') {
         prevSample = null;
+        lastOcrSample = null;
         lastMotionTime = 0;
+        pendingStartTime = 0;
         hasPendingChange = false;
         lastOriginalText = '';
         lastTranslatedText = '';
@@ -582,37 +586,52 @@ self.onmessage = async (e) => {
         if (!prevSample) {
             prevSample = curSample;
             lastMotionTime = now;
+            pendingStartTime = now;
             hasPendingChange = true;
             self.postMessage({ type: 'SKIPPED', reason: 'init_wait' });
             return;
         }
 
-        // 计算局部最大网格变化
-        const maxDiff = calcMaxBlockDiff(curSample, prevSample);
+        // 计算发生明显变化的网格数量
+        const motionBlocks = countChangedBlocks(curSample, prevSample);
         prevSample = curSample;
 
-        // 1. 任意网格仍在变化（逐字打印 / 翻页中）：重置静止计时器并标记有新变化
-        if (maxDiff >= BLOCK_DIFF_THRESHOLD) {
+        // 1. 超过 CURSOR_MAX_BLOCKS 个网格仍在变化（打字 / 翻页中）：重置静止计时器
+        if (motionBlocks > CURSOR_MAX_BLOCKS) {
+            if (!hasPendingChange) {
+                hasPendingChange = true;
+                pendingStartTime = now;
+            }
             lastMotionTime = now;
-            hasPendingChange = true;
-            self.postMessage({ type: 'SKIPPED', reason: 'animating' });
-            return;
+
+            // 若未超过最大兜底等待时间，则继续等待动画结束；超时则放行强行识别一次
+            if (now - pendingStartTime < MAX_WAIT_MS) {
+                self.postMessage({ type: 'SKIPPED', reason: 'animating' });
+                return;
+            }
         }
 
-        // 2. 画面静止且没有待处理的新变化：直接跳过
+        // 2. 画面静止（或仅光标在转）且没有待处理的新变化：直接跳过
         if (!hasPendingChange) {
             self.postMessage({ type: 'SKIPPED', reason: 'idle' });
             return;
         }
 
-        // 3. 画面已停止变化，但持续静止时间未达到设定时长：继续等待
-        if (now - lastMotionTime < STABLE_DURATION_MS) {
+        // 3. 文本已停止变化，但持续静止时间未达到设定时长：继续等待
+        if (now - lastMotionTime < STABLE_DURATION_MS && now - pendingStartTime < MAX_WAIT_MS) {
             self.postMessage({ type: 'SKIPPED', reason: 'waiting_stable' });
             return;
         }
 
-        // 4. 满足“变化后持续静止”条件：消耗标记并执行 OCR
+        // 4. 满足触发条件：消耗标记，并与上一次执行 OCR 的画面对比去重
         hasPendingChange = false;
+        pendingStartTime = 0;
+
+        if (lastOcrSample && countChangedBlocks(curSample, lastOcrSample) <= CURSOR_MAX_BLOCKS) {
+            self.postMessage({ type: 'SKIPPED', reason: 'idle' });
+            return;
+        }
+        lastOcrSample = curSample;
 
         const rawText = await runPaddleOCR(bitmap);
         if (!rawText) {
