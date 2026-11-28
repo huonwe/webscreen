@@ -152,11 +152,11 @@ export function createModalShell({
     });
 
     // Close when clicking outside dialog-panel (on backdrop)
-    dialog.addEventListener('click', (event) => {
-        if (event.target === dialog) {
-            close();
-        }
-    });
+    // dialog.addEventListener('click', (event) => {
+    //     if (event.target === dialog) {
+    //         close();
+    //     }
+    // });
 
     // Intercept Escape key so cleanup runs cleanly
     dialog.addEventListener('cancel', (event) => {
