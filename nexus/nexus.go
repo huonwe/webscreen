@@ -566,11 +566,11 @@ func (n *Nexus) setupRemote(remoteUUID string, config RemoteConfig) (sdriver.SDr
 			return nil, fmt.Errorf("failed to create rockchip-hdmirx driver for remoteUUID %s: %v", remoteUUID, err)
 		}
 	case consts.DEVICE_TYPE_GAMESTREAM:
-		if config["ip"] == "" {
-			config["ip"] = deviceInfo.IP
+		if config["device_ip"] == "" {
+			config["device_ip"] = deviceInfo.IP
 		}
-		if config["port"] == "" && deviceInfo.Port > 0 {
-			config["port"] = strconv.Itoa(deviceInfo.Port)
+		if config["device_port"] == "" && deviceInfo.Port > 0 {
+			config["device_port"] = strconv.Itoa(deviceInfo.Port)
 		}
 		driver, err = gamestream.New(config)
 		if err != nil {
