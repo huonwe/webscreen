@@ -3,7 +3,7 @@
 <p align="center">
   <a href="https://github.com/huonwe/scrmux/releases"><img src="https://img.shields.io/github/v/release/huonwe/scrmux?style=flat-square&color=blue" alt="GitHub Release"></a>
   <a href="https://github.com/huonwe/scrmux/stargazers"><img src="https://img.shields.io/github/stars/huonwe/scrmux?style=flat-square&color=yellow" alt="GitHub Stars"></a>
-  <a href="https://hub.docker.com/r/dukihiroi/scrmux"><img src="https://img.shields.io/docker/pulls/dukihiroi/scrmux?style=flat-square&logo=docker&label=Docker%20Pulls" alt="Docker Pulls"></a>
+  <!-- <a href="https://hub.docker.com/r/dukihiroi/scrmux"><img src="https://img.shields.io/docker/pulls/dukihiroi/scrmux?style=flat-square&logo=docker&label=Docker%20Pulls" alt="Docker Pulls"></a> -->
   <a href="https://github.com/huonwe/scrmux/commits/main"><img src="https://img.shields.io/github/last-commit/huonwe/scrmux?style=flat-square" alt="Last Commit"></a>
   <a href="https://www.gnu.org/licenses/agpl-3.0"><img src="https://img.shields.io/badge/License-AGPL_v3-purple?style=flat-square" alt="License: AGPL v3"></a>
 </p>
