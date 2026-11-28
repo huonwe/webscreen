@@ -17,6 +17,10 @@
 **Turn any browser into an AI-enhanced universal remote screen.**  
 Stream **Android**, **GameStream (Sunshine/Wolf)**, **Linux Desktops**, and **RK3588 HDMI-in** from a single self-hosted Go binary — supercharged with client-side **WebSR Super Resolution (Anime4K models)** and **LLM OCR Translation**.
 
+> [!NOTE]
+> **Project Renamed**: **Webscreen** is now **Scrmux** (Unified Web Screen Multiplexer).
+> Existing GitHub links will automatically redirect. Please update your CLI commands, config paths, and Docker image references to `scrmux`.
+
 [简体中文](./README.zh.md) • [日本語](./README.jp.md)
 
 ---
