@@ -1,7 +1,6 @@
 package nexus
 
 import (
-	"database/sql"
 	"errors"
 	"fmt"
 	"log"
@@ -41,11 +40,10 @@ type Nexus struct {
 	// Timestamp
 	// timestampStartTime time.Time
 
-	db  *sql.DB
 	mtu uint16 // RTP 分包器的 MTU 大小，通常 1200 左右很安全
 }
 
-func NewNexus(db *sql.DB, mtu uint16) *Nexus {
+func NewNexus(mtu uint16) *Nexus {
 	if mtu == 0 {
 		mtu = 1200 // 默认 MTU 大小
 	}
@@ -53,10 +51,21 @@ func NewNexus(db *sql.DB, mtu uint16) *Nexus {
 		sessions:        make(map[string]*ViewSession),
 		bindings:        make(map[string]*remoteBinding),
 		sessionToRemote: make(map[string]string),
-		db:              db,
 		mtu:             mtu,
 		// timestampStartTime: time.Now(),
 	}
+}
+
+func (n *Nexus) Close() error {
+	n.Lock()
+	defer n.Unlock()
+	for _, binding := range n.bindings {
+		close(binding.stopCh)
+		if binding.remote.sdriver != nil {
+			binding.remote.sdriver.Stop()
+		}
+	}
+	return nil
 }
 
 // 1. 连接设备并启动媒体泵
@@ -541,7 +550,7 @@ func (v *ViewSession) connectToNexus(n *Nexus, cfg ConnectionConfig) error {
 
 func (n *Nexus) setupRemote(remoteUUID string, config RemoteConfig) (sdriver.SDriver, error) {
 	// Implement the logic to set up a remote device using the provided remoteID
-	deviceInfo, err := db.QueryDeviceTypeByUUID(n.db, remoteUUID)
+	deviceInfo, err := db.QueryDeviceTypeByUUID(consts.DB, remoteUUID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get device type for remoteID %s: %v", remoteUUID, err)
 	}

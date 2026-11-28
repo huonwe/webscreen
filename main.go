@@ -45,11 +45,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
-	webMaster := webservice.New(config, pub, MyDataBase)
-	log.Printf("Starting web service on %s:%d", config.Host, config.Port)
+	consts.DB = MyDataBase
+	webMaster := webservice.New(config, pub)
+	log.Printf("Starting web service on %s:%d", config.IP_Listen, config.Port_Listen)
 	log.Printf("Data directory: %s", DATA_DIR)
 	log.Printf("Trusted IPs: %v", config.TrustedIPs)
-	go webMaster.Serve(config.Host, config.Port)
+	go webMaster.Serve(config.IP_Listen, config.Port_Listen)
 
 	<-ctx.Done()
 	log.Println("Gracefully closing")

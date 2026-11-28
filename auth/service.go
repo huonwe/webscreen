@@ -1,8 +1,8 @@
 package auth
 
 import (
-	"database/sql"
 	"errors"
+	"scrmux/consts"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -10,7 +10,6 @@ import (
 )
 
 type Service struct {
-	db        *sql.DB
 	jwtSecret []byte
 }
 
@@ -22,16 +21,16 @@ type jwtClaims struct {
 	jwt.RegisteredClaims
 }
 
-var ErrAlreadyInitialized = errors.New("系统已初始化，禁止重复注册")
+var ErrAlreadyInitialized = errors.New("System already initialized")
 
-func NewService(db *sql.DB, secret string) *Service {
-	return &Service{db: db, jwtSecret: []byte(secret)}
+func NewService(secret string) *Service {
+	return &Service{jwtSecret: []byte(secret)}
 }
 
 // HasAdmin 检查系统是否已完成首次初始化
 func (s *Service) HasAdmin() (bool, error) {
 	var count int
-	err := s.db.QueryRow("SELECT COUNT(*) FROM users WHERE role = 'admin'").Scan(&count)
+	err := consts.DB.QueryRow("SELECT COUNT(*) FROM users WHERE role = 'admin'").Scan(&count)
 	return count > 0, err
 }
 
@@ -48,7 +47,7 @@ func (s *Service) SetupAdmin(username, password string) error {
 	if err != nil {
 		return err
 	}
-	_, err = s.db.Exec(
+	_, err = consts.DB.Exec(
 		"INSERT INTO users (username, password_hash, role) VALUES (?, ?, 'admin')",
 		username,
 		string(hash),
@@ -60,12 +59,12 @@ func (s *Service) SetupAdmin(username, password string) error {
 func (s *Service) Login(username, password string) (string, error) {
 	var hash string
 	var id int
-	err := s.db.QueryRow("SELECT password_hash, id FROM users WHERE username = ?", username).Scan(&hash, &id)
+	err := consts.DB.QueryRow("SELECT password_hash, id FROM users WHERE username = ?", username).Scan(&hash, &id)
 	if err != nil {
-		return "", errors.New("用户名或密码错误")
+		return "", errors.New("Invalid username or password")
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)); err != nil {
-		return "", errors.New("用户名或密码错误")
+		return "", errors.New("Invalid username or password")
 	}
 	return s.signJWT(id, "admin", username, "password", 7*24*time.Hour)
 }

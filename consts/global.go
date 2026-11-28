@@ -1,14 +1,14 @@
 package consts
 
+import "database/sql"
+
 var DATA_DIR string
 
 var UDP_RANGE_START uint16
 var UDP_RANGE_END uint16
 var ICE_SERVERS []string
 
-func GET_DATA_DIR() string {
-	return DATA_DIR
-}
+var DB *sql.DB
 
 // func GetDataDir() string {
 // 	return DATA_DIR
