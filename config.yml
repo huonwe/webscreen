@@ -1,4 +1,4 @@
-hostname: localhost
+domain: localhost
 ip_listen: 0.0.0.0
 port_listen: 8081
 # Secret key for JWT authentication

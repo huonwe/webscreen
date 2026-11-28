@@ -10,5 +10,9 @@ services:
     privileged: true
     volumes:
       - /dev/bus/usb:/dev/bus/usb
-      
-      - ./data:/scrmux/data
+    environment:
+      - DATA_DIR=./data
+      - TLS=false
+      - DOMAIN="localhost"
+      - IP="127.0.0.1"
+      - PORT=8081
