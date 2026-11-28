@@ -1,6 +1,6 @@
-enableandroiddiscover: true
-host: 0.0.0.0
-port: 8081
+hostname: localhost
+ip_listen: 0.0.0.0
+port_listen: 8081
 # Secret key for JWT authentication
 jwt_secret: change_before_use
 # Allowed IP addresses for PIN authentication

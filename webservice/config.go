@@ -9,9 +9,9 @@ import (
 )
 
 type WebMasterConfig struct {
-	EnableAndroidDiscover bool
-	Host                  string `yaml:"host"`
-	Port                  int    `yaml:"port"`
+	Hostname    string `yaml:"hostname"`
+	IP_Listen   string `yaml:"ip_listen"`
+	Port_Listen int    `yaml:"port_listen"`
 
 	JWTSecret  string   `yaml:"jwt_secret"`
 	TrustedIPs []string `yaml:"trusted_ips"`
@@ -25,13 +25,13 @@ type WebMasterConfig struct {
 
 func LoadConfig(path string) (WebMasterConfig, error) {
 	defaultConfig := WebMasterConfig{
-		EnableAndroidDiscover: true,
-		Host:                  "0.0.0.0",
-		Port:                  8081,
-		JWTSecret:             "change_before_use",
-		TrustedIPs:            []string{"127.0.0.1", "::1"},
-		PIN:                   "000000",
-		MTU:                   1400,
+		Hostname:    "localhost",
+		IP_Listen:   "0.0.0.0",
+		Port_Listen: 8081,
+		JWTSecret:   "change_before_use",
+		TrustedIPs:  []string{"127.0.0.1", "::1"},
+		PIN:         "000000",
+		MTU:         1400,
 
 		UDP_RANGE_START: 51200,
 		UDP_RANGE_END:   51210,
