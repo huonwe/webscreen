@@ -24,7 +24,10 @@ import (
 )
 
 type remoteBinding struct {
-	remote          *Remote
+	RemoteUUID   string
+	RemoteConfig RemoteConfig
+	sdriver      sdriver.SDriver
+
 	masterSessionID string
 	viewers         map[string]*ViewSession
 	viewersSnap     atomic.Pointer[[]*ViewSession] // 无锁快照，供 pumpRemote 极速读取
@@ -61,8 +64,8 @@ func (n *Nexus) Close() error {
 	defer n.Unlock()
 	for _, binding := range n.bindings {
 		close(binding.stopCh)
-		if binding.remote.sdriver != nil {
-			binding.remote.sdriver.Stop()
+		if binding.sdriver != nil {
+			binding.sdriver.Stop()
 		}
 	}
 	return nil
@@ -93,9 +96,11 @@ func (n *Nexus) ConnectToRemote(remoteUUID string, config RemoteConfig) error {
 		return nil
 	}
 	binding := &remoteBinding{
-		remote:  &Remote{RemoteUUID: remoteUUID, RemoteConfig: config, sdriver: driver},
-		viewers: make(map[string]*ViewSession),
-		stopCh:  make(chan struct{}),
+		RemoteUUID:   remoteUUID,
+		RemoteConfig: config,
+		sdriver:      driver,
+		viewers:      make(map[string]*ViewSession),
+		stopCh:       make(chan struct{}),
 	}
 	n.bindings[remoteUUID] = binding
 	n.Unlock()
@@ -108,7 +113,7 @@ func (n *Nexus) ConnectToRemote(remoteUUID string, config RemoteConfig) error {
 
 // 2. 媒体泵：从 SDriver 读取 AVBox，零拷贝广播给所有观众
 func (n *Nexus) pumpRemoteAV(b *remoteBinding) {
-	videoCh, audioCh, _, _ := b.remote.sdriver.GetReceivers()
+	videoCh, audioCh, _, _ := b.sdriver.GetReceivers()
 	var box sdriver.AVBox
 	var ok bool
 
@@ -156,8 +161,8 @@ func (n *Nexus) pumpRemoteAV(b *remoteBinding) {
 
 // SDriver -> Remote -> Nexus  -> 前端
 func (n *Nexus) pumpRemoteMsg(bind *remoteBinding) {
-	_, _, msgCh, _ := bind.remote.sdriver.GetReceivers()
-	log.Printf("[nexus] Starting message pump for remote %s", bind.remote.RemoteUUID)
+	_, _, msgCh, _ := bind.sdriver.GetReceivers()
+	log.Printf("[nexus] Starting message pump for remote %s", bind.RemoteUUID)
 	for {
 		select {
 		case <-bind.stopCh:
@@ -166,7 +171,7 @@ func (n *Nexus) pumpRemoteMsg(bind *remoteBinding) {
 			if !ok {
 				return
 			}
-			// log.Printf("[nexus] Received message from remote %s: %v", bind.remote.RemoteUUID, event)
+			// log.Printf("[nexus] Received message from remote %s: %v", bind.RemoteUUID, event)
 			if snap := bind.viewersSnap.Load(); snap != nil {
 				for _, viewer := range *snap {
 					err := viewer.HandleMsg(event)
@@ -198,10 +203,8 @@ func (n *Nexus) BindViewSessionToRemote(sessionID, remoteUUID string) error {
 	b.viewers[sessionID] = v
 	b.refreshSnapshot() // 原子更新快照
 	n.sessionToRemote[sessionID] = remoteUUID
-	driver := b.remote.sdriver
-	v.controlEventHandler = func(msg []byte) error {
-		return n.DispatchEventToRemote(b.remote, msg)
-	}
+	driver := b.sdriver
+	v.controlEventHandler = b.HandleControlEvent
 	n.Unlock()
 
 	// 锁外请求关键帧：新观众中途加入时立刻能看到画面，无需等待下一个 GOP
@@ -210,23 +213,23 @@ func (n *Nexus) BindViewSessionToRemote(sessionID, remoteUUID string) error {
 }
 
 // 4. 控制指令转发（利用 SDriver.SendEvent） browser -> Nexus -> Remote -> SDriver -> Device
-func (n *Nexus) DispatchEventToRemote(remote *Remote, raw_event []byte) error {
-	// n.RLock()
-	// v, ok := n.sessions[sessionID]
-	// if !ok || !v.CanControl {
-	// 	n.RUnlock()
-	// 	return errors.New("unauthorized or session closed")
-	// }
-	// remoteUUID, bound := n.sessionToRemote[sessionID]
-	// b := n.bindings[remoteUUID]
-	// n.RUnlock()
+// func (r *remoteBinding) DispatchEventToRemote(raw_event []byte) error {
+// 	// n.RLock()
+// 	// v, ok := n.sessions[sessionID]
+// 	// if !ok || !v.CanControl {
+// 	// 	n.RUnlock()
+// 	// 	return errors.New("unauthorized or session closed")
+// 	// }
+// 	// remoteUUID, bound := n.sessionToRemote[sessionID]
+// 	// b := n.bindings[remoteUUID]
+// 	// n.RUnlock()
 
-	if remote == nil {
-		return errors.New("remote is nil")
-	}
-	err := remote.HandleControlEvent(raw_event)
-	return err
-}
+// 	// if remoteBinding == nil {
+// 	// 	return errors.New("remote is nil")
+// 	// }
+// 	err := r.HandleControlEvent(raw_event)
+// 	return err
+// }
 
 // 5. 统一关闭入口（Detach-then-Close：绝对无死锁，天然幂等）
 func (n *Nexus) CloseViewSession(sessionID string) {
@@ -274,7 +277,7 @@ func (n *Nexus) CloseViewSession(sessionID string) {
 	}
 	if stopBinding != nil {
 		close(stopBinding.stopCh) // 立即停止 pump 协程
-		stopBinding.remote.sdriver.Stop()
+		stopBinding.sdriver.Stop()
 	}
 }
 
@@ -599,8 +602,8 @@ func (n *Nexus) RequestRemoteIDR(sessionID string) {
 	b := n.bindings[remoteUUID]
 	n.RUnlock()
 
-	if bound && b != nil && b.remote.sdriver != nil {
-		b.remote.sdriver.RequestIDR(false)
+	if bound && b != nil && b.sdriver != nil {
+		b.sdriver.RequestIDR(false)
 	}
 }
 
@@ -609,10 +612,10 @@ func (n *Nexus) GetRemoteCapabilities(remoteUUID string) sdriver.DriverCaps {
 	b, exists := n.bindings[remoteUUID]
 	n.RUnlock()
 
-	if !exists || b == nil || b.remote.sdriver == nil {
+	if !exists || b == nil || b.sdriver == nil {
 		return sdriver.DriverCaps{}
 	}
-	return b.remote.sdriver.Capabilities()
+	return b.sdriver.Capabilities()
 }
 
 func (n *Nexus) GetRemoteMediaMeta(remoteUUID string) sdriver.MediaMeta {
@@ -620,10 +623,10 @@ func (n *Nexus) GetRemoteMediaMeta(remoteUUID string) sdriver.MediaMeta {
 	b, exists := n.bindings[remoteUUID]
 	n.RUnlock()
 
-	if !exists || b == nil || b.remote.sdriver == nil {
+	if !exists || b == nil || b.sdriver == nil {
 		return sdriver.MediaMeta{}
 	}
-	return b.remote.sdriver.MediaMeta()
+	return b.sdriver.MediaMeta()
 }
 
 // 辅助方法：在持有 n.Lock() 时刷新快照
@@ -644,8 +647,8 @@ func (n *Nexus) IsAlreadyStreaming(remoteUUID string) (bool, RemoteConfig) {
 		return false, RemoteConfig{}
 	}
 
-	if b.masterSessionID != "" && b.remote.sdriver != nil {
-		return true, b.remote.RemoteConfig
+	if b.masterSessionID != "" && b.sdriver != nil {
+		return true, b.RemoteConfig
 	}
 	return false, RemoteConfig{}
 }

@@ -7,22 +7,22 @@ import (
 	"scrmux/sdriver"
 )
 
-func (r *Remote) HandleControlEvent(raw []byte) error {
-	if !r.sdriver.Capabilities().CanControl {
+func (b *remoteBinding) HandleControlEvent(raw []byte) error {
+	if !b.sdriver.Capabilities().CanControl {
 		return fmt.Errorf("driver does not support control events")
 	}
-	event, err := r.parseEvent(raw)
+	event, err := b.parseEvent(raw)
 	if err != nil {
 		log.Printf("[agent] Failed to parse control event: %v", err)
 		return err
 	}
 	// log.Println("[agent] Parsed control event:", event)
 	// log.Printf("Parsed control event: %+v", event)
-	return r.sdriver.SendEvent(event)
+	return b.sdriver.SendEvent(event)
 }
 
 // func (r *Remote) HandleControlEventStream(raw []byte) {
-// 	event, err := r.parseEvent(raw)
+// 	event, err := b.parseEvent(raw)
 // 	if err != nil {
 // 		log.Printf("[agent] Failed to parse control event: %v", err)
 // 		return
@@ -36,7 +36,7 @@ func (r *Remote) HandleControlEvent(raw []byte) error {
 // 	// log.Printf("Parsed control event: %+v", event)
 // }
 
-func (r *Remote) parseEvent(raw []byte) (sdriver.Event, error) {
+func (b *remoteBinding) parseEvent(raw []byte) (sdriver.Event, error) {
 	if len(raw) < 1 {
 		return nil, fmt.Errorf("empty event data")
 	}
@@ -45,37 +45,37 @@ func (r *Remote) parseEvent(raw []byte) (sdriver.Event, error) {
 
 	switch eventType {
 	// case sdriver.EVENT_TYPE_MOUSE:
-	// 	return r.parseMouseEvent(raw)
+	// 	return b.parseMouseEvent(raw)
 	case sdriver.EVENT_TYPE_TOUCH:
-		return r.parseTouchEvent(raw)
+		return b.parseTouchEvent(raw)
 	case sdriver.EVENT_TYPE_MOUSE:
-		return r.parseMouseEvent(raw)
+		return b.parseMouseEvent(raw)
 	case sdriver.EVENT_TYPE_KEY:
-		return r.parseKeyEvent(raw)
+		return b.parseKeyEvent(raw)
 	case sdriver.EVENT_TYPE_SCROLL:
-		return r.parseScrollEvent(raw)
+		return b.parseScrollEvent(raw)
 	case sdriver.EVENT_TYPE_ROTATE:
-		return r.parseRotateEvent()
+		return b.parseRotateEvent()
 	case sdriver.EVENT_TYPE_UHID_CREATE:
-		return r.parseUHIDCreateEvent(raw)
+		return b.parseUHIDCreateEvent(raw)
 	case sdriver.EVENT_TYPE_UHID_INPUT:
-		return r.parseUHIDInputEvent(raw)
+		return b.parseUHIDInputEvent(raw)
 	case sdriver.EVENT_TYPE_UHID_DESTROY:
-		return r.parseUHIDDestroyEvent(raw)
+		return b.parseUHIDDestroyEvent(raw)
 	case sdriver.EVENT_TYPE_GET_CLIPBOARD:
-		return r.parseGetClipboardEvent(raw)
+		return b.parseGetClipboardEvent(raw)
 	case sdriver.EVENT_TYPE_SET_CLIPBOARD:
-		return r.parseSetClipboardEvent(raw)
+		return b.parseSetClipboardEvent(raw)
 	case sdriver.EVENT_TYPE_REQ_IDR:
-		return r.parseIDRReqEvent()
+		return b.parseIDRReqEvent()
 	case sdriver.EVENT_TYPE_GAMEPAD:
-		return r.parseGamepadEvent(raw)
+		return b.parseGamepadEvent(raw)
 	default:
 		return nil, fmt.Errorf("unknown event type: %d", eventType)
 	}
 }
 
-func (r *Remote) parseTouchEvent(raw []byte) (*sdriver.TouchEvent, error) {
+func (b *remoteBinding) parseTouchEvent(raw []byte) (*sdriver.TouchEvent, error) {
 	if len(raw) != 10 {
 		return nil, fmt.Errorf("invalid touch event message length: %d", len(raw))
 	}
@@ -86,13 +86,13 @@ func (r *Remote) parseTouchEvent(raw []byte) (*sdriver.TouchEvent, error) {
 		PosY:      uint32(binary.BigEndian.Uint16(raw[5:7])),
 		Pressure:  binary.BigEndian.Uint16(raw[7:9]),
 		Buttons:   uint32(raw[9]),
-		Width:     uint16(r.sdriver.MediaMeta().Width),
-		Height:    uint16(r.sdriver.MediaMeta().Height),
+		Width:     uint16(b.sdriver.MediaMeta().Width),
+		Height:    uint16(b.sdriver.MediaMeta().Height),
 	}
 	return e, nil
 }
 
-func (r *Remote) parseMouseEvent(raw []byte) (*sdriver.MouseEvent, error) {
+func (b *remoteBinding) parseMouseEvent(raw []byte) (*sdriver.MouseEvent, error) {
 	// 1(Type) + 1(Action) + 4(X) + 4(Y) + 4(Buttons) + 2(WheelX) + 2(WheelY) = 18
 	if len(raw) != 18 {
 		return nil, fmt.Errorf("invalid mouse event message length: %d", len(raw))
@@ -111,7 +111,7 @@ func (r *Remote) parseMouseEvent(raw []byte) (*sdriver.MouseEvent, error) {
 	return e, nil
 }
 
-func (r *Remote) parseKeyEvent(raw []byte) (*sdriver.KeyEvent, error) {
+func (b *remoteBinding) parseKeyEvent(raw []byte) (*sdriver.KeyEvent, error) {
 	if len(raw) != 4 {
 		return nil, fmt.Errorf("invalid key event message length: %d", len(raw))
 	}
@@ -122,15 +122,15 @@ func (r *Remote) parseKeyEvent(raw []byte) (*sdriver.KeyEvent, error) {
 	return e, nil
 }
 
-func (r *Remote) parseScrollEvent(raw []byte) (*sdriver.ScrollEvent, error) {
+func (b *remoteBinding) parseScrollEvent(raw []byte) (*sdriver.ScrollEvent, error) {
 	if len(raw) != 10 {
 		return nil, fmt.Errorf("invalid scroll event message length: %d", len(raw))
 	}
 	e := &sdriver.ScrollEvent{
 		PosX:    uint32(binary.BigEndian.Uint16(raw[1:3])),
 		PosY:    uint32(binary.BigEndian.Uint16(raw[3:5])),
-		Width:   uint16(r.sdriver.MediaMeta().Width),
-		Height:  uint16(r.sdriver.MediaMeta().Height),
+		Width:   uint16(b.sdriver.MediaMeta().Width),
+		Height:  uint16(b.sdriver.MediaMeta().Height),
 		HScroll: binary.BigEndian.Uint16(raw[5:7]),
 		VScroll: binary.BigEndian.Uint16(raw[7:9]),
 		Buttons: uint32(raw[9]),
@@ -138,15 +138,15 @@ func (r *Remote) parseScrollEvent(raw []byte) (*sdriver.ScrollEvent, error) {
 	return e, nil
 }
 
-func (r *Remote) parseRotateEvent() (*sdriver.RotateEvent, error) {
+func (b *remoteBinding) parseRotateEvent() (*sdriver.RotateEvent, error) {
 	return &sdriver.RotateEvent{}, nil
 }
 
-func (r *Remote) parseIDRReqEvent() (*sdriver.IDRReqEvent, error) {
+func (b *remoteBinding) parseIDRReqEvent() (*sdriver.IDRReqEvent, error) {
 	return &sdriver.IDRReqEvent{}, nil
 }
 
-func (r *Remote) parseGamepadEvent(raw []byte) (*sdriver.GamepadEvent, error) {
+func (b *remoteBinding) parseGamepadEvent(raw []byte) (*sdriver.GamepadEvent, error) {
 	if len(raw) != 18 {
 		return nil, fmt.Errorf("invalid gamepad event message length: %d", len(raw))
 	}
@@ -163,7 +163,7 @@ func (r *Remote) parseGamepadEvent(raw []byte) (*sdriver.GamepadEvent, error) {
 	}, nil
 }
 
-func (r *Remote) parseUHIDCreateEvent(raw []byte) (*sdriver.UHIDCreateEvent, error) {
+func (b *remoteBinding) parseUHIDCreateEvent(raw []byte) (*sdriver.UHIDCreateEvent, error) {
 	// 协议: [Type 1][ID 2][Vendor 2][Prod 2][NameLen 1][Name N][DescLen 2][Desc N]
 	const minHeaderSize = 8
 	if len(raw) < minHeaderSize {
@@ -196,7 +196,7 @@ func (r *Remote) parseUHIDCreateEvent(raw []byte) (*sdriver.UHIDCreateEvent, err
 	return e, nil
 }
 
-func (r *Remote) parseUHIDInputEvent(raw []byte) (*sdriver.UHIDInputEvent, error) {
+func (b *remoteBinding) parseUHIDInputEvent(raw []byte) (*sdriver.UHIDInputEvent, error) {
 	// WS Packet: [Type 1][ID 2][Size 2][Data N]
 	if len(raw) < 5 {
 		return nil, fmt.Errorf("invalid uhid input message length: %d", len(raw))
@@ -215,7 +215,7 @@ func (r *Remote) parseUHIDInputEvent(raw []byte) (*sdriver.UHIDInputEvent, error
 	return e, nil
 }
 
-func (r *Remote) parseUHIDDestroyEvent(raw []byte) (*sdriver.UHIDDestroyEvent, error) {
+func (b *remoteBinding) parseUHIDDestroyEvent(raw []byte) (*sdriver.UHIDDestroyEvent, error) {
 	// WS Packet: [Type 1][ID 2]
 	if len(raw) != 3 {
 		return nil, fmt.Errorf("invalid uhid destroy message length: %d", len(raw))
@@ -227,7 +227,7 @@ func (r *Remote) parseUHIDDestroyEvent(raw []byte) (*sdriver.UHIDDestroyEvent, e
 	return e, nil
 }
 
-func (r *Remote) parseGetClipboardEvent(raw []byte) (*sdriver.GetClipboardEvent, error) {
+func (b *remoteBinding) parseGetClipboardEvent(raw []byte) (*sdriver.GetClipboardEvent, error) {
 	// WS Packet: [Type 1]
 	// log.Printf("Parsing GetClipboardEvent, raw length: %d", len(raw))
 	CopyKey := raw[1]
@@ -237,7 +237,7 @@ func (r *Remote) parseGetClipboardEvent(raw []byte) (*sdriver.GetClipboardEvent,
 	return e, nil
 }
 
-func (r *Remote) parseSetClipboardEvent(raw []byte) (*sdriver.SetClipboardEvent, error) {
+func (b *remoteBinding) parseSetClipboardEvent(raw []byte) (*sdriver.SetClipboardEvent, error) {
 	// WS Packet: [Type 1][Sequence 8][Paste 1][TextLen 4][Text N]
 	const minHeaderSize = 14 // 1 + 8 + 1 + 4
 	if len(raw) < minHeaderSize {

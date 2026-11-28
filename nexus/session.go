@@ -13,13 +13,6 @@ import (
 	"github.com/pion/webrtc/v5"
 )
 
-// Remote：彻底干净，只持有设备驱动
-type Remote struct {
-	RemoteUUID   string
-	RemoteConfig RemoteConfig
-	sdriver      sdriver.SDriver
-}
-
 // ViewSession：封装具体传输协议（WebRTC / WS / WT）
 type ViewSession struct {
 	SessionID        string
