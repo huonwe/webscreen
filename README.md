@@ -93,8 +93,8 @@ curl -fL https://github.com/huonwe/scrmux/releases/latest/download/scrmux-linux-
 curl -fsSL https://raw.githubusercontent.com/huonwe/scrmux/main/config.yml -o ./data/config.yml
 chmod +x scrmux
 
-# 3. Start scrmux (visit http://<your-ip>:8081):
-./scrmux -D ./data
+# 3. Start scrmux and enable tls (visit https://<your-ip>:8081):
+./scrmux -D ./data --tls
 ```
 
 Notes for Linux Desktop Backend:
@@ -127,10 +127,11 @@ curl -fsSL https://raw.githubusercontent.com/huonwe/scrmux/main/config.yml -o ./
 # Pair and connect Android devices
 adb pair <your Android device IP>
 adb connect <your Android device IP>
-./scrmux -D ./data
+
+./scrmux -D ./data --tls
 ```
 
-Then open your browser and visit: `http://<your-ip>:8081`
+Then open your browser and visit: `https://<your-ip>:8081`
 
 ### Option 2: Build from Source
 
