@@ -307,7 +307,7 @@ export async function openRemoteConfigModal(device, remoteConfig = {}, { univers
     // delete configMap['protocol_transport'];
     // console.log('configMap before deletion:', configMap);
     // console.log('universalSchema:', resolvedUniversalSchema)
-    const newUniversalSchema = resolvedUniversalSchema.filter(item => item.name !== 'protocol_transport');
+    const newUniversalSchema = resolvedUniversalSchema.filter(item => item.name == 'video_codec' || item.name == 'audio_codec');
     
     renderSchemaFields(modal.query('#remoteUniversalContainer'), newUniversalSchema, configMap, {
         prefix: 'rem_uni_',
