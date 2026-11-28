@@ -31,7 +31,7 @@ RECORDER_OUT := $(RECORDER_DIR)/$(RECORDER_BIN)
 # 2. Main 程序输出路径 (可变)
 DIST_DIR ?= dist
 SUFFIX ?= -$(GOOS)-$(GOARCH)
-MAIN_OUT := $(DIST_DIR)/webscreen$(SUFFIX)$(EXE)
+MAIN_OUT := $(DIST_DIR)/scrmux$(SUFFIX)$(EXE)
 
 # --- 构建目标 ---
 
@@ -56,5 +56,5 @@ build-main: build-LinuxRecorder
 
 # 清理
 clean:
-	rm -f webscreen* $(RECORDER_DIR)/*
+	rm -f scrmux* $(RECORDER_DIR)/*
 	rm -rf dist

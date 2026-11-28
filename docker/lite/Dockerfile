@@ -1,13 +1,13 @@
 FROM alpine:latest
 
 ARG TARGETARCH
-ARG BINARY_PATH=dist/webscreen-linux-${TARGETARCH}
+ARG BINARY_PATH=dist/scrmux-linux-${TARGETARCH}
 
 RUN apk add --no-cache android-tools v4l-utils
 
-WORKDIR /webscreen
+WORKDIR /scrmux
 
-COPY ${BINARY_PATH} ./webscreen
-RUN chmod +x ./webscreen
+COPY ${BINARY_PATH} ./scrmux
+RUN chmod +x ./scrmux
 
-ENTRYPOINT ["./webscreen"]
+ENTRYPOINT ["./scrmux"]

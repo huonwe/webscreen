@@ -1,10 +1,10 @@
-# 📺 Webscreen
+# 📺 scrmux
 
 <p align="center">
-  <a href="https://github.com/huonwe/webscreen/releases"><img src="https://img.shields.io/github/v/release/huonwe/webscreen?style=flat-square&color=blue" alt="GitHub Release"></a>
-  <a href="https://github.com/huonwe/webscreen/stargazers"><img src="https://img.shields.io/github/stars/huonwe/webscreen?style=flat-square&color=yellow" alt="GitHub Stars"></a>
-  <a href="https://hub.docker.com/r/dukihiroi/webscreen"><img src="https://img.shields.io/docker/pulls/dukihiroi/webscreen?style=flat-square&logo=docker&label=Docker%20Pulls" alt="Docker Pulls"></a>
-  <a href="https://github.com/huonwe/webscreen/commits/main"><img src="https://img.shields.io/github/last-commit/huonwe/webscreen?style=flat-square" alt="Last Commit"></a>
+  <a href="https://github.com/huonwe/scrmux/releases"><img src="https://img.shields.io/github/v/release/huonwe/scrmux?style=flat-square&color=blue" alt="GitHub Release"></a>
+  <a href="https://github.com/huonwe/scrmux/stargazers"><img src="https://img.shields.io/github/stars/huonwe/scrmux?style=flat-square&color=yellow" alt="GitHub Stars"></a>
+  <a href="https://hub.docker.com/r/dukihiroi/scrmux"><img src="https://img.shields.io/docker/pulls/dukihiroi/scrmux?style=flat-square&logo=docker&label=Docker%20Pulls" alt="Docker Pulls"></a>
+  <a href="https://github.com/huonwe/scrmux/commits/main"><img src="https://img.shields.io/github/last-commit/huonwe/scrmux?style=flat-square" alt="Last Commit"></a>
   <a href="https://www.gnu.org/licenses/agpl-3.0"><img src="https://img.shields.io/badge/License-AGPL_v3-purple?style=flat-square" alt="License: AGPL v3"></a>
 </p>
 <p align="center">
@@ -25,12 +25,12 @@ Stream **Android**, **GameStream (Sunshine/Wolf)**, **Linux Desktops**, and **RK
      1. 浏览器内开启/关闭 WebSR 超分前后的游戏画面锐度对比
      2. 框选外语游戏/直播画面，触发 LLM OCR 实时翻译弹窗 -->
 <p align="center">
-  <img src="./doc/assets/timer-difference.png" alt="Webscreen Showcase" width="85%">
+  <img src="./doc/assets/timer-difference.png" alt="scrmux Showcase" width="85%">
 </p>
 
-## ⚡ Why Webscreen?
+## ⚡ Why scrmux?
 
-Most remote streaming tools force you to juggle separate apps, suffer blurry low-bitrate streams, or manually screenshot foreign text. **Webscreen unifies everything into one lightweight web interface:**
+Most remote streaming tools force you to juggle separate apps, suffer blurry low-bitrate streams, or manually screenshot foreign text. **scrmux unifies everything into one lightweight web interface:**
 
 * 🔍 **Client-Side WebSR Super Resolution**: Upscale low-bitrate streams directly in your browser using WebGPU/WebGL shaders — get crisp text and sharp game graphics over bandwidth-limited networks without extra server GPU load.
 * 🌐 **Instant LLM OCR Translation**: Playing untranslated games or watching foreign streams? Select any region on screen to extract and translate text on the fly via your preferred LLM endpoint.
@@ -55,7 +55,7 @@ Most remote streaming tools force you to juggle separate apps, suffer blurry low
 
 ## 🛠️ Prerequisites
 
-Webscreen follows a three-tier architecture: **Browser (Viewer)** ↔ **Webscreen Server (Relay/Host)** ↔ **Target Devices (Remote)**.
+scrmux follows a three-tier architecture: **Browser (Viewer)** ↔ **scrmux Server (Relay/Host)** ↔ **Target Devices (Remote)**.
 
 ### 1. Browser Side (Client)
 * **Modern Web Browser**: Chrome, Edge, Safari, or Firefox with **WebRTC** hardware decoding support (**H.264 High Profile** or **H.265 Main Profile**).
@@ -63,13 +63,13 @@ Webscreen follows a three-tier architecture: **Browser (Viewer)** ↔ **Webscree
 
 ---
 
-### 2. Server Side (Where Webscreen Runs)
+### 2. Server Side (Where scrmux Runs)
 Depending on which backends you plan to host, prepare the corresponding environment on your server (Linux, Windows, macOS, Docker, or Termux):
 
 | Target Backend | Server Requirements |
 | :--- | :--- |
-| **GameStream (`Sunshine` / `Wolf`)** | **Zero extra dependencies** — works out of the box with the single Webscreen binary. |
-| **Android (`scrcpy`)** | `adb` (`android-tools`) in your `PATH`. *(If missing, Webscreen will attempt to download it automatically.)* |
+| **GameStream (`Sunshine` / `Wolf`)** | **Zero extra dependencies** — works out of the box with the single scrmux binary. |
+| **Android (`scrcpy`)** | `adb` (`android-tools`) in your `PATH`. *(If missing, scrmux will attempt to download it automatically.)* |
 | **Linux Virtual Desktop** | `xvfb`, `ffmpeg`, `xfce4`, `sway`, `wf-recorder`, and `seatd` (plus `uinput` permissions for mouse/keyboard injection). |
 | **RK3588 HDMI-in** | Armbian/vendor kernel with `rk3588-hdmirx` enabled, FFmpeg with RKMPP support (e.g., `/usr/lib/jellyfin-ffmpeg/ffmpeg`), `v4l-utils`, and `sudo chmod 666 /dev/mpp_service`. |
 
@@ -83,18 +83,18 @@ sudo apt update && sudo apt install -y adb
 # Optional: Install dependencies for Linux headless virtual desktop (Xorg / Sway):
 # sudo apt install -y xvfb ffmpeg xfce4 sway wf-recorder seatd
 
-# 2. Download the latest Webscreen binary (amd64) and default config:
-mkdir -p webscreen/data && cd webscreen
-curl -fL https://github.com/huonwe/webscreen/releases/latest/download/webscreen-linux-amd64 -o webscreen
-curl -fsSL https://raw.githubusercontent.com/huonwe/webscreen/main/config.yml -o ./data/config.yml
-chmod +x webscreen
+# 2. Download the latest scrmux binary (amd64) and default config:
+mkdir -p scrmux/data && cd scrmux
+curl -fL https://github.com/huonwe/scrmux/releases/latest/download/scrmux-linux-amd64 -o scrmux
+curl -fsSL https://raw.githubusercontent.com/huonwe/scrmux/main/config.yml -o ./data/config.yml
+chmod +x scrmux
 
-# 3. Start Webscreen (visit http://<your-ip>:8081):
-./webscreen -D ./data
+# 3. Start scrmux (visit http://<your-ip>:8081):
+./scrmux -D ./data
 ```
 
 Notes for Linux Desktop Backend:
-- Xorg mode may require running Webscreen as root.
+- Xorg mode may require running scrmux as root.
 - Sway mode relies on wf-recorder for screen capture.
 - Input passthrough (keyboard/mouse) requires uinput kernel module and proper seatd permissions.
 </details>
@@ -110,12 +110,12 @@ HDMI Source (for RK3588): Any standard HDMI output device (PC, console, camera, 
 
 ### Option 1: Use Pre-built Binary
 
-Download the latest binary from the [Releases](https://github.com/huonwe/webscreen/releases) page.
+Download the latest binary from the [Releases](https://github.com/huonwe/scrmux/releases) page.
 
 Then,
 ```bash
 mkdir ./data
-curl -fsSL https://raw.githubusercontent.com/huonwe/webscreen/main/config.yml -o ./data/config.yml
+curl -fsSL https://raw.githubusercontent.com/huonwe/scrmux/main/config.yml -o ./data/config.yml
 # You might need to change some settings here.
 ```
 
@@ -123,7 +123,7 @@ curl -fsSL https://raw.githubusercontent.com/huonwe/webscreen/main/config.yml -o
 # Pair and connect Android devices
 adb pair <your Android device IP>
 adb connect <your Android device IP>
-./webscreen -D ./data
+./scrmux -D ./data
 ```
 
 Then open your browser and visit: `http://<your-ip>:8081`
@@ -135,8 +135,8 @@ Normally, you can build simply by running `make`.
 > **Termux Note**: If building natively on Termux, you must run `go build -ldflags "-checklinkname=0"`.
 
 ```bash
-git clone https://github.com/huonwe/webscreen.git
-cd webscreen
+git clone https://github.com/huonwe/scrmux.git
+cd scrmux
 make
 ```
 
@@ -144,14 +144,14 @@ make
 
 ```yaml
 services:
-  webscreen:
-    image: dukihiroi/webscreen:latest
-    container_name: webscreen
+  scrmux:
+    image: dukihiroi/scrmux:latest
+    container_name: scrmux
     network_mode: host
     restart: unless-stopped
     volumes:
       - /dev/bus/usb:/dev/bus/usb
-      - ./data:/webscreen/data
+      - ./data:/scrmux/data
     privileged: true
 
 ```
@@ -185,7 +185,7 @@ You might need to pair your Android device via [Wireless Debugging](https://deve
 
 * Huge thanks to [@Enterpr1se0](https://github.com/Enterpr1se0) and [@rogniceguy-max](https://github.com/rogniceguy-max) for fixing connection bugs!
 
-* Huge thanks to [youyoudezhuzhu/webscreen](https://github.com/youyoudezhuzhu/webscreen) for fixing agent unused sdriver resource release bugs and adding android adb manager!
+* Huge thanks to [youyoudezhuzhu/scrmux](https://github.com/youyoudezhuzhu/scrmux) for fixing agent unused sdriver resource release bugs and adding android adb manager!
 
 * [websr](https://github.com/sb2702/websr) for use of super resolution
 

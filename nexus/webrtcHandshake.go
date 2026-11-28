@@ -25,7 +25,7 @@ func createPeerConnection(cfg ConnectionConfig) (*webrtc.PeerConnection, error) 
 	}
 
 	if strings.EqualFold(cfg.VideoCodec, "h265") && !sdpOffersH265(sdp) {
-		log.Printf("[webscreen] browser SDP does not offer H.265 (HEVC)")
+		log.Printf("[scrmux] browser SDP does not offer H.265 (HEVC)")
 		return nil, errors.New("This browser does not support H.265 (HEVC); streaming with H.264 instead.")
 	}
 

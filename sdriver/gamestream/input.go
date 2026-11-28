@@ -3,7 +3,7 @@ package gamestream
 import (
 	"encoding/binary"
 	"math"
-	"webscreen/sdriver"
+	"scrmux/sdriver"
 )
 
 const (

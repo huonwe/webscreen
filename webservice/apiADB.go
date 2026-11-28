@@ -6,7 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"webscreen/webservice/android"
+	"scrmux/webservice/android"
 )
 
 // 设备管理接口：USB 与 Wi-Fi 两种接入方式由同一个 ADB Manager 统一管理。

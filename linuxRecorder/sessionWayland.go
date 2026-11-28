@@ -6,8 +6,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"scrmux/linuxRecorder/config"
 	"time"
-	"webscreen/linuxRecorder/config"
 )
 
 func (s *Session) initWaylandEnv() error {

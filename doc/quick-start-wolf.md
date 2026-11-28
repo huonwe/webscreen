@@ -16,13 +16,13 @@ services:
     network_mode: host
     restart: unless-stopped
 
-  webscreen:
-    image: dukihiroi/webscreen:latest
-    container_name: webscreen
+  scrmux:
+    image: dukihiroi/scrmux:latest
+    container_name: scrmux
     restart: unless-stopped
     network_mode: host
     volumes:
-      - ./data:/webscreen/data
+      - ./data:/scrmux/data
     depends_on:
       - wolf
 ```

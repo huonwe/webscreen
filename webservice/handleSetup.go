@@ -7,7 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	appauth "webscreen/auth"
+	appauth "scrmux/auth"
 )
 
 func (wm *WebMaster) handleSetupUI(c *gin.Context) {

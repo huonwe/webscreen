@@ -6,10 +6,10 @@ import (
 	"math/rand"
 	"os"
 	"os/exec"
+	"scrmux/utils"
 	"strconv"
 	"strings"
 	"time"
-	"webscreen/utils"
 )
 
 func ExecADB(ctx context.Context, args ...string) error {

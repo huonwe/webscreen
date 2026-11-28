@@ -1,12 +1,12 @@
 <div align="center">
 
-# 📺 Webscreen
+# 📺 scrmux
 
 Android、Linux および GameStream デバイス向けのセルフホスト型画面ストリーミング Web アプリケーション。
 
-[![GitHub release](https://img.shields.io/github/v/release/huonwe/webscreen?style=flat-square)](https://github.com/huonwe/webscreen/releases)
-[![GitHub stars](https://img.shields.io/github/stars/huonwe/webscreen?style=flat-square)](https://github.com/huonwe/webscreen/stargazers)
-[![Go Version](https://img.shields.io/github/go-mod/go-version/huonwe/webscreen?style=flat-square)](https://github.com/huonwe/webscreen)
+[![GitHub release](https://img.shields.io/github/v/release/huonwe/scrmux?style=flat-square)](https://github.com/huonwe/scrmux/releases)
+[![GitHub stars](https://img.shields.io/github/stars/huonwe/scrmux?style=flat-square)](https://github.com/huonwe/scrmux/stargazers)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/huonwe/scrmux?style=flat-square)](https://github.com/huonwe/scrmux)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg?style=flat-square)](https://www.gnu.org/licenses/agpl-3.0)
 
 [English](README.md) • [简体中文](README.zh.md)
@@ -24,7 +24,7 @@ Android、Linux および GameStream デバイス向けのセルフホスト型�
 
 ## ✨ 主な機能
 
-Webscreen は **Android Termux**、**Linux**、**Windows**、および **MacOS**（`amd64` と `arm64` の両方）で動作します。今後さらに多くのデバイスに対応する予定です！
+scrmux は **Android Termux**、**Linux**、**Windows**、および **MacOS**（`amd64` と `arm64` の両方）で動作します。今後さらに多くのデバイスに対応する予定です！
 
 ### 🌟 共通機能
 - 超解像（Super Resolution / HTTPS が必要）
@@ -46,7 +46,7 @@ Webscreen は **Android Termux**、**Linux**、**Windows**、および **MacOS**
 - タッチ操作（マルチタッチ、筆圧感知）
 > [Quick Start with Redroid](doc/quick-start-redroid.md)
 
-> **注意**：Android 用 APK（要 root）および FnOS 用 fpk については、[youyoudezhuzhu/webscreen](https://github.com/youyoudezhuzhu/webscreen) をご参照ください。
+> **注意**：Android 用 APK（要 root）および FnOS 用 fpk については、[youyoudezhuzhu/scrmux](https://github.com/youyoudezhuzhu/scrmux) をご参照ください。
 
 ### 🐧 Linux（Xvfb / Xorg / Sway）
 - 映像、操作
@@ -96,15 +96,15 @@ sudo apt install xvfb ffmpeg xfce4 sway wf-recorder seatd
 
 ### 方法 1：ビルド済みバイナリを使用
 
-[Releases](https://github.com/huonwe/webscreen/releases) ページから最新のバイナリをダウンロードします。
+[Releases](https://github.com/huonwe/scrmux/releases) ページから最新のバイナリをダウンロードします。
 ```bash
 mkdir ./data
-curl -fsSL https://raw.githubusercontent.com/huonwe/webscreen/main/config.yml -o ./data/config.yml
+curl -fsSL https://raw.githubusercontent.com/huonwe/scrmux/main/config.yml -o ./data/config.yml
 # You might need to change some settings here.
 ```
 
 ```bash
-./webscreen -D ./data
+./scrmux -D ./data
 
 ```
 
@@ -117,8 +117,8 @@ curl -fsSL https://raw.githubusercontent.com/huonwe/webscreen/main/config.yml -o
 > **Termux に関する注意**：Termux 上でネイティブビルドを行う場合は、`go build -ldflags "-checklinkname=0"` を実行する必要があります。
 
 ```bash
-git clone [https://github.com/huonwe/webscreen.git](https://github.com/huonwe/webscreen.git)
-cd webscreen
+git clone [https://github.com/huonwe/scrmux.git](https://github.com/huonwe/scrmux.git)
+cd scrmux
 make
 
 ```
@@ -127,14 +127,14 @@ make
 
 ```yaml
 services:
-  webscreen:
-    image: dukihiroi/webscreen:latest
-    container_name: webscreen
+  scrmux:
+    image: dukihiroi/scrmux:latest
+    container_name: scrmux
     network_mode: host
     restart: unless-stopped
     volumes:
       - /dev/bus/usb:/dev/bus/usb
-      - ./data:/webscreen/data
+      - ./data:/scrmux/data
     privileged: true
 
 
@@ -168,7 +168,7 @@ services:
 ## 🤝 謝辞
 
 * 接続関連のバグを修正してくださった [@Enterpr1se0](https://github.com/Enterpr1se0) 氏と [@rogniceguy-max](https://github.com/rogniceguy-max) 氏に深く感謝いたします！
-* 未使用の sdriver リソース解放バグの修正と Android ADB マネージャーの追加をしてくださった [youyoudezhuzhu/webscreen](https://github.com/youyoudezhuzhu/webscreen) に深く感謝いたします！
+* 未使用の sdriver リソース解放バグの修正と Android ADB マネージャーの追加をしてくださった [youyoudezhuzhu/scrmux](https://github.com/youyoudezhuzhu/scrmux) に深く感謝いたします！
 * 超解像機能の実装にあたり [websr](https://github.com/sb2702/websr) を利用させていただきました。
 
 ## 📄 ライセンス

@@ -36,7 +36,7 @@ type Session struct {
 
 	// Input Event Controller
 	controller *InputController
-	// Connect to the webscreen server
+	// Connect to the scrmux server
 	conn net.Conn
 	// FFmpeg/wf-recorder process
 	// FFmpeg/wf-recorder output (for logging/debugging)

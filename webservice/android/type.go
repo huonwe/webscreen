@@ -1,6 +1,6 @@
 package android
 
-import "webscreen/consts"
+import "scrmux/consts"
 
 type AndroidDevice struct {
 	UUID     string `json:"device_uuid"`

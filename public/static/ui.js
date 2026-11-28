@@ -5,11 +5,11 @@
  */
 function showToast(message, duration = 1000) {
     console.log(message)
-    let toast = document.getElementById('webscreen-toast');
+    let toast = document.getElementById('scrmux-toast');
     
     if (!toast) {
         toast = document.createElement('div');
-        toast.id = 'webscreen-toast';
+        toast.id = 'scrmux-toast';
         
         // 注入样式
         Object.assign(toast.style, {

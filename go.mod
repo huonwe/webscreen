@@ -1,4 +1,4 @@
-module webscreen
+module scrmux
 
 go 1.27
 

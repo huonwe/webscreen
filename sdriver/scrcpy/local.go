@@ -6,7 +6,7 @@ package scrcpy
 // local TCP listener. On the device itself there is no adb, but we do not
 // need one either:
 //
-//   - scrcpy-server is started locally with app_process (webscreen is already
+//   - scrcpy-server is started locally with app_process (scrmux is already
 //     running as root there, the server drops back to the shell uid itself);
 //   - the server is asked for tunnel_forward=true, which makes it create the
 //     abstract unix socket "scrcpy_<scid>" and accept the three connections
@@ -31,7 +31,7 @@ import (
 
 const (
 	// LOCAL_WORK_DIR is a writable and executable location on the device.
-	LOCAL_WORK_DIR = "/data/local/tmp/webscreen"
+	LOCAL_WORK_DIR = "/data/local/tmp/scrmux"
 	// LOCAL_SERVER_PATH is where scrcpy-server is stored on the device.
 	LOCAL_SERVER_PATH = LOCAL_WORK_DIR + "/scrcpy-server"
 	// UHID_DEVICE is the uinput/hid device scrcpy uses for virtual input.

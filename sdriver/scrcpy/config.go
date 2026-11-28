@@ -3,8 +3,8 @@ package scrcpy
 import (
 	"context"
 	"embed"
-	"webscreen/sdriver"
-	"webscreen/utils"
+	"scrmux/sdriver"
+	"scrmux/utils"
 )
 
 const (

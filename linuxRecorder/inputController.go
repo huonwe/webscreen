@@ -57,18 +57,18 @@ func NewInputController(controllerType string, display string, screenWidth uint1
 		}
 
 	case CONTROLLER_TYPE_WAYLAND:
-		kb, err := uinput.CreateKeyboard("/dev/uinput", []byte("webscreen_keyboard"))
+		kb, err := uinput.CreateKeyboard("/dev/uinput", []byte("scrmux_keyboard"))
 		if err != nil {
 			return nil, err
 		}
-		m, err := uinput.CreateMouse("/dev/uinput", []byte("webscreen_mouse"))
+		m, err := uinput.CreateMouse("/dev/uinput", []byte("scrmux_mouse"))
 		if err != nil {
 			kb.Close()
 			return nil, err
 		}
 		touch, err := uinput.CreateMultiTouch(
 			"/dev/uinput",
-			[]byte("webscreen_touch"),
+			[]byte("scrmux_touch"),
 			int32(0),
 			int32(screenWidth),
 			int32(0),

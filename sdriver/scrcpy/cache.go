@@ -3,7 +3,7 @@ package scrcpy
 import (
 	"bytes"
 	"log"
-	"webscreen/sdriver"
+	"scrmux/sdriver"
 )
 
 var startCode []byte = []byte{0x00, 0x00, 0x00, 0x01}

@@ -9,12 +9,12 @@ import (
 	"sync"
 	"time"
 
-	"webscreen/auth"
-	appauth "webscreen/auth"
-	db "webscreen/database"
-	"webscreen/nexus"
-	"webscreen/utils"
-	"webscreen/webservice/android"
+	"scrmux/auth"
+	appauth "scrmux/auth"
+	db "scrmux/database"
+	"scrmux/nexus"
+	"scrmux/utils"
+	"scrmux/webservice/android"
 
 	"github.com/gin-gonic/gin"
 )

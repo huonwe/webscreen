@@ -1,6 +1,6 @@
 package utils
 
-// localRootMode is set when webscreen runs directly on the Android device
+// localRootMode is set when scrmux runs directly on the Android device
 // itself (with root) instead of on a host driving the device over adb.
 //
 // In this mode the scrcpy server is started locally (app_process) and the
@@ -13,7 +13,7 @@ func SetLocalRootMode(v bool) {
 	localRootMode = v
 }
 
-// IsLocalRootMode reports whether webscreen runs on the device itself.
+// IsLocalRootMode reports whether scrmux runs on the device itself.
 func IsLocalRootMode() bool {
 	return localRootMode
 }

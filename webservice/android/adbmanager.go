@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"webscreen/utils"
+	"scrmux/utils"
 )
 
 // 设备状态机取值（需求第 21 节）
@@ -134,10 +134,10 @@ func newManager() *Manager {
 	return m
 }
 
-// dataDir 返回持久化目录：优先 webscreen_datadir（fnOS fpk 传入 TRIM_PKGVAR），
+// dataDir 返回持久化目录：优先 scrmux_datadir（fnOS fpk 传入 TRIM_PKGVAR），
 // 否则退回当前工作目录，保证非 fpk 场景也不丢数据。
 func dataDir() string {
-	if dir := os.Getenv("webscreen_datadir"); dir != "" {
+	if dir := os.Getenv("scrmux_datadir"); dir != "" {
 		_ = os.MkdirAll(dir, 0o755)
 		return dir
 	}

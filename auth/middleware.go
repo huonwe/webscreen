@@ -52,7 +52,7 @@ func (s *Service) parseRoleFromCookie(c *gin.Context) (string, error) {
 				return s.jwtSecret, nil
 			},
 			jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}),
-			jwt.WithIssuer("webscreen"),
+			jwt.WithIssuer("scrmux"),
 		)
 		if err == nil && token.Valid {
 			if claims.Role == "admin" || claims.Role == "viewer" {

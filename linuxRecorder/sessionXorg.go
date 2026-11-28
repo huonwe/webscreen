@@ -6,11 +6,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"scrmux/linuxRecorder/config"
 	"strconv"
 	"strings"
 	"syscall"
 	"time"
-	"webscreen/linuxRecorder/config"
 )
 
 func (s *Session) launchXorgSession(width int, height int, frameRate int) error {
@@ -53,13 +53,13 @@ func (s *Session) launchXorgSession(width int, height int, frameRate int) error 
 }
 
 func writeXorgConfig(width, height, depth int) (string, string, error) {
-	configFile, err := os.CreateTemp("", "webscreen-xorg-*.conf")
+	configFile, err := os.CreateTemp("", "scrmux-xorg-*.conf")
 	if err != nil {
 		return "", "", err
 	}
 	defer configFile.Close()
 
-	logFile, err := os.CreateTemp("", "webscreen-xorg-*.log")
+	logFile, err := os.CreateTemp("", "scrmux-xorg-*.log")
 	if err != nil {
 		os.Remove(configFile.Name())
 		return "", "", err

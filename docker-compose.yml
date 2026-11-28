@@ -1,14 +1,14 @@
 services:
-  webscreen:
+  scrmux:
     build:
       context: .
       dockerfile: docker/lite/Dockerfile
-    image: dukihiroi/webscreen:latest
-    container_name: webscreen
+    image: dukihiroi/scrmux:latest
+    container_name: scrmux
     network_mode: host
     restart: unless-stopped
     privileged: true
     volumes:
       - /dev/bus/usb:/dev/bus/usb
       
-      - ./data:/webscreen/data
+      - ./data:/scrmux/data

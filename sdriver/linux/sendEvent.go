@@ -3,7 +3,7 @@ package linuxDriver
 import (
 	"bytes"
 	"encoding/binary"
-	"webscreen/sdriver"
+	"scrmux/sdriver"
 )
 
 func (d *LinuxDriver) SendEvent(event sdriver.Event) error {

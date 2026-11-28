@@ -10,14 +10,14 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"scrmux/sdriver"
+	"scrmux/sdriver/comm"
+	"scrmux/utils"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
-	"webscreen/sdriver"
-	"webscreen/sdriver/comm"
-	"webscreen/utils"
 )
 
 type ScrcpyDriver struct {
@@ -49,7 +49,7 @@ type ScrcpyDriver struct {
 	scid      string
 	// socketName string
 
-	// localMode is true when webscreen runs on the device itself (root, no adb)
+	// localMode is true when scrmux runs on the device itself (root, no adb)
 	localMode bool
 	// handle of the locally started scrcpy server
 	localServerCmd *exec.Cmd

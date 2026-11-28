@@ -1,6 +1,6 @@
 package rockchiphdmirx
 
-import "webscreen/sdriver"
+import "scrmux/sdriver"
 
 func ConfigDescription() []sdriver.ConfigParamDescription {
 	return []sdriver.ConfigParamDescription{

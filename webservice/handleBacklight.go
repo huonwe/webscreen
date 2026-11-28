@@ -12,7 +12,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"webscreen/utils"
+	"scrmux/utils"
 )
 
 // 受控端背光控制（隐私保护：屏幕黑、但不锁屏、串流与触控照常）。
@@ -25,7 +25,7 @@ import (
 // 原值不可用时退回 max_brightness。
 const backlightOffScript = `
 set -e
-prev=/data/local/tmp/webscreen_backlight_prev
+prev=/data/local/tmp/scrmux_backlight_prev
 : > "$prev"
 for d in /sys/class/backlight/*/; do
   f="${d}brightness"
@@ -41,7 +41,7 @@ echo WEBSREEN_BACKLIGHT_OK
 
 const backlightOnScript = `
 set -e
-prev=/data/local/tmp/webscreen_backlight_prev
+prev=/data/local/tmp/scrmux_backlight_prev
 if [ -s "$prev" ]; then
   # 每行格式： <目录> <原亮度> <最大亮度>；优先写回原亮度，缺失才用最大值。
   # 注意用 set -- 显式取字段，避免 read 在字段数不符时把值错位。
@@ -149,7 +149,7 @@ func listADBSerials(adbPath string) []string {
 }
 
 // runDeviceShell 在受控设备上以 root 执行一段 shell：
-//   - serial 非空 → 通过 adb（NAS 托管模式，webscreen 跑在 NAS 上）
+//   - serial 非空 → 通过 adb（NAS 托管模式，scrmux 跑在 NAS 上）
 //   - serial 为空 → 直接在本机执行（APK 内嵌模式，服务就跑在手机里）
 func runDeviceShell(serial, script string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
@@ -165,7 +165,7 @@ func runDeviceShell(serial, script string) (string, error) {
 	// 此时设备没有 adb 也不需要 adb。注意不能只看 serial 是否为空：
 	// 前端从 URL 拿到的是设备 id（例如 /screen/10fda345），本机模式下这个 id
 	// 并不是可用的 adb 串号，走 adb 分支会失败（真机实测报错
-	// "webscreen is running on the device itself (root mode), adb is neither
+	// "scrmux is running on the device itself (root mode), adb is neither
 	// available nor required"）。exec 直接传参，不经 shell 拼接，无需引号。
 	if strings.TrimSpace(serial) == "" || utils.IsLocalRootMode() {
 		cmd := exec.CommandContext(ctx, "/system/bin/su", "-c", wrapped)

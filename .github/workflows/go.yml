@@ -36,7 +36,7 @@ jobs:
         CGO_ENABLED: 0
       run: |
         # 1. 确定二进制文件名
-        BINARY_NAME="webscreen-${{ matrix.goos }}-${{ matrix.goarch }}"
+        BINARY_NAME="scrmux-${{ matrix.goos }}-${{ matrix.goarch }}"
         
         # 2. 如果是 Windows，添加 .exe 后缀
         if [ "${{ matrix.goos }}" = "windows" ]; then
@@ -118,7 +118,7 @@ jobs:
         id: meta-lite
         uses: docker/metadata-action@v6
         with:
-          images: ${{ secrets.DOCKERHUB_USERNAME }}/webscreen
+          images: ${{ secrets.DOCKERHUB_USERNAME }}/scrmux
           tags: |
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
             type=semver,pattern={{version}}
@@ -140,7 +140,7 @@ jobs:
       #   id: meta-full
       #   uses: docker/metadata-action@v6
       #   with:
-      #     images: ${{ secrets.DOCKERHUB_USERNAME }}/webscreen-full
+      #     images: ${{ secrets.DOCKERHUB_USERNAME }}/scrmux-full
       #     tags: |
       #       type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
       #       type=semver,pattern={{version}}

@@ -1,12 +1,12 @@
 <div align="center">
 
-# 📺 Webscreen
+# 📺 scrmux
 
 一款适用于 Android, Linux, 和 GameStream 设备的自托管屏幕串流 Web 应用程序。
 
-[![GitHub release](https://img.shields.io/github/v/release/huonwe/webscreen?style=flat-square)](https://github.com/huonwe/webscreen/releases)
-[![GitHub stars](https://img.shields.io/github/stars/huonwe/webscreen?style=flat-square)](https://github.com/huonwe/webscreen/stargazers)
-[![Go Version](https://img.shields.io/github/go-mod/go-version/huonwe/webscreen?style=flat-square)](https://github.com/huonwe/webscreen)
+[![GitHub release](https://img.shields.io/github/v/release/huonwe/scrmux?style=flat-square)](https://github.com/huonwe/scrmux/releases)
+[![GitHub stars](https://img.shields.io/github/stars/huonwe/scrmux?style=flat-square)](https://github.com/huonwe/scrmux/stargazers)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/huonwe/scrmux?style=flat-square)](https://github.com/huonwe/scrmux)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg?style=flat-square)](https://www.gnu.org/licenses/agpl-3.0)
 
 [English](README.md) • [日本語](README.jp.md)
@@ -24,7 +24,7 @@
 
 ## ✨ 功能特性
 
-Webscreen 可在 **Android Termux**、**Linux**、**Windows** 和 **MacOS**（同时支持 `amd64` 和 `arm64` 架构）上运行，未来可能会支持更多设备！
+scrmux 可在 **Android Termux**、**Linux**、**Windows** 和 **MacOS**（同时支持 `amd64` 和 `arm64` 架构）上运行，未来可能会支持更多设备！
 
 ### 🌟 通用功能
 - 超分辨率（需要 HTTPS）
@@ -46,7 +46,7 @@ Webscreen 可在 **Android Termux**、**Linux**、**Windows** 和 **MacOS**（�
 - 触控（多指触控、压感）
 > [Quick Start with Redroid](doc/quick-start-redroid.md)
 
-> **注意**：如需 Android APK（需 Root）和 FnOS fpk 安装包，可前往查看 [youyoudezhuzhu/webscreen](https://github.com/youyoudezhuzhu/webscreen)。
+> **注意**：如需 Android APK（需 Root）和 FnOS fpk 安装包，可前往查看 [youyoudezhuzhu/scrmux](https://github.com/youyoudezhuzhu/scrmux)。
 
 ### 🐧 Linux（Xvfb / Xorg / Sway）
 - 视频与控制
@@ -96,16 +96,16 @@ sudo apt install xvfb ffmpeg xfce4 sway wf-recorder seatd
 
 ### 方式一：使用预编译二进制文件
 
-从 [Releases](https://github.com/huonwe/webscreen/releases) 页面下载最新的二进制文件。
+从 [Releases](https://github.com/huonwe/scrmux/releases) 页面下载最新的二进制文件。
 
 ```bash
 mkdir ./data
-curl -fsSL https://raw.githubusercontent.com/huonwe/webscreen/main/config.yml -o ./data/config.yml
+curl -fsSL https://raw.githubusercontent.com/huonwe/scrmux/main/config.yml -o ./data/config.yml
 # You might need to change some settings here.
 ```
 
 ```bash
-./webscreen
+./scrmux
 
 ```
 
@@ -118,8 +118,8 @@ curl -fsSL https://raw.githubusercontent.com/huonwe/webscreen/main/config.yml -o
 > **Termux 注意事项**：如果在 Termux 上进行原生编译，必须执行 `go build -ldflags "-checklinkname=0"`。
 
 ```bash
-git clone [https://github.com/huonwe/webscreen.git](https://github.com/huonwe/webscreen.git)
-cd webscreen
+git clone [https://github.com/huonwe/scrmux.git](https://github.com/huonwe/scrmux.git)
+cd scrmux
 make
 
 ```
@@ -128,14 +128,14 @@ make
 
 ```yaml
 services:
-  webscreen:
-    image: dukihiroi/webscreen:latest
-    container_name: webscreen
+  scrmux:
+    image: dukihiroi/scrmux:latest
+    container_name: scrmux
     network_mode: host
     restart: unless-stopped
     volumes:
       - /dev/bus/usb:/dev/bus/usb
-      - ./data:/webscreen/data
+      - ./data:/scrmux/data
     privileged: true
 
 ```
@@ -168,7 +168,7 @@ services:
 ## 🤝 致谢
 
 * 非常感谢 [@Enterpr1se0](https://github.com/Enterpr1se0) 和 [@rogniceguy-max](https://github.com/rogniceguy-max) 修复了连接相关的 Bug！
-* 非常感谢 [youyoudezhuzhu/webscreen](https://github.com/youyoudezhuzhu/webscreen) 修复了未使用的 sdriver 资源释放 Bug 并新增了 Android ADB 管理器！
+* 非常感谢 [youyoudezhuzhu/scrmux](https://github.com/youyoudezhuzhu/scrmux) 修复了未使用的 sdriver 资源释放 Bug 并新增了 Android ADB 管理器！
 * 感谢 [websr](https://github.com/sb2702/websr) 提供的超分辨率技术支持。
 
 ## 📄 开源协议

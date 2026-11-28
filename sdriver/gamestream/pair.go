@@ -26,7 +26,7 @@ import (
 
 const (
 	defaultUniqueID   = "0123456789ABCDEF"
-	defaultDeviceName = "WebScreen"
+	defaultDeviceName = "scrmux"
 	defaultUUID       = "12345678-1234-1234-1234-123456789012"
 )
 

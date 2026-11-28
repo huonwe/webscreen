@@ -9,9 +9,9 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"scrmux/sdriver"
+	"scrmux/sdriver/comm"
 	"time"
-	"webscreen/sdriver"
-	"webscreen/sdriver/comm"
 )
 
 //go:embed bin/recorder

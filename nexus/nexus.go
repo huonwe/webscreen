@@ -5,17 +5,17 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"scrmux/consts"
+	db "scrmux/database"
+	"scrmux/sdriver"
+	"scrmux/sdriver/gamestream"
+	linuxDriver "scrmux/sdriver/linux"
+	rockchiphdmirx "scrmux/sdriver/rockchip-hdmirx"
+	"scrmux/sdriver/scrcpy"
 	"strconv"
 	"sync"
 	"sync/atomic"
 	"uuid"
-	"webscreen/consts"
-	db "webscreen/database"
-	"webscreen/sdriver"
-	"webscreen/sdriver/gamestream"
-	linuxDriver "webscreen/sdriver/linux"
-	rockchiphdmirx "webscreen/sdriver/rockchip-hdmirx"
-	"webscreen/sdriver/scrcpy"
 
 	"github.com/gorilla/websocket"
 	"github.com/pion/rtcp"
@@ -344,7 +344,7 @@ func (n *Nexus) NewViewSession(userID string, config ConnectionConfig) (*ViewSes
 // This is NOT going to connect to a remote device directly.
 func (v *ViewSession) connectToNexus(n *Nexus, cfg ConnectionConfig) error {
 	// if v.NexusConnected {
-	// 	log.Println("[webscreen] Viewer is already connected to Nexus")
+	// 	log.Println("[scrmux] Viewer is already connected to Nexus")
 	// 	return nil
 	// }
 	switch cfg.Protocol {
@@ -436,13 +436,13 @@ func (v *ViewSession) connectToNexus(n *Nexus, cfg ConnectionConfig) error {
 			func(state webrtc.PeerConnectionState) {
 				switch state {
 				case webrtc.PeerConnectionStateConnected:
-					log.Printf("[webscreen] ViewSession %s WebRTC connected, requesting IDR", v.SessionID)
+					log.Printf("[scrmux] ViewSession %s WebRTC connected, requesting IDR", v.SessionID)
 					n.RequestRemoteIDR(v.SessionID)
 				case webrtc.PeerConnectionStateDisconnected, webrtc.PeerConnectionStateFailed, webrtc.PeerConnectionStateClosed:
-					log.Printf("[webscreen] ViewSession %s disconnected from Nexus (state: %s)", v.SessionID, state.String())
+					log.Printf("[scrmux] ViewSession %s disconnected from Nexus (state: %s)", v.SessionID, state.String())
 					n.CloseViewSession(v.SessionID)
 				default:
-					log.Printf("[webscreen] ViewSession %s connection state changed: %s", v.SessionID, state.String())
+					log.Printf("[scrmux] ViewSession %s connection state changed: %s", v.SessionID, state.String())
 				}
 			},
 		)

@@ -1,7 +1,7 @@
 const translations = {
     en: {
         // App & Navigation
-        app_title: "WebScreen Console",
+        app_title: "scrmux Console",
         refresh: "Refresh",
         close: "Close",
         cancel: "Cancel",
@@ -179,13 +179,13 @@ const translations = {
         unlock_forgot_password: "Forgot PIN?",
         unlock_contact_admin: "Please contact the administrator to reset",
         unlock_success: "Unlock Successful",
-        unlock_welcome: "Welcome to WebScreen Management Console",
+        unlock_welcome: "Welcome to scrmux Management Console",
         unlock_network_error: "Network error, please try again",
         unlock_verify_success: "Verification successful",
     },
     zh: {
         // 应用与导航
-        app_title: "WebScreen 控制台",
+        app_title: "scrmux 控制台",
         refresh: "刷新",
         close: "关闭",
         cancel: "取消",
@@ -363,13 +363,13 @@ const translations = {
         unlock_forgot_password: "忘记密码？",
         unlock_contact_admin: "请联系管理员重置",
         unlock_success: "解锁成功",
-        unlock_welcome: "欢迎进入 WebScreen 管理控制台",
+        unlock_welcome: "欢迎进入 scrmux 管理控制台",
         unlock_network_error: "网络错误，请重试",
         unlock_verify_success: "验证成功",
     },
     ja: {
         // アプリ・ナビゲーション
-        app_title: "WebScreen コンソール",
+        app_title: "scrmux コンソール",
         refresh: "更新",
         close: "閉じる",
         cancel: "キャンセル",
@@ -547,7 +547,7 @@ const translations = {
         unlock_forgot_password: "PINを忘れた方",
         unlock_contact_admin: "管理者に連絡してリセットしてください",
         unlock_success: "ロック解除成功",
-        unlock_welcome: "WebScreen 管理コンソールへようこそ",
+        unlock_welcome: "scrmux 管理コンソールへようこそ",
         unlock_network_error: "ネットワークエラー。もう一度お試しください",
         unlock_verify_success: "検証成功",
     }
@@ -555,7 +555,7 @@ const translations = {
 
 class I18n {
     constructor() {
-        const saved = localStorage.getItem('webscreen_lang');
+        const saved = localStorage.getItem('scrmux_lang');
         const browserLang = (navigator.language || 'en').slice(0, 2);
         this.lang = ['en', 'zh', 'ja'].includes(saved)
             ? saved
@@ -565,7 +565,7 @@ class I18n {
     setLang(lang) {
         if (!translations[lang]) return;
         this.lang = lang;
-        localStorage.setItem('webscreen_lang', lang);
+        localStorage.setItem('scrmux_lang', lang);
         this.apply();
     }
 

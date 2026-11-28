@@ -89,7 +89,7 @@ func (s *Service) signJWT(ID int, role, username, loginMethod string, duration t
 		Username:    username,
 		LoginMethod: loginMethod,
 		RegisteredClaims: jwt.RegisteredClaims{
-			Issuer:    "webscreen",
+			Issuer:    "scrmux",
 			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(now.Add(duration)),
 		},

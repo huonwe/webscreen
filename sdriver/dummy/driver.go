@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"webscreen/sdriver"
-	"webscreen/sdriver/comm"
+	"scrmux/sdriver"
+	"scrmux/sdriver/comm"
 )
 
 // DummyDriver implements sdriver.SDriver by reading from a local H.264 Annex B file.

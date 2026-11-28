@@ -29,7 +29,7 @@ func (wm *WebMaster) GenerateToken() (string, error) {
 		RegisteredClaims: jwt.RegisteredClaims{
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			ExpiresAt: jwt.NewNumericDate(expirationTime),
-			Issuer:    "webscreen",
+			Issuer:    "scrmux",
 		},
 	}
 
@@ -46,7 +46,7 @@ func (wm *WebMaster) parseToken(tokenString string) (*CustomClaims, error) {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
 		return wm.jwtSecret, nil
-	}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}), jwt.WithIssuer("webscreen"))
+	}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}), jwt.WithIssuer("scrmux"))
 
 	if err != nil || !token.Valid {
 		return nil, fmt.Errorf("invalid token: %v", err)
@@ -113,7 +113,7 @@ func (wm *WebMaster) validateToken(tokenString string) bool {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
 		return wm.jwtSecret, nil
-	}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}), jwt.WithIssuer("webscreen"))
+	}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}), jwt.WithIssuer("scrmux"))
 
 	if err != nil || !token.Valid {
 		return false

@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"log"
-	"webscreen/sdriver"
+	"scrmux/sdriver"
 )
 
 func (r *Remote) HandleControlEvent(raw []byte) error {

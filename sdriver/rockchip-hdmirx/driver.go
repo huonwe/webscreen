@@ -9,11 +9,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"scrmux/sdriver"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
-	"webscreen/sdriver"
 )
 
 const defaultFFmpeg = "/usr/lib/jellyfin-ffmpeg/ffmpeg"

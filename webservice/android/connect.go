@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"scrmux/sdriver/scrcpy"
+	"scrmux/utils"
 	"strings"
-	"webscreen/sdriver/scrcpy"
-	"webscreen/utils"
 )
 
 func ExecADB(args ...string) error {

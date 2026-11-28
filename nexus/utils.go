@@ -239,10 +239,10 @@ func WaitAndGetFinalCodecParams(pc *webrtc.PeerConnection) (webrtc.RTPCodecParam
 
 func createAVTrack(videoMimeType string, AVSync bool) (*webrtc.TrackLocalStaticRTP, *webrtc.TrackLocalStaticRTP) {
 	mark := fmt.Sprintf("%d", time.Now().UnixNano())
-	trackID := fmt.Sprintf("%s-%s", "webscreen-track", randomString(8))
+	trackID := fmt.Sprintf("%s-%s", "scrmux-track", randomString(8))
 	trackIDVideo := trackID + "-" + mark + "-video"
 	trackIDAudio := trackID + "-" + mark + "-audio"
-	streamID := fmt.Sprintf("%s-%s", "webscreen-stream", randomString(8))
+	streamID := fmt.Sprintf("%s-%s", "scrmux-stream", randomString(8))
 	streamIDVideo := streamID + "-" + mark + "-video"
 	streamIDAudio := streamID + "-" + mark + "-audio"
 	if AVSync {

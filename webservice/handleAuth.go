@@ -31,7 +31,7 @@ func (wm *WebMaster) handleAuthStatus(c *gin.Context) {
 			return wm.jwtSecret, nil
 		},
 		jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}),
-		jwt.WithIssuer("webscreen"),
+		jwt.WithIssuer("scrmux"),
 	)
 	if err != nil || !token.Valid || claims.Role == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "登录已失效"})

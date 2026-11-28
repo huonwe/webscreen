@@ -2,8 +2,8 @@ package scrcpy
 
 import (
 	"log"
+	"scrmux/sdriver"
 	"time"
-	"webscreen/sdriver"
 )
 
 func (sd *ScrcpyDriver) GetReceivers() (<-chan sdriver.AVBox, <-chan sdriver.AVBox, chan sdriver.Event, chan sdriver.Event) {

@@ -1,6 +1,6 @@
 # Quick Start with Redroid and Docker Compose
 
-This guide helps you set up **Webscreen** alongside **Redroid** (Remote Android) using `docker-compose`. This allows you to run a virtual Android instance and control it via your browser.
+This guide helps you set up **scrmux** alongside **Redroid** (Remote Android) using `docker-compose`. This allows you to run a virtual Android instance and control it via your browser.
 
 ## Docker Compose Configuration
 
@@ -8,13 +8,13 @@ Create a file named `docker-compose.yml` with the following content:
 
 ```yaml
 services:
-  webscreen:
-    image: dukihiroi/webscreen:latest
-    container_name: webscreen
+  scrmux:
+    image: dukihiroi/scrmux:latest
+    container_name: scrmux
     restart: unless-stopped
     network_mode: host
     volumes:
-      - ./data:/webscreen/data
+      - ./data:/scrmux/data
     depends_on:
       - redroid
 
@@ -49,7 +49,7 @@ docker compose up -d
   
 - **Webwcreen cannot connect**:
   Ensure both containers are on the same network (docker-compose creates a default network automatically).
-  You can manually connect by entering the webscreen container:
+  You can manually connect by entering the scrmux container:
   ```bash
-  docker exec -it webscreen adb connect redroid:5555
+  docker exec -it scrmux adb connect redroid:5555
   ```

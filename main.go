@@ -8,9 +8,9 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"webscreen/consts"
-	db "webscreen/database"
-	"webscreen/webservice"
+	"scrmux/consts"
+	db "scrmux/database"
+	"scrmux/webservice"
 
 	"github.com/gin-gonic/gin"
 )
@@ -41,7 +41,7 @@ func main() {
 		log.Fatalf("Failed to load config.yml: %v", err)
 	}
 	// config.EnableAndroidDiscover = true
-	MyDataBase, err := db.InitDB(DATA_DIR + "/webscreen.db")
+	MyDataBase, err := db.InitDB(DATA_DIR + "/scrmux.db")
 	if err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}

@@ -2,16 +2,16 @@ package webservice
 
 import (
 	"log"
+	"scrmux/consts"
+	db "scrmux/database"
+	"scrmux/nexus"
+	"scrmux/sdriver/gamestream"
+	linuxDriver "scrmux/sdriver/linux"
+	rockchipDriver "scrmux/sdriver/rockchip-hdmirx"
+	"scrmux/sdriver/scrcpy"
+	"scrmux/webservice/android"
 	"strconv"
 	"uuid"
-	"webscreen/consts"
-	db "webscreen/database"
-	"webscreen/nexus"
-	"webscreen/sdriver/gamestream"
-	linuxDriver "webscreen/sdriver/linux"
-	rockchipDriver "webscreen/sdriver/rockchip-hdmirx"
-	"webscreen/sdriver/scrcpy"
-	"webscreen/webservice/android"
 
 	"github.com/gin-gonic/gin"
 )

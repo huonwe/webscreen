@@ -1,6 +1,6 @@
 {
-  "name": "WebScreen",
-  "short_name": "WebScreen",
+  "name": "scrmux",
+  "short_name": "scrmux",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#000000",

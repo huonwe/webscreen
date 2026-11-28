@@ -3,7 +3,7 @@ package webservice
 import (
 	"log"
 	"net/http"
-	"webscreen/nexus"
+	"scrmux/nexus"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
