@@ -14,7 +14,7 @@ import (
 )
 
 // generateSelfSignedCert 在内存中生成自签 TLS 证书
-func GenerateSelfSignedCert(hostname string, ip string) (tls.Certificate, error) {
+func GenerateSelfSignedCert(hostname string) (tls.Certificate, error) {
 	// 1. 生成 ECDSA 私钥
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
@@ -38,7 +38,7 @@ func GenerateSelfSignedCert(hostname string, ip string) (tls.Certificate, error)
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		BasicConstraintsValid: true,
 		// 添加本地访问常用的 IP 和域名（SAN 扩展，现代浏览器强制校验）
-		IPAddresses: []net.IP{net.ParseIP("127.0.0.1"), net.ParseIP("::1"), net.ParseIP(ip)},
+		IPAddresses: getLocalIPs(),
 		DNSNames:    []string{hostname},
 	}
 
@@ -57,4 +57,18 @@ func GenerateSelfSignedCert(hostname string, ip string) (tls.Certificate, error)
 	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: privBytes})
 
 	return tls.X509KeyPair(certPEM, keyPEM)
+}
+
+func getLocalIPs() []net.IP {
+	var ips []net.IP
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return []net.IP{net.ParseIP("127.0.0.1"), net.ParseIP("::1")}
+	}
+	for _, addr := range addrs {
+		if ipNet, ok := addr.(*net.IPNet); ok {
+			ips = append(ips, ipNet.IP)
+		}
+	}
+	return ips
 }

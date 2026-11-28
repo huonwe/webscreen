@@ -1,10 +1,11 @@
 package webservice
 
 import (
-	"database/sql"
+	"crypto/tls"
 	"fmt"
 	"io/fs"
 	"log"
+	"net"
 	"net/http"
 	"sync"
 	"time"
@@ -13,7 +14,6 @@ import (
 	appauth "scrmux/auth"
 	db "scrmux/database"
 	"scrmux/nexus"
-	"scrmux/utils"
 	"scrmux/webservice/android"
 
 	"github.com/gin-gonic/gin"
@@ -29,7 +29,6 @@ type WebMaster struct {
 	trustedIPs           []string
 	UnlockAttemptRecords map[string]UnlockAttemptRecord
 	jwtSecret            []byte
-	DB                   *sql.DB
 	authService          *appauth.Service
 	authMu               sync.Mutex
 
@@ -42,7 +41,7 @@ type WebMaster struct {
 	staticFS            fs.FS
 }
 
-func New(config WebMasterConfig, staticFS fs.FS, database *sql.DB) *WebMaster {
+func New(config WebMasterConfig, staticFS fs.FS) *WebMaster {
 	wm := &WebMaster{
 		// ScreenSessions:       make(map[string]ScreenSession),
 		config:               config,
@@ -51,9 +50,8 @@ func New(config WebMasterConfig, staticFS fs.FS, database *sql.DB) *WebMaster {
 		UnlockAttemptRecords: make(map[string]UnlockAttemptRecord),
 		pin:                  config.PIN,
 		trustedIPs:           append([]string(nil), config.TrustedIPs...),
-		authService:          auth.NewService(database, config.JWTSecret),
-		DB:                   database,
-		Nexus:                nexus.NewNexus(database, config.MTU),
+		authService:          auth.NewService(config.JWTSecret),
+		Nexus:                nexus.NewNexus(config.MTU),
 	}
 	secret := config.JWTSecret
 	if secret == "" {
@@ -73,16 +71,19 @@ func New(config WebMasterConfig, staticFS fs.FS, database *sql.DB) *WebMaster {
 func (wm *WebMaster) setRouter() {
 	// gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
+	r.GET("/ping", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "pong over HTTPS"})
+	})
 
 	// 前端资源是 //go:embed 进二进制的：升级后浏览器若沿用缓存的旧 HTML/JS，
 	// 会出现"按钮在但点了没反应"（旧页面没有新脚本标签）这类极难排查的现象。
 	// 因此统一禁止缓存，保证升级后刷新即生效。
-	r.Use(func(c *gin.Context) {
-		c.Header("Cache-Control", "no-cache, no-store, must-revalidate")
-		c.Header("Pragma", "no-cache")
-		c.Header("Expires", "0")
-		c.Next()
-	})
+	// r.Use(func(c *gin.Context) {
+	// 	c.Header("Cache-Control", "no-cache, no-store, must-revalidate")
+	// 	c.Header("Pragma", "no-cache")
+	// 	c.Header("Expires", "0")
+	// 	c.Next()
+	// })
 
 	subFS, _ := fs.Sub(wm.staticFS, "static")
 	r.StaticFS("/static", http.FS(subFS))
@@ -123,7 +124,6 @@ func (wm *WebMaster) setRouter() {
 		api.GET("/device/configDescription", wm.handleDeviceConfigDescription)
 		api.GET("/gamestream/discover", wm.handleGameStreamDiscover)
 		api.POST("/gamestream/pair", wm.handleGameStreamPair)
-		// api.GET("/generalConfigDescription", wm.handleGeneralConfigDescription)
 
 		// api.POST("/device/discovery", wm.handleListDevicesDiscoveried)
 
@@ -136,45 +136,48 @@ func (wm *WebMaster) setRouter() {
 		api.POST("/adb/device/remove", wm.handleADBRemove)
 		api.POST("/adb/device/disconnect", wm.handleADBDisconnect)
 		api.POST("/adb/device/reconnect", wm.handleADBReconnect)
-
 		// 受控端背光（隐私保护：屏幕黑，但不锁屏，串流照常）
 		api.POST("/screen/backlight", wm.handleBacklight)
 
-		// auth := api.Group("/auth")
-		// {
-		// 	auth.GET("/status", authSrv.HandleStatus)
-		// }
 	}
 
 	wm.router = r
 }
 
-func (wm *WebMaster) Serve(host string, port int) {
-	// if wm.config.EnableAndroidDiscover {
-	// 	go wm.AndroidDevicesDiscovery()
-	// }
+func (wm *WebMaster) Serve(ip string, port int, tls_on bool, tls_hostname string) {
 	// 统一设备管理器：USB 热插拔、RSA 授权状态与无线重连都由它跟踪。
-	// 本机 root 模式下没有 adb，不需要它。
-	if !utils.IsLocalRootMode() {
-		android.GetManager().Start()
-	}
+	android.GetManager().Start()
 	wm.setRouter()
-	err := wm.router.Run(fmt.Sprintf("%s:%d", host, port))
-	if err != nil {
-		log.Fatalf("Failed to start server: %v", err)
+	if tls_on {
+		cert, err := GenerateSelfSignedCert(tls_hostname)
+		if err != nil {
+			log.Fatalf("生成证书失败: %v", err)
+		}
+		srv := &http.Server{
+			Addr:    net.JoinHostPort(ip, fmt.Sprintf("%d", port)),
+			Handler: wm.router,
+			TLSConfig: &tls.Config{
+				Certificates: []tls.Certificate{cert},
+			},
+		}
+		err = srv.ListenAndServeTLS("", "")
+		if err != nil {
+			log.Fatalf("Failed to start server: %v", err)
+		}
+		return
+	} else {
+		log.Printf("Starting server without TLS on %s:%d", ip, port)
+		err := http.ListenAndServe(net.JoinHostPort(ip, fmt.Sprintf("%d", port)), wm.router)
+		if err != nil {
+			log.Fatalf("Failed to start server: %v", err)
+		}
 	}
 }
 
 func (wm *WebMaster) Close() {
-	wm.authMu.Lock()
-	defer wm.authMu.Unlock()
-	if wm.DB != nil {
-		_ = wm.DB.Close()
-		wm.DB = nil
-		wm.authService = nil
+	nexus := wm.Nexus
+	if nexus != nil {
+		_ = nexus.Close()
+		wm.Nexus = nil
 	}
-	// for k, v := range maps.All(wm.ScreenSessions) {
-	// 	log.Printf("closing session %v", k)
-	// 	v.Close()
-	// }
 }

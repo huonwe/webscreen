@@ -18,16 +18,31 @@ import (
 //go:embed public
 var publicFS embed.FS
 
-var DATA_DIR string
-
 func main() {
-	// host := flag.String("host", "0.0.0.0", "host to bind the server to")
-	// port := flag.String("port", "8081", "server port")
+	gin.SetMode(gin.ReleaseMode)
+
+	var DATA_DIR string
+	var TLS bool
+	var TLS_DOMAIN string
+	var IP string
+	var PORT int
 	flag.StringVar(&DATA_DIR, "D", "./data", "directory to store data")
+	flag.StringVar(&DATA_DIR, "data", "./data", "directory to store data")
+	flag.BoolVar(&TLS, "tls", true, "enable TLS")
+	flag.StringVar(&TLS_DOMAIN, "tls_domain", "", "TLS domain name for the server")
+	flag.StringVar(&IP, "ip", "", "IP address to bind the server to")
+	flag.IntVar(&PORT, "port", 0, "server port")
+
 	flag.Parse()
 	consts.DATA_DIR = DATA_DIR
-	// pin should be 6 digits and only digits
-	gin.SetMode(gin.ReleaseMode)
+
+	MyDataBase, err := db.InitDB(DATA_DIR + "/scrmux.db")
+	if err != nil {
+		log.Fatalf("Failed to initialize database: %v", err)
+	}
+
+	consts.DB = MyDataBase
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
@@ -40,20 +55,25 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to load config.yml: %v", err)
 	}
-	// config.EnableAndroidDiscover = true
-	MyDataBase, err := db.InitDB(DATA_DIR + "/scrmux.db")
-	if err != nil {
-		log.Fatalf("Failed to initialize database: %v", err)
+	if IP != "" {
+		config.IP_Listen = IP
 	}
-	consts.DB = MyDataBase
+	if PORT != 0 {
+		config.Port_Listen = PORT
+	}
+	if TLS_DOMAIN != "" {
+		config.TLS_Domain = TLS_DOMAIN
+	}
+
 	webMaster := webservice.New(config, pub)
 	log.Printf("Starting web service on %s:%d", config.IP_Listen, config.Port_Listen)
 	log.Printf("Data directory: %s", DATA_DIR)
 	log.Printf("Trusted IPs: %v", config.TrustedIPs)
-	go webMaster.Serve(config.IP_Listen, config.Port_Listen)
+	go webMaster.Serve(config.IP_Listen, config.Port_Listen, TLS, config.TLS_Domain)
 
 	<-ctx.Done()
-	log.Println("Gracefully closing")
+	log.Println("Closing...")
 	webMaster.Close()
+	_ = consts.DB.Close()
 
 }

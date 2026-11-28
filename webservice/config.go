@@ -9,7 +9,7 @@ import (
 )
 
 type WebMasterConfig struct {
-	Hostname    string `yaml:"hostname"`
+	TLS_Domain  string `yaml:"tls_domain"`
 	IP_Listen   string `yaml:"ip_listen"`
 	Port_Listen int    `yaml:"port_listen"`
 
@@ -25,7 +25,7 @@ type WebMasterConfig struct {
 
 func LoadConfig(path string) (WebMasterConfig, error) {
 	defaultConfig := WebMasterConfig{
-		Hostname:    "localhost",
+		TLS_Domain:  "localhost",
 		IP_Listen:   "0.0.0.0",
 		Port_Listen: 8081,
 		JWTSecret:   "change_before_use",
