@@ -49,7 +49,6 @@ type ViewSession struct {
 
 	done      chan struct{}
 	closeOnce sync.Once
-	closeFn   func() // 协议专属关闭逻辑（如 peerConnection.Close()）
 }
 
 // func New
@@ -166,7 +165,9 @@ func (v *ViewSession) PushingAVM() {
 					return
 				}
 			case event := <-v.cacheMsgCh:
-				v.HandleMsg(event)
+				if err := v.HandleMsg(event); err != nil {
+					log.Printf("[nexus] ViewSession %s HandleMsg failed: %v", v.SessionID, err)
+				}
 			case <-v.done:
 				log.Printf("[nexus] ViewSession %s done, exiting PushingBox goroutine", v.SessionID)
 				return
@@ -196,7 +197,9 @@ func (v *ViewSession) PushingAVM() {
 					_ = v.audioTrack.WriteRTP(packet)
 				}
 			case event := <-v.cacheMsgCh:
-				v.HandleMsg(event)
+				if err := v.HandleMsg(event); err != nil {
+					log.Printf("[nexus] ViewSession %s HandleMsg failed: %v", v.SessionID, err)
+				}
 			// log.Printf("[nexus] Pushed audio frame: PTS=%d, RTP TS=%d, size=%d bytes", box.PTS, ts, len(box.Data))
 			case <-v.done:
 				log.Printf("[nexus] ViewSession %s done, exiting PushingBox goroutine", v.SessionID)
@@ -248,7 +251,6 @@ func (v *ViewSession) HandleMsg(event sdriver.Event) error {
 		v.WSConn.WriteMessage(websocket.BinaryMessage, msg)
 	case consts.PROTOCOL_TYPE_WEBRTC:
 		if v.dataChannelUnordered != nil {
-			log.Printf("[nexus] Sending message of type: %d over WebRTC data channel", eType)
 			v.dataChannelUnordered.Send(msg)
 		}
 	}
@@ -259,10 +261,21 @@ func (v *ViewSession) HandleMsg(event sdriver.Event) error {
 
 func (v *ViewSession) Close() {
 	v.closeOnce.Do(func() {
-		close(v.done) // 通知发送协程和 PushAV 安全退出，不关闭 data channel
-		// close(v.cacheMsgCh) // 关闭消息缓存通道
-		if v.closeFn != nil {
-			v.closeFn()
+		if v.WSConn != nil {
+			_ = v.WSConn.WriteJSON(map[string]string{"msg": "This view session is going to be closed"})
+		}
+		close(v.done) // 通知发送协程和 PushAVM 安全退出，不关闭 data channel
+		switch v.ConnectionConfig.Protocol {
+		case consts.PROTOCOL_TYPE_WEBSOCKET:
+			if v.WSConn != nil {
+				_ = v.WSConn.Close()
+			}
+		case consts.PROTOCOL_TYPE_WEBRTC:
+			if v.dataChannelUnordered != nil {
+				_ = v.dataChannelUnordered.Close()
+				_ = v.dataChannelOrdered.Close() // 如果有顺序通道，也关闭
+				_ = v.peerConnection.Close()
+			}
 		}
 	})
 }

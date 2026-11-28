@@ -16,15 +16,18 @@ type remoteBinding struct {
 	masterSessionID string
 	viewers         map[string]*ViewSession
 	viewersSnap     atomic.Pointer[[]*ViewSession] // 无锁快照，供 pumpRemote 极速读取
-	stopCh          chan struct{}                  // 用于通知 pump 协程退出
+	stopCh          chan struct{}                  // 用于通知 bind pump 协程退出
 }
 
 func (b *remoteBinding) Close() {
 	_, _, msgChan, _ := b.sdriver.GetReceivers()
 	msgChan <- sdriver.TextMsgEvent{
-		Msg: "Remote is closing",
+		Msg: "This remote is is going to be closed",
 	}
 	close(b.stopCh)
+	for _, viewer := range b.viewers {
+		viewer.Close()
+	}
 }
 
 // 2. 媒体泵：从 SDriver 读取 AVBox，零拷贝广播给所有观众

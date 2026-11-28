@@ -47,14 +47,13 @@ func NewNexus(mtu uint16) *Nexus {
 	}
 }
 
+// 只有在 Nexus 关闭时，才会调用该方法关闭所有
+// 运行中单个用户关闭使用 CloseViewSession 方法
 func (n *Nexus) Close() error {
 	n.Lock()
 	defer n.Unlock()
 	for _, binding := range n.bindings {
-		close(binding.stopCh)
-		if binding.sdriver != nil {
-			binding.sdriver.Stop()
-		}
+		binding.Close()
 	}
 	return nil
 }
@@ -269,28 +268,8 @@ func (v *ViewSession) connectToNexus(n *Nexus, cfg ConnectionConfig) error {
 		if err != nil {
 			return fmt.Errorf("failed to create PeerConnection: %v", err)
 		}
-		var videoTrack, audioTrack *webrtc.TrackLocalStaticRTP
-		// Check if the remote is already connected and has tracks
-		n.RLock()
-		r, exists := n.bindings[cfg.RemoteUUID]
-		n.RUnlock()
-		if !exists {
-			videoTrack, audioTrack = createAVTrack(videoMimeType, cfg.Extra["av_sync"] == "true")
-		} else {
-			n.RLock()
-			masterSession := n.sessions[r.masterSessionID]
-			n.RUnlock()
-			masterSession.MasterSessionLock.Lock()
-			videoTrack = masterSession.videoTrack
-			audioTrack = masterSession.audioTrack
-			if videoTrack == nil || audioTrack == nil {
-				// 这说明master session是websocket传输
-				videoTrack, audioTrack = createAVTrack(videoMimeType, cfg.Extra["av_sync"] == "true")
-				masterSession.videoTrack = videoTrack
-				masterSession.audioTrack = audioTrack
-			}
-			masterSession.MasterSessionLock.Unlock()
-		}
+
+		videoTrack, audioTrack := createAVTrack(videoMimeType, cfg.Extra["av_sync"] == "true")
 
 		// 2. Add SHARED tracks to PeerConnection
 		rtpSenderVideo, err := peerConnection.AddTrack(videoTrack)
