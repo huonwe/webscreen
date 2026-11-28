@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"scrmux/consts"
 	"strings"
 
 	"github.com/pion/interceptor"
@@ -54,7 +55,7 @@ func createPeerConnection(cfg ConnectionConfig) (*webrtc.PeerConnection, error) 
 		return nil, fmt.Errorf("failed to register default interceptors: %v", err)
 	}
 	settingEngine := webrtc.SettingEngine{}
-	err = settingEngine.SetEphemeralUDPPortRange(UDP_PORT_START, UDP_PORT_END)
+	err = settingEngine.SetEphemeralUDPPortRange(consts.WEBRTC_UDP_RANGE_START, consts.WEBRTC_UDP_RANGE_END)
 	if err != nil {
 		return nil, fmt.Errorf("failed to set ephemeral UDP port range: %v", err)
 	}
@@ -62,7 +63,7 @@ func createPeerConnection(cfg ConnectionConfig) (*webrtc.PeerConnection, error) 
 	// Configure ICE servers (STUN) for NAT traversal
 	config := webrtc.Configuration{
 		ICEServers: []webrtc.ICEServer{
-			{URLs: []string{"stun:stun.l.google.com:19302"}},
+			{URLs: consts.WEBRTC_ICE_SERVERS},
 		},
 	}
 	// Create PeerConnection

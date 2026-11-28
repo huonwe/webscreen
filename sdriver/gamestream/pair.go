@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"scrmux/consts"
 	"strings"
 	"time"
 )
@@ -47,13 +48,12 @@ type authStore struct {
 	clientPEM  []byte
 }
 
-func loadOrCreateAuth(dir string) (*authStore, error) {
-	if dir == "" {
-		dir = defaultAuthDir
-	}
+func loadOrCreateAuth() (*authStore, error) {
+	dir := consts.DATA_DIR + "/gamestream_auth"
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return nil, fmt.Errorf("create auth dir: %w", err)
 	}
+	// log.Println("Loading or creating auth in", dir)
 	keyPath := filepath.Join(dir, "client_key.pem")
 	certPath := filepath.Join(dir, "client_cert.pem")
 
@@ -127,10 +127,8 @@ func loadOrCreateAuth(dir string) (*authStore, error) {
 	return store, nil
 }
 
-func serverCertPath(dir, ip string) string {
-	if dir == "" {
-		dir = defaultAuthDir
-	}
+func serverCertPath(ip string) string {
+	dir := consts.DATA_DIR + "/gamestream_auth"
 	safeIP := strings.ReplaceAll(ip, ":", "_")
 	return filepath.Join(dir, fmt.Sprintf("server_cert_%s.pem", safeIP))
 }
@@ -140,12 +138,12 @@ func IsHostPaired(ip string) bool {
 	if ip == "" {
 		return false
 	}
-	_, err := os.Stat(serverCertPath(defaultAuthDir, ip))
+	_, err := os.Stat(serverCertPath(ip))
 	return err == nil
 }
 
 func (s *authStore) loadServerCert(ip string) (*x509.Certificate, error) {
-	data, err := os.ReadFile(serverCertPath(s.dir, ip))
+	data, err := os.ReadFile(serverCertPath(ip))
 	if err != nil {
 		return nil, err
 	}
@@ -158,7 +156,7 @@ func (s *authStore) loadServerCert(ip string) (*x509.Certificate, error) {
 
 func (s *authStore) saveServerCert(ip string, cert *x509.Certificate) error {
 	pemBytes := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: cert.Raw})
-	return os.WriteFile(serverCertPath(s.dir, ip), pemBytes, 0644)
+	return os.WriteFile(serverCertPath(ip), pemBytes, 0644)
 }
 
 func (s *authStore) httpsClient(serverCert *x509.Certificate) (*http.Client, error) {
@@ -188,20 +186,20 @@ func (s *authStore) httpsClient(serverCert *x509.Certificate) (*http.Client, err
 // PairDevice performs the NVIDIA GameStream / Sunshine PIN pairing handshake
 // and persists the client key/cert and pinned server certificate locally.
 func PairDevice(ip string, port int, pin string) error {
-	return pairDeviceWithDir(defaultAuthDir, ip, port, pin)
+	return pairDeviceWithDir(ip, port, pin)
 }
 
-func pairDeviceWithDir(authDir, ip string, port int, pin string) error {
+func pairDeviceWithDir(ip string, port int, pin string) error {
 	if ip == "" {
 		return errors.New("gamestream: host ip is required")
 	}
 	if port <= 0 {
-		port = defaultHTTPPort
+		port = 47989
 	}
 	if pin == "" {
 		return errors.New("gamestream: pairing pin is required")
 	}
-	store, err := loadOrCreateAuth(authDir)
+	store, err := loadOrCreateAuth()
 	if err != nil {
 		return err
 	}

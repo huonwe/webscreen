@@ -8,11 +8,6 @@ import (
 	"strings"
 )
 
-var (
-	defaultHTTPPort = 47989
-	defaultAuthDir  = "./sdriver/gamestream_auth"
-)
-
 func ConfigDescription() []sdriver.ConfigParamDescription {
 	return []sdriver.ConfigParamDescription{
 		{Name: "app", Type: "string", Required: false, Default: "Desktop", Badge: true, Description: "application name or id to launch on the host"},
@@ -71,7 +66,7 @@ func parseConfig(cfg map[string]string) (*streamConfig, error) {
 		return nil, fmt.Errorf("gamestream: video_codec must be h264 or h265")
 	}
 	var err error
-	if c.port, err = positiveInt(cfg["device_port"], defaultHTTPPort, "port"); err != nil {
+	if c.port, err = positiveInt(cfg["device_port"], 47989, "port"); err != nil {
 		return nil, err
 	}
 	if c.fps, err = positiveInt(cfg["frame_rate"], 60, "frame_rate"); err != nil || c.fps > 240 {

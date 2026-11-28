@@ -47,7 +47,7 @@ func New(config map[string]string) (*Driver, error) {
 	if err != nil {
 		return nil, err
 	}
-	store, err := loadOrCreateAuth(defaultAuthDir)
+	store, err := loadOrCreateAuth()
 	if err != nil {
 		return nil, fmt.Errorf("gamestream: init auth: %w", err)
 	}

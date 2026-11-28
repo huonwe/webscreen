@@ -9,6 +9,7 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/gorilla/websocket v1.5.4-0.20240701034025-d67f41855da4
 	github.com/grandcat/zeroconf v1.0.0
+	github.com/hashicorp/mdns v1.0.7
 	github.com/jezek/xgb v1.3.1
 	github.com/pion/interceptor v1.0.0-rc.1
 	github.com/pion/rtcp v1.2.20

@@ -25,7 +25,7 @@ func main() {
 	// port := flag.String("port", "8081", "server port")
 	flag.StringVar(&DATA_DIR, "D", "./data", "directory to store data")
 	flag.Parse()
-	consts.SetDataDir(DATA_DIR)
+	consts.DATA_DIR = DATA_DIR
 	// pin should be 6 digits and only digits
 	gin.SetMode(gin.ReleaseMode)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
