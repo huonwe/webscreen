@@ -156,8 +156,11 @@ services:
     restart: unless-stopped
     volumes:
       - /dev/bus/usb:/dev/bus/usb
-      - ./data:/scrmux/data
     privileged: true
+    environment:
+      - TLS=true
+      - IP="0.0.0.0"
+      - PORT=8081
 
 ```
 
