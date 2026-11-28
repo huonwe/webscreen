@@ -45,7 +45,7 @@ type ViewSession struct {
 	// 建议内部带一个带缓冲的 sendCh chan AVBox，由独立写协程消费，防止单个慢观众拖垮全局广播
 	cacheVideoCh chan sdriver.AVBox // 例如 cap = 64
 	cacheAudioCh chan sdriver.AVBox // 例如 cap = 32
-	// cacheMsgCh   chan []byte        // 例如 cap = 64
+	cacheMsgCh   chan sdriver.Event // 例如 cap = 64
 
 	done      chan struct{}
 	closeOnce sync.Once
@@ -84,7 +84,7 @@ func isKeyFrameVideo(payload []byte, codec string) bool {
 		}
 	}
 
-	if codec == consts.CODEC_TYPE_H265 || codec == "hevc" {
+	if codec == consts.CODEC_TYPE_H265 {
 		for i := 0; i+4 <= len(payload); {
 			naluSize := int(binary.BigEndian.Uint32(payload[i : i+4]))
 			i += 4
@@ -141,8 +141,8 @@ func isKeyFrameVideo(payload []byte, codec string) bool {
 }
 
 // 非阻塞写入：如果某个观众网络极卡导致缓冲区满，直接丢帧保护其他观众
-func (v *ViewSession) PushingAVBox() {
-	if v.cacheVideoCh == nil || v.cacheAudioCh == nil {
+func (v *ViewSession) PushingAVM() {
+	if v.cacheVideoCh == nil || v.cacheAudioCh == nil || v.cacheMsgCh == nil {
 		log.Printf("[nexus] PushPacket: videoCh or audioCh is nil, reject to pushing")
 		return
 	}
@@ -165,6 +165,8 @@ func (v *ViewSession) PushingAVBox() {
 					v.Close()
 					return
 				}
+			case event := <-v.cacheMsgCh:
+				v.HandleMsg(event)
 			case <-v.done:
 				log.Printf("[nexus] ViewSession %s done, exiting PushingBox goroutine", v.SessionID)
 				return
@@ -193,6 +195,8 @@ func (v *ViewSession) PushingAVBox() {
 					packet.Timestamp = ts
 					_ = v.audioTrack.WriteRTP(packet)
 				}
+			case event := <-v.cacheMsgCh:
+				v.HandleMsg(event)
 			// log.Printf("[nexus] Pushed audio frame: PTS=%d, RTP TS=%d, size=%d bytes", box.PTS, ts, len(box.Data))
 			case <-v.done:
 				log.Printf("[nexus] ViewSession %s done, exiting PushingBox goroutine", v.SessionID)

@@ -5,8 +5,104 @@ import (
 	"fmt"
 	"log"
 	"scrmux/sdriver"
+	"sync/atomic"
 )
 
+type remoteBinding struct {
+	RemoteUUID   string
+	RemoteConfig RemoteConfig
+	sdriver      sdriver.SDriver
+
+	masterSessionID string
+	viewers         map[string]*ViewSession
+	viewersSnap     atomic.Pointer[[]*ViewSession] // 无锁快照，供 pumpRemote 极速读取
+	stopCh          chan struct{}                  // 用于通知 pump 协程退出
+}
+
+func (b *remoteBinding) Close() {
+	_, _, msgChan, _ := b.sdriver.GetReceivers()
+	msgChan <- sdriver.TextMsgEvent{
+		Msg: "Remote is closing",
+	}
+	close(b.stopCh)
+}
+
+// 2. 媒体泵：从 SDriver 读取 AVBox，零拷贝广播给所有观众
+// 合并后的媒体与信令泵
+func (b *remoteBinding) pumpRemote() {
+	videoCh, audioCh, msgCh, _ := b.sdriver.GetReceivers()
+
+	for {
+		// 所有流均已关闭时自动退出
+		if videoCh == nil && audioCh == nil && msgCh == nil {
+			return
+		}
+
+		select {
+		case <-b.stopCh:
+			return
+
+		case box, ok := <-videoCh:
+			if !ok {
+				videoCh = nil
+				continue
+			}
+			b.broadcastAV(box)
+
+		case box, ok := <-audioCh:
+			if !ok {
+				audioCh = nil
+				continue
+			}
+			b.broadcastAV(box)
+
+		case event, ok := <-msgCh:
+			if !ok {
+				msgCh = nil
+				continue
+			}
+			b.broadcastMsg(event)
+		}
+	}
+}
+
+func (b *remoteBinding) broadcastAV(box sdriver.AVBox) {
+	snap := b.viewersSnap.Load()
+	if snap == nil {
+		return
+	}
+	for _, viewer := range *snap {
+		if box.Type == 0 {
+			select {
+			case viewer.cacheVideoCh <- box:
+			default:
+				log.Printf("[nexus] Dropped video packet for viewer %s due to full cache", viewer.SessionID)
+			}
+		} else if box.Type == 1 {
+			select {
+			case viewer.cacheAudioCh <- box:
+			default:
+				log.Printf("[nexus] Dropped audio packet for viewer %s due to full cache", viewer.SessionID)
+			}
+		}
+	}
+}
+
+func (b *remoteBinding) broadcastMsg(event sdriver.Event) { // 请替换为实际的 event 类型
+	snap := b.viewersSnap.Load()
+	if snap == nil {
+		return
+	}
+	for _, viewer := range *snap {
+		select {
+		case viewer.cacheMsgCh <- event: // 由 viewer 内部协程异步串行执行 viewer.HandleMsg(event)
+		default:
+			log.Printf("[nexus] Dropped msg for viewer %s due to full cache", viewer.SessionID)
+		}
+	}
+}
+
+// Browser -> Nexus -> Remote
 func (b *remoteBinding) HandleControlEvent(raw []byte) error {
 	if !b.sdriver.Capabilities().CanControl {
 		return fmt.Errorf("driver does not support control events")
@@ -20,21 +116,6 @@ func (b *remoteBinding) HandleControlEvent(raw []byte) error {
 	// log.Printf("Parsed control event: %+v", event)
 	return b.sdriver.SendEvent(event)
 }
-
-// func (r *Remote) HandleControlEventStream(raw []byte) {
-// 	event, err := b.parseEvent(raw)
-// 	if err != nil {
-// 		log.Printf("[agent] Failed to parse control event: %v", err)
-// 		return
-// 	}
-// 	_, _, _, controlCh := r.sdriver.GetReceivers()
-// 	select {
-// 	case controlCh <- event:
-// 	default:
-// 		log.Printf("[agent] Failed to send control event: channel full")
-// 	}
-// 	// log.Printf("Parsed control event: %+v", event)
-// }
 
 func (b *remoteBinding) parseEvent(raw []byte) (sdriver.Event, error) {
 	if len(raw) < 1 {
@@ -258,4 +339,13 @@ func (b *remoteBinding) parseSetClipboardEvent(raw []byte) (*sdriver.SetClipboar
 		Content:  raw[14 : 14+textLen],
 	}
 	return e, nil
+}
+
+// 辅助方法：在持有 n.Lock() 时刷新快照
+func (b *remoteBinding) refreshSnapshot() {
+	snap := make([]*ViewSession, 0, len(b.viewers))
+	for _, v := range b.viewers {
+		snap = append(snap, v)
+	}
+	b.viewersSnap.Store(&snap)
 }

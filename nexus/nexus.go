@@ -13,7 +13,6 @@ import (
 	"scrmux/sdriver/scrcpy"
 	"strconv"
 	"sync"
-	"sync/atomic"
 	"uuid"
 
 	"github.com/gorilla/websocket"
@@ -22,17 +21,6 @@ import (
 	"github.com/pion/rtp/codecs"
 	"github.com/pion/webrtc/v5"
 )
-
-type remoteBinding struct {
-	RemoteUUID   string
-	RemoteConfig RemoteConfig
-	sdriver      sdriver.SDriver
-
-	masterSessionID string
-	viewers         map[string]*ViewSession
-	viewersSnap     atomic.Pointer[[]*ViewSession] // 无锁快照，供 pumpRemote 极速读取
-	stopCh          chan struct{}                  // 用于通知 pump 协程退出
-}
 
 type Nexus struct {
 	sync.RWMutex
@@ -106,83 +94,8 @@ func (n *Nexus) ConnectToRemote(remoteUUID string, config RemoteConfig) error {
 	n.Unlock()
 
 	// 启动该设备的专属媒体分发泵
-	go n.pumpRemoteAV(binding)
-	go n.pumpRemoteMsg(binding)
+	go binding.pumpRemote()
 	return nil
-}
-
-// 2. 媒体泵：从 SDriver 读取 AVBox，零拷贝广播给所有观众
-func (n *Nexus) pumpRemoteAV(b *remoteBinding) {
-	videoCh, audioCh, _, _ := b.sdriver.GetReceivers()
-	var box sdriver.AVBox
-	var ok bool
-
-	for {
-		select {
-		case <-b.stopCh:
-			return
-		case box, ok = <-videoCh:
-			if !ok {
-				videoCh = nil // 防止已关闭的 channel 持续触发空转
-			}
-
-		case box, ok = <-audioCh:
-			if !ok {
-				audioCh = nil
-			}
-		}
-
-		if videoCh == nil && audioCh == nil {
-			return // 音视频流均已结束，自动退出
-		}
-		if !ok {
-			continue
-		}
-
-		if snap := b.viewersSnap.Load(); snap != nil {
-			for _, viewer := range *snap {
-				if box.Type == 0 {
-					select {
-					case viewer.cacheVideoCh <- box:
-					default:
-						log.Printf("[nexus] Dropped video packet for viewer %s due to full cache", viewer.SessionID)
-					}
-				} else if box.Type == 1 {
-					select {
-					case viewer.cacheAudioCh <- box:
-					default:
-						log.Printf("[nexus] Dropped audio packet for viewer %s due to full cache", viewer.SessionID)
-					}
-				}
-			}
-		}
-	}
-}
-
-// SDriver -> Remote -> Nexus  -> 前端
-func (n *Nexus) pumpRemoteMsg(bind *remoteBinding) {
-	_, _, msgCh, _ := bind.sdriver.GetReceivers()
-	log.Printf("[nexus] Starting message pump for remote %s", bind.RemoteUUID)
-	for {
-		select {
-		case <-bind.stopCh:
-			return
-		case event, ok := <-msgCh:
-			if !ok {
-				return
-			}
-			// log.Printf("[nexus] Received message from remote %s: %v", bind.RemoteUUID, event)
-			if snap := bind.viewersSnap.Load(); snap != nil {
-				for _, viewer := range *snap {
-					err := viewer.HandleMsg(event)
-					if err != nil {
-						log.Printf("[nexus] Error handling message for viewer %s: %v", viewer.SessionID, err)
-					}
-				}
-			}
-		}
-	}
-
 }
 
 // 3. 绑定观众到设备（首个人自动成为 Master，后续观众自动触发关键帧）
@@ -211,25 +124,6 @@ func (n *Nexus) BindViewSessionToRemote(sessionID, remoteUUID string) error {
 	driver.RequestIDR(isFirst)
 	return nil
 }
-
-// 4. 控制指令转发（利用 SDriver.SendEvent） browser -> Nexus -> Remote -> SDriver -> Device
-// func (r *remoteBinding) DispatchEventToRemote(raw_event []byte) error {
-// 	// n.RLock()
-// 	// v, ok := n.sessions[sessionID]
-// 	// if !ok || !v.CanControl {
-// 	// 	n.RUnlock()
-// 	// 	return errors.New("unauthorized or session closed")
-// 	// }
-// 	// remoteUUID, bound := n.sessionToRemote[sessionID]
-// 	// b := n.bindings[remoteUUID]
-// 	// n.RUnlock()
-
-// 	// if remoteBinding == nil {
-// 	// 	return errors.New("remote is nil")
-// 	// }
-// 	err := r.HandleControlEvent(raw_event)
-// 	return err
-// }
 
 // 5. 统一关闭入口（Detach-then-Close：绝对无死锁，天然幂等）
 func (n *Nexus) CloseViewSession(sessionID string) {
@@ -330,8 +224,8 @@ func (n *Nexus) NewViewSession(userID string, config ConnectionConfig) (*ViewSes
 		ConnectionConfig: config,
 		cacheVideoCh:     make(chan sdriver.AVBox, 30),
 		cacheAudioCh:     make(chan sdriver.AVBox, 30),
-		// cacheMsgCh:        make(chan []byte, 64),
-		done: make(chan struct{}),
+		cacheMsgCh:       make(chan sdriver.Event, 64),
+		done:             make(chan struct{}),
 
 		audioPacketizer: rtp.NewPacketizer(n.mtu, 0, 0, &codecs.OpusPayloader{}, rtp.NewRandomSequencer(), 48000),
 		videoPacketizer: packetizer,
@@ -346,7 +240,7 @@ func (n *Nexus) NewViewSession(userID string, config ConnectionConfig) (*ViewSes
 	n.sessions[sessionID] = viewSession
 	n.Unlock()
 
-	go viewSession.PushingAVBox() // 启动独立协程处理视频/音频缓存队列，避免阻塞 pumpRemote
+	go viewSession.PushingAVM() // 启动独立协程处理视频/音频缓存队列，避免阻塞 pumpRemote
 
 	return viewSession, nil
 }
@@ -627,15 +521,6 @@ func (n *Nexus) GetRemoteMediaMeta(remoteUUID string) sdriver.MediaMeta {
 		return sdriver.MediaMeta{}
 	}
 	return b.sdriver.MediaMeta()
-}
-
-// 辅助方法：在持有 n.Lock() 时刷新快照
-func (b *remoteBinding) refreshSnapshot() {
-	snap := make([]*ViewSession, 0, len(b.viewers))
-	for _, v := range b.viewers {
-		snap = append(snap, v)
-	}
-	b.viewersSnap.Store(&snap)
 }
 
 // 如果存在master session，返回设备是否正在串流。如果存在master session，同时返回master session的串流配置
