@@ -11,6 +11,7 @@ import (
 	"log"
 	"net"
 	"net/url"
+	"scrmux/consts"
 	"strconv"
 	"strings"
 	"time"
@@ -531,7 +532,7 @@ func buildAnnounceSDP(hs *httpSession, cfg *streamConfig, res *rtspResult) strin
 	attr("x-nv-general.enableRecoveryMode", "0")
 	attr("x-nv-video[0].videoEncoderSlicesPerFrame", "1")
 
-	if cfg.codec == "h265" {
+	if cfg.codec == consts.CODEC_TYPE_H265 {
 		attr("x-nv-clientSupportHevc", "1")
 		attr("x-nv-vqos[0].bitStreamFormat", "1")
 	} else {

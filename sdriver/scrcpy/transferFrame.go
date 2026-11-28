@@ -6,6 +6,7 @@ import (
 	"log"
 
 	// "bytes"
+	"scrmux/consts"
 	"scrmux/sdriver"
 )
 
@@ -52,11 +53,11 @@ func (da *ScrcpyDriver) convertVideoFrame() {
 		}
 
 		switch da.mediaMeta.VideoCodec {
-		case "h265":
+		case consts.CODEC_TYPE_H265:
 			nalTypeF = func(payloadBuf byte) byte { return (payloadBuf >> 1) & 0x3F }
-		case "h264":
+		case consts.CODEC_TYPE_H264:
 			nalTypeF = func(payloadBuf byte) byte { return payloadBuf & 0x1F }
-		case "av1":
+		case consts.CODEC_TYPE_AV1:
 			nalTypeF = func(payloadBuf byte) byte { return (payloadBuf >> 3) & 0x0F }
 		default:
 			log.Println("Unknown codec type for NALU parsing:", da.mediaMeta.VideoCodec)

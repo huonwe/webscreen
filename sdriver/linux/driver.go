@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"scrmux/consts"
 	"scrmux/sdriver"
 	"scrmux/sdriver/comm"
 	"time"
@@ -176,11 +177,11 @@ func (d *LinuxDriver) handleConnection() {
 		// 解析 NAL Header
 		var nalType byte
 		switch d.video_codec {
-		case "h265", "hevc":
+		case consts.CODEC_TYPE_H265, "hevc":
 			// HEVC NALU Header 是 2 字节，Type 在第一个字节的 1-6 bit
 			nalHeader := nalData[0]
 			nalType = (nalHeader & 0x7E) >> 1
-		case "h264":
+		case consts.CODEC_TYPE_H264:
 			// H.264 NALU Header 是 1 字节，Type 在低 5 bit
 			nalHeader := nalData[0]
 			nalType = nalHeader & 0x1F
@@ -191,7 +192,7 @@ func (d *LinuxDriver) handleConnection() {
 		isKeyFrame := false
 		// log.Printf("Processing NALU Type: %d", nalType)
 
-		if d.video_codec == "h265" || d.video_codec == "hevc" {
+		if d.video_codec == consts.CODEC_TYPE_H265 || d.video_codec == "hevc" {
 			switch nalType {
 			case 32: // VPS
 				d.lastVPS = make([]byte, len(nalData))
@@ -249,7 +250,7 @@ func (d *LinuxDriver) handleConnection() {
 		if isKeyFrame {
 			startCode := []byte{0x00, 0x00, 0x00, 0x01}
 			sendData = make([]byte, 0, len(d.lastVPS)+len(d.lastSPS)+len(d.lastPPS)+len(payloadBuf)+16)
-			if d.video_codec == "h265" || d.video_codec == "hevc" {
+			if d.video_codec == consts.CODEC_TYPE_H265 || d.video_codec == "hevc" {
 				if len(d.lastVPS) > 0 {
 					sendData = append(sendData, startCode...)
 					sendData = append(sendData, d.lastVPS...)

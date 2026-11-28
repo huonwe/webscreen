@@ -3,6 +3,7 @@ package webservice
 import (
 	"log"
 	"net/http"
+	"scrmux/consts"
 	"scrmux/nexus"
 
 	"github.com/gin-gonic/gin"
@@ -40,7 +41,7 @@ func (wm *WebMaster) handleScreenWS(c *gin.Context) {
 		conn.WriteJSON(map[string]any{"status": "error", "message": "Remote UUID is required", "stage": "connection_view_session"})
 		return
 	}
-	if connectionConfig.Protocol == "websocket" {
+	if connectionConfig.Protocol == consts.PROTOCOL_TYPE_WEBSOCKET {
 		connectionConfig.WSConn = conn
 	}
 
@@ -59,12 +60,12 @@ func (wm *WebMaster) handleScreenWS(c *gin.Context) {
 		conn.WriteJSON(map[string]any{"status": "error", "message": err.Error(), "stage": "connection_view_session"})
 		return
 	}
-	if connectionConfig.Protocol == "websocket" {
+	if connectionConfig.Protocol == consts.PROTOCOL_TYPE_WEBSOCKET {
 		viewSession.WSConn = conn
 		log.Println("set WSConnection to viewSession")
 		conn.WriteJSON(map[string]any{"status": "ok", "useWSTransport": true, "message": "WebSocket connection established", "stage": "connection_view_session"})
 	}
-	if connectionConfig.Protocol == "webrtc" {
+	if connectionConfig.Protocol == consts.PROTOCOL_TYPE_WEBRTC {
 		finalSDP := viewSession.FinalSDP2Nexus
 		if finalSDP == "" {
 			log.Println("Failed to create view session: Final SDP is empty")

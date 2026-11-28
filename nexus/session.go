@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"log"
+	"scrmux/consts"
 	"scrmux/sdriver"
 	"sync"
 
@@ -76,7 +77,7 @@ func isKeyFrameVideo(payload []byte, codec string) bool {
 		return false
 	}
 
-	if codec == "h264" {
+	if codec == consts.CODEC_TYPE_H264 {
 		for i := 0; i+4 <= len(payload); {
 			naluSize := int(binary.BigEndian.Uint32(payload[i : i+4]))
 			i += 4
@@ -90,7 +91,7 @@ func isKeyFrameVideo(payload []byte, codec string) bool {
 		}
 	}
 
-	if codec == "h265" || codec == "hevc" {
+	if codec == consts.CODEC_TYPE_H265 || codec == "hevc" {
 		for i := 0; i+4 <= len(payload); {
 			naluSize := int(binary.BigEndian.Uint32(payload[i : i+4]))
 			i += 4
@@ -120,7 +121,7 @@ func isKeyFrameVideo(payload []byte, codec string) bool {
 	}
 
 	switch codec {
-	case "h264":
+	case consts.CODEC_TYPE_H264:
 		for _, offset := range startCodeOffsets {
 			if offset < len(payload) && payload[offset]&0x1f == 5 {
 				return true
@@ -129,7 +130,7 @@ func isKeyFrameVideo(payload []byte, codec string) bool {
 		if len(startCodeOffsets) == 0 && payload[0]&0x1f == 5 {
 			return true
 		}
-	case "h265", "hevc":
+	case consts.CODEC_TYPE_H265, "hevc":
 		for _, offset := range startCodeOffsets {
 			if offset < len(payload) {
 				nalType := (payload[offset] >> 1) & 0x3f
@@ -153,7 +154,7 @@ func (v *ViewSession) PushingAVBox() {
 		return
 	}
 	log.Println("[nexus] ViewSession PushingAVBox started, sessionID:", v.SessionID, "protocol:", v.ConnectionConfig.Protocol)
-	if v.ConnectionConfig.Protocol == "websocket" {
+	if v.ConnectionConfig.Protocol == consts.PROTOCOL_TYPE_WEBSOCKET {
 		for {
 			select {
 			case box := <-v.cacheVideoCh:
@@ -178,7 +179,7 @@ func (v *ViewSession) PushingAVBox() {
 		}
 	}
 
-	if v.ConnectionConfig.Protocol == "webrtc" {
+	if v.ConnectionConfig.Protocol == consts.PROTOCOL_TYPE_WEBRTC {
 		for {
 			select {
 			case box := <-v.cacheVideoCh:
@@ -246,9 +247,9 @@ func (v *ViewSession) HandleMsg(event sdriver.Event) error {
 	}
 	// log.Printf("[nexus] Handling message of type: %d", eType)
 	switch v.ConnectionConfig.Protocol {
-	case "websocket":
+	case consts.PROTOCOL_TYPE_WEBSOCKET:
 		v.WSConn.WriteMessage(websocket.BinaryMessage, msg)
-	case "webrtc":
+	case consts.PROTOCOL_TYPE_WEBRTC:
 		if v.dataChannelUnordered != nil {
 			log.Printf("[nexus] Sending message of type: %d over WebRTC data channel", eType)
 			v.dataChannelUnordered.Send(msg)

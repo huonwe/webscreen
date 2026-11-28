@@ -12,6 +12,7 @@ import (
 	"encoding/hex"
 	"encoding/pem"
 	"math/big"
+	"scrmux/consts"
 	"scrmux/sdriver"
 	"testing"
 	"time"
@@ -112,7 +113,7 @@ func TestEmitVideoFrameSplitsNALs(t *testing.T) {
 	d := &Driver{
 		videoChan: make(chan sdriver.AVBox, 8),
 		done:      make(chan struct{}),
-		meta:      sdriver.MediaMeta{VideoCodec: "h264"},
+		meta:      sdriver.MediaMeta{VideoCodec: consts.CODEC_TYPE_H264},
 	}
 
 	// SPS (type 7) + PPS (type 8) + IDR (type 5)
@@ -143,7 +144,7 @@ func TestEmitVideoFrameSplitsNALs(t *testing.T) {
 func TestParseConfig(t *testing.T) {
 	cfg, err := parseConfig(map[string]string{
 		"ip":             "192.168.1.10",
-		"video_codec":    "h265",
+		"video_codec":    consts.CODEC_TYPE_H265,
 		"video_bit_rate": "15M",
 		"resolution":     "2560x1440",
 		"frame_rate":     "120",
@@ -151,7 +152,7 @@ func TestParseConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parseConfig failed: %v", err)
 	}
-	if cfg.bitrate != 15000 || cfg.width != 2560 || cfg.height != 1440 || cfg.fps != 120 || cfg.codec != "h265" {
+	if cfg.bitrate != 15000 || cfg.width != 2560 || cfg.height != 1440 || cfg.fps != 120 || cfg.codec != consts.CODEC_TYPE_H265 {
 		t.Fatalf("unexpected parsed config: %+v", cfg)
 	}
 }

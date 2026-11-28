@@ -1,51 +1,32 @@
 package nexus
 
+import "scrmux/consts"
+
 func ConfigDescription() []ConfigParamDescription {
 
 	return []ConfigParamDescription{
-		// {
-		// 	Name:        "av_sync",
-		// 	Type:        "boolean",
-		// 	Required:    true,
-		// 	Default:     false,
-		// 	Description: "Enable A/V sync. Useful when watching videos.",
-		// },
-		// {
-		// 	Name:        "use_local_timestamp",
-		// 	Type:        "boolean",
-		// 	Required:    true,
-		// 	Default:     true,
-		// 	Description: "Use local timestamp instead of device timestamp. This may reduce latency but the video may be less smooth.",
-		// },
-		// {
-		// 	Name:        "websocket_instead_of_webrtc",
-		// 	Type:        "boolean",
-		// 	Required:    true,
-		// 	Default:     false,
-		// 	Description: "Use WebSocket instead of WebRTC for streaming. (Now developing, no real effect yet)",
-		// },
 		{
 			Name:        "protocol_transport",
 			Type:        "string",
 			Required:    true,
-			Default:     "webrtc",
-			Options:     []string{"webrtc", "websocket"},
+			Default:     consts.PROTOCOL_TYPE_WEBRTC,
+			Options:     []string{consts.PROTOCOL_TYPE_WEBRTC, consts.PROTOCOL_TYPE_WEBSOCKET},
 			Description: "Connection protocol to use.",
 		},
 		{
 			Name:        "video_codec",
 			Type:        "string",
 			Required:    true,
-			Default:     "h264",
-			Options:     []string{"h264", "h265"},
+			Default:     consts.CODEC_TYPE_H264,
+			Options:     []string{consts.CODEC_TYPE_H264, consts.CODEC_TYPE_H265},
 			Description: "Video codec to use for the connection.",
 		},
 		{
 			Name:        "audio_codec",
 			Type:        "string",
 			Required:    true,
-			Default:     "opus",
-			Options:     []string{"opus"},
+			Default:     consts.CODEC_TYPE_OPUS,
+			Options:     []string{consts.CODEC_TYPE_OPUS},
 			Description: "Audio codec to use for the connection.",
 		},
 		{

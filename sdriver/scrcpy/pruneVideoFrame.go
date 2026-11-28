@@ -1,6 +1,9 @@
 package scrcpy
 
-import "bytes"
+import (
+	"bytes"
+	"scrmux/consts"
+)
 
 // PruneSEI 高效去除 SEI 和 AUD
 // 采用原地复用底层数组的方式，避免多次内存搬运和重新分配内存
@@ -80,12 +83,12 @@ func isSEIOrAUD(nalWithHeader []byte, codec string) bool {
 	header := nalWithHeader[4]
 	var nalType byte
 
-	if codec == "h264" {
+	if codec == consts.CODEC_TYPE_H264 {
 		// H.264: 低 5 位是 Type
 		nalType = header & 0x1F
 		// 6: SEI, 9: AUD
 		return nalType == 6 || nalType == 9
-	} else if codec == "h265" {
+	} else if codec == consts.CODEC_TYPE_H265 {
 		// H.265: 中间 6 位是 Type (右移1位)
 		nalType = (header >> 1) & 0x3F
 		// 39: Prefix SEI, 40: Suffix SEI, 35: AUD

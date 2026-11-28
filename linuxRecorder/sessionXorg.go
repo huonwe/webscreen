@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"scrmux/consts"
 	"scrmux/linuxRecorder/config"
 	"strconv"
 	"strings"
@@ -87,9 +88,9 @@ func (s *Session) StartFFmpeg(codec string, resolution string, bitRate string, f
 
 	var bestEncoder string
 	switch codec {
-	case "h264":
+	case consts.CODEC_TYPE_H264:
 		bestEncoder = GetBestH264Encoder()
-	case "h265", "hevc":
+	case consts.CODEC_TYPE_H265, "hevc":
 		codec = "hevc" // 统一格式名，供 ffmpeg 的 -f 参数使用
 		bestEncoder = GetBestHEVCEncoder()
 	default:
@@ -126,7 +127,7 @@ func (s *Session) StartFFmpeg(codec string, resolution string, bitRate string, f
 		"-pix_fmt", "yuv420p", // 注意 FFmpeg 是 -pix_fmt 而不是 -x
 	}
 
-	if codec == "h264" {
+	if codec == consts.CODEC_TYPE_H264 {
 		cmdArgs = append(cmdArgs,
 			"-profile:v", "baseline",
 			"-level", "4.1",

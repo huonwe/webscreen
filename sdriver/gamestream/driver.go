@@ -3,6 +3,7 @@ package gamestream
 import (
 	"fmt"
 	"net"
+	"scrmux/consts"
 	"scrmux/sdriver"
 	"sync"
 	"time"
@@ -98,7 +99,7 @@ func New(config map[string]string) (*Driver, error) {
 		controlChan: make(chan sdriver.Event, 16),
 		meta: sdriver.MediaMeta{
 			VideoCodec: cfg.codec,
-			AudioCodec: "opus",
+			AudioCodec: consts.CODEC_TYPE_OPUS,
 			Width:      uint32(cfg.width),
 			Height:     uint32(cfg.height),
 			FPS:        uint32(cfg.fps),

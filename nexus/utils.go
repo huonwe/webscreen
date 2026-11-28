@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"scrmux/consts"
 	"time"
 
 	"github.com/pion/webrtc/v5"
@@ -14,13 +15,13 @@ func getMimeTypeFromString(codecName string) (string, error) {
 	var mimeType string
 
 	switch codecName {
-	case "h264", "avc":
+	case consts.CODEC_TYPE_H264, "avc":
 		mimeType = webrtc.MimeTypeH264
-	case "h265", "hevc":
+	case consts.CODEC_TYPE_H265, "hevc":
 		mimeType = webrtc.MimeTypeH265
-	case "av1":
+	case consts.CODEC_TYPE_AV1:
 		mimeType = webrtc.MimeTypeAV1
-	case "opus":
+	case consts.CODEC_TYPE_OPUS:
 		mimeType = webrtc.MimeTypeOpus
 	default:
 		return "", errors.New("unsupported video codec")
@@ -47,7 +48,7 @@ func createMediaEngine(mimeTypes []string) *webrtc.MediaEngine {
 						{Type: "nack", Parameter: "pli"},
 					},
 				},
-				PayloadType: PAYLOAD_TYPE_AV1_PROFILE_MAIN_5_1,
+				PayloadType: consts.PAYLOAD_TYPE_AV1_PROFILE_MAIN_5_1,
 			}, webrtc.RTPCodecTypeVideo)
 			if err != nil {
 				log.Println("RegisterCodec AV1 failed:", err)
@@ -103,7 +104,7 @@ func batchRegisterCodecH264(m *webrtc.MediaEngine) {
 				{Type: "nack", Parameter: "pli"},
 			},
 		},
-		PayloadType: PAYLOAD_TYPE_H264_PROFILE_HIGH_5_1,
+		PayloadType: consts.PAYLOAD_TYPE_H264_PROFILE_HIGH_5_1,
 	}, webrtc.RTPCodecTypeVideo)
 	// high profile for iphone safari
 	err = m.RegisterCodec(webrtc.RTPCodecParameters{
@@ -119,7 +120,7 @@ func batchRegisterCodecH264(m *webrtc.MediaEngine) {
 				{Type: "nack", Parameter: "pli"},
 			},
 		},
-		PayloadType: PAYLOAD_TYPE_H264_PROFILE_HIGH_5_1_0C,
+		PayloadType: consts.PAYLOAD_TYPE_H264_PROFILE_HIGH_5_1_0C,
 	}, webrtc.RTPCodecTypeVideo)
 	if err != nil {
 		log.Println("RegisterCodec H264 failed:", err)
@@ -138,7 +139,7 @@ func batchRegisterCodecH264(m *webrtc.MediaEngine) {
 				{Type: "nack", Parameter: "pli"},
 			},
 		},
-		PayloadType: PAYLOAD_TYPE_H264_PROFILE_BASELINE_3_1,
+		PayloadType: consts.PAYLOAD_TYPE_H264_PROFILE_BASELINE_3_1,
 	}, webrtc.RTPCodecTypeVideo)
 	if err != nil {
 		log.Println("RegisterCodec H264 failed:", err)
@@ -157,7 +158,7 @@ func batchRegisterCodecH264(m *webrtc.MediaEngine) {
 				{Type: "nack", Parameter: "pli"},
 			},
 		},
-		PayloadType: PAYLOAD_TYPE_H264_PROFILE_BASELINE_3_1_0C,
+		PayloadType: consts.PAYLOAD_TYPE_H264_PROFILE_BASELINE_3_1_0C,
 	}, webrtc.RTPCodecTypeVideo)
 	if err != nil {
 		log.Println("RegisterCodec H264 failed:", err)
@@ -180,7 +181,7 @@ func batchRegisterCodecH265(m *webrtc.MediaEngine) {
 				{Type: "nack", Parameter: "pli"},
 			},
 		},
-		PayloadType: PAYLOAD_TYPE_H265_PROFILE_MAIN_TIER_MAIN_5_1,
+		PayloadType: consts.PAYLOAD_TYPE_H265_PROFILE_MAIN_TIER_MAIN_5_1,
 	}, webrtc.RTPCodecTypeVideo)
 	if err != nil {
 		log.Println("RegisterCodec H265 failed:", err)
@@ -198,7 +199,7 @@ func batchRegisterCodecH265(m *webrtc.MediaEngine) {
 				{Type: "nack", Parameter: "pli"},
 			},
 		},
-		PayloadType: PAYLOAD_TYPE_H265_PROFILE_MAIN_TIER_MAIN_4_1,
+		PayloadType: consts.PAYLOAD_TYPE_H265_PROFILE_MAIN_TIER_MAIN_4_1,
 	}, webrtc.RTPCodecTypeVideo)
 	if err != nil {
 		log.Println("RegisterCodec H265 failed:", err)

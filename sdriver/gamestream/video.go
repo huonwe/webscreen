@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"log"
 	"net"
+	"scrmux/consts"
 	"scrmux/sdriver"
 	"time"
 )
@@ -400,7 +401,7 @@ func (d *Driver) emitVideoFrame(annexB []byte, frameIdx uint32, waitingForIDR *b
 // updateConfigOrCheckIDR caches VPS/SPS/PPS (without start codes), drops AUD/SEI,
 // and returns true if nal is a VCL slice to emit.
 func (d *Driver) updateConfigOrCheckIDR(nal []byte, isIDR *bool) bool {
-	if d.meta.VideoCodec == "h265" {
+	if d.meta.VideoCodec == consts.CODEC_TYPE_H265 {
 		if len(nal) < 2 {
 			return false
 		}

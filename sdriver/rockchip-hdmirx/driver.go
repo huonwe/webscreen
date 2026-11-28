@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"scrmux/consts"
 	"scrmux/sdriver"
 	"strconv"
 	"strings"
@@ -62,9 +63,9 @@ func New(config map[string]string) (*Driver, error) {
 	}
 	codec := strings.ToLower(config["video_codec"])
 	if codec == "" {
-		codec = "h264"
+		codec = consts.CODEC_TYPE_H264
 	}
-	if codec != "h264" && codec != "h265" {
+	if codec != consts.CODEC_TYPE_H264 && codec != consts.CODEC_TYPE_H265 {
 		return nil, fmt.Errorf("video_codec must be h264 or h265")
 	}
 	bitRate := config["video_bit_rate"]
@@ -80,8 +81,8 @@ func New(config map[string]string) (*Driver, error) {
 	}
 
 	encoder := "h264_rkmpp"
-	outputFormat := "h264"
-	if codec == "h265" {
+	outputFormat := consts.CODEC_TYPE_H264
+	if codec == consts.CODEC_TYPE_H265 {
 		encoder = "hevc_rkmpp"
 		outputFormat = "hevc"
 	}
@@ -246,7 +247,7 @@ func (d *Driver) emitNAL(nal []byte, start time.Time) {
 		return
 	}
 	var nalType byte
-	if d.meta.VideoCodec == "h265" {
+	if d.meta.VideoCodec == consts.CODEC_TYPE_H265 {
 		if len(nal) < 2 {
 			return
 		}
@@ -255,26 +256,26 @@ func (d *Driver) emitNAL(nal []byte, start time.Time) {
 		nalType = nal[0] & 0x1f
 	}
 	d.mu.Lock()
-	isIDR := (d.meta.VideoCodec == "h264" && nalType == 5) ||
-		(d.meta.VideoCodec == "h265" && nalType >= 19 && nalType <= 21)
+	isIDR := (d.meta.VideoCodec == consts.CODEC_TYPE_H264 && nalType == 5) ||
+		(d.meta.VideoCodec == consts.CODEC_TYPE_H265 && nalType >= 19 && nalType <= 21)
 	switch {
-	case d.meta.VideoCodec == "h265" && nalType == 32:
+	case d.meta.VideoCodec == consts.CODEC_TYPE_H265 && nalType == 32:
 		d.lastVPS = append([]byte(nil), nal...)
 		d.mu.Unlock()
 		return
-	case d.meta.VideoCodec == "h265" && nalType == 33:
+	case d.meta.VideoCodec == consts.CODEC_TYPE_H265 && nalType == 33:
 		d.lastSPS = append([]byte(nil), nal...)
 		d.mu.Unlock()
 		return
-	case d.meta.VideoCodec == "h265" && nalType == 34:
+	case d.meta.VideoCodec == consts.CODEC_TYPE_H265 && nalType == 34:
 		d.lastPPS = append([]byte(nil), nal...)
 		d.mu.Unlock()
 		return
-	case d.meta.VideoCodec == "h264" && nalType == 7:
+	case d.meta.VideoCodec == consts.CODEC_TYPE_H264 && nalType == 7:
 		d.lastSPS = append([]byte(nil), nal...)
 		d.mu.Unlock()
 		return
-	case d.meta.VideoCodec == "h264" && nalType == 8:
+	case d.meta.VideoCodec == consts.CODEC_TYPE_H264 && nalType == 8:
 		d.lastPPS = append([]byte(nil), nal...)
 		d.mu.Unlock()
 		return

@@ -13,7 +13,7 @@ import (
 )
 
 func createPeerConnection(cfg ConnectionConfig) (*webrtc.PeerConnection, error) {
-	if cfg.VideoCodec != "h264" && cfg.VideoCodec != "h265" && cfg.VideoCodec != "av1" {
+	if cfg.VideoCodec != consts.CODEC_TYPE_H264 && cfg.VideoCodec != consts.CODEC_TYPE_H265 && cfg.VideoCodec != consts.CODEC_TYPE_AV1 {
 		return nil, errors.New("WebRTC: Unsupported video codec: " + cfg.VideoCodec)
 	}
 	sdp := cfg.Extra["sdp"]
@@ -22,10 +22,10 @@ func createPeerConnection(cfg ConnectionConfig) (*webrtc.PeerConnection, error) 
 	}
 	sdpOffersH265 := func(sdp string) bool {
 		lower := strings.ToLower(sdp)
-		return strings.Contains(lower, "h265") || strings.Contains(lower, "hevc")
+		return strings.Contains(lower, consts.CODEC_TYPE_H265) || strings.Contains(lower, "hevc")
 	}
 
-	if strings.EqualFold(cfg.VideoCodec, "h265") && !sdpOffersH265(sdp) {
+	if strings.EqualFold(cfg.VideoCodec, consts.CODEC_TYPE_H265) && !sdpOffersH265(sdp) {
 		log.Printf("[scrmux] browser SDP does not offer H.265 (HEVC)")
 		return nil, errors.New("This browser does not support H.265 (HEVC); streaming with H.264 instead.")
 	}

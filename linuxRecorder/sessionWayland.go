@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"scrmux/consts"
 	"scrmux/linuxRecorder/config"
 	"time"
 )
@@ -126,9 +127,9 @@ func (s *Session) WaylandRunCmd(cmdStr string) int {
 func (s *Session) StartWfRecorder(codec string, resolution string, bitRate string, frameRate int) error {
 	var encoder string
 	switch codec {
-	case "h264":
+	case consts.CODEC_TYPE_H264:
 		encoder = GetBestH264Encoder()
-	case "hevc", "h265":
+	case "hevc", consts.CODEC_TYPE_H265:
 		codec = "hevc" // wf-recorder 里统一叫 hevc
 		encoder = GetBestHEVCEncoder()
 	default:
@@ -155,7 +156,7 @@ func (s *Session) StartWfRecorder(codec string, resolution string, bitRate strin
 	}
 
 	// 根据编码格式设置不同的参数
-	if codec == "h264" {
+	if codec == consts.CODEC_TYPE_H264 {
 		// H.264 特定参数
 		args = append(args,
 			"-p", "profile=baseline", // WebRTC 推荐用 Baseline Profile

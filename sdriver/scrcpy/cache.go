@@ -3,6 +3,7 @@ package scrcpy
 import (
 	"bytes"
 	"log"
+	"scrmux/consts"
 	"scrmux/sdriver"
 )
 
@@ -49,9 +50,9 @@ func (da *ScrcpyDriver) updateCache(payload []byte, codec string) {
 		}
 
 		switch codec {
-		case "h265":
+		case consts.CODEC_TYPE_H265:
 			nalType = (nal[0] >> 1) & 0x3F
-		case "h264":
+		case consts.CODEC_TYPE_H264:
 			nalType = nal[0] & 0x1F
 		default:
 			log.Println("Unknown codec type for NALU parsing:", codec)

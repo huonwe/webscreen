@@ -272,9 +272,9 @@ func (n *Nexus) CloseViewSession(sessionID string) {
 func (n *Nexus) NewViewSession(userID string, config ConnectionConfig) (*ViewSession, error) {
 
 	var packetizer rtp.Packetizer
-	if config.Protocol == "webrtc" {
+	if config.Protocol == consts.PROTOCOL_TYPE_WEBRTC {
 		switch config.VideoCodec {
-		case "h264":
+		case consts.CODEC_TYPE_H264:
 			packetizer = rtp.NewPacketizer(
 				n.mtu, // MTU 大小，通常 1200 左右很安全
 				0,     // Payload Type，Pion 会自动覆盖它，填 0 即可
@@ -283,7 +283,7 @@ func (n *Nexus) NewViewSession(userID string, config ConnectionConfig) (*ViewSes
 				rtp.NewRandomSequencer(), // 随机序列号生成器
 				90000,                    // 视频的基准时钟频率 (WebRTC 规定视频固定为 90kHz)
 			)
-		case "h265":
+		case consts.CODEC_TYPE_H265:
 			packetizer = rtp.NewPacketizer(
 				n.mtu, // MTU 大小，通常 1200 左右很安全
 				0,     // Payload Type，Pion 会自动覆盖它，填 0 即可
@@ -292,7 +292,7 @@ func (n *Nexus) NewViewSession(userID string, config ConnectionConfig) (*ViewSes
 				rtp.NewRandomSequencer(), // 随机序列号生成器
 				90000,                    // 视频的基准时钟频率 (WebRTC 规定视频固定为 90kHz)
 			)
-		case "av1":
+		case consts.CODEC_TYPE_AV1:
 			packetizer = rtp.NewPacketizer(
 				n.mtu, // MTU 大小，通常 1200 左右很安全
 				0,     // Payload Type，Pion 会自动覆盖它，填 0 即可
@@ -305,7 +305,7 @@ func (n *Nexus) NewViewSession(userID string, config ConnectionConfig) (*ViewSes
 			return nil, fmt.Errorf("unsupported video codec: %s", config.VideoCodec)
 		}
 	}
-	if config.Protocol == "websocket" {
+	if config.Protocol == consts.PROTOCOL_TYPE_WEBSOCKET {
 
 	}
 	sessionID := uuid.New().String()
@@ -348,7 +348,7 @@ func (v *ViewSession) connectToNexus(n *Nexus, cfg ConnectionConfig) error {
 	// 	return nil
 	// }
 	switch cfg.Protocol {
-	case "webrtc":
+	case consts.PROTOCOL_TYPE_WEBRTC:
 		var err error
 		videoMimeType, err := getMimeTypeFromString(cfg.VideoCodec)
 		if err != nil {
@@ -498,9 +498,9 @@ func (v *ViewSession) connectToNexus(n *Nexus, cfg ConnectionConfig) error {
 				}
 			}
 		}()
-	case "webtransport":
+	case consts.PROTOCOL_TYPE_WEBTRANSPORT:
 		// Implement WebTransport connection logic here
-	case "websocket":
+	case consts.PROTOCOL_TYPE_WEBSOCKET:
 		v.WSConn = cfg.WSConn
 		if v.WSConn == nil {
 			return errors.New("WebSocket connection is not established")

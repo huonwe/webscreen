@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"scrmux/consts"
 	"scrmux/sdriver"
 	"scrmux/sdriver/comm"
 	"scrmux/utils"
@@ -104,7 +105,7 @@ func New(config map[string]string) (*ScrcpyDriver, error) {
 		config["control"] = "true"
 	}
 	if config["video_codec"] == "" {
-		config["video_codec"] = "h264"
+		config["video_codec"] = consts.CODEC_TYPE_H264
 	}
 
 	data, err := scrcpyServerData.ReadFile(SCRCPY_EMBED_PATH)
@@ -403,9 +404,9 @@ func (da *ScrcpyDriver) updateVideoMetaFromSPS(sps []byte, codec string) {
 	var spsInfo comm.SPSInfo
 	var err error
 	switch codec {
-	case "h264":
+	case consts.CODEC_TYPE_H264:
 		spsInfo, err = comm.ParseSPS_H264(sps, true)
-	case "h265":
+	case consts.CODEC_TYPE_H265:
 		spsInfo, err = comm.ParseSPS_H265(sps)
 	default:
 		log.Println("Unknown codec type for SPS parsing:", codec)
