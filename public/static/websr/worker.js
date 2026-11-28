@@ -121,6 +121,8 @@ self.onmessage = async (event) => {
                 weights = await (await fetch('./cnn-2x-s-an.json')).json();
             }
 
+            console.log('Selected network:', network_name);
+
             websr = new WebSR({
                 network_name,
                 weights,
