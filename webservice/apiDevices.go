@@ -105,7 +105,7 @@ func (wm *WebMaster) handleListDevices(c *gin.Context) {
 		}
 	}
 
-	all_devices, err := db.QueryAllDevices(wm.DB)
+	all_devices, err := db.QueryAllDevices(consts.DB)
 	if err != nil {
 		log.Printf("Error querying all devices: %v", err)
 		c.JSON(500, gin.H{"error": "Internal server error"})
@@ -248,7 +248,7 @@ func (wm *WebMaster) handleDeviceConfigDescription(c *gin.Context) {
 
 func (wm *WebMaster) registerDevice(device db.DeviceInfo) {
 	// register the device to the sqlite if not exists, otherwise update the device info
-	exists, err := db.DeviceExists(wm.DB, device.Type, device.IP, device.Port)
+	exists, err := db.DeviceExists(consts.DB, device.Type, device.IP, device.Port)
 	if err != nil {
 		log.Printf("Error checking device existence: %v", err)
 		return
@@ -259,7 +259,7 @@ func (wm *WebMaster) registerDevice(device db.DeviceInfo) {
 		if deviceUUID == "" {
 			deviceUUID = uuid.New().String()
 		}
-		db.InsertDevice(wm.DB, deviceUUID, device.Type, device.DeviceID, device.DeviceID, device.IP, device.Port, device.Status, "")
+		db.InsertDevice(consts.DB, deviceUUID, device.Type, device.DeviceID, device.DeviceID, device.IP, device.Port, device.Status, "")
 	}
 
 }
@@ -274,7 +274,7 @@ func (wm *WebMaster) handleUpdateDeviceDisplayName(c *gin.Context) {
 		return
 	}
 	// log.Printf("Updating display name for device UUID %s to %s", req.DeviceUUID, req.Name)
-	if err := db.UpdateDeviceDisplayNameByUUID(wm.DB, req.DeviceUUID, req.Name); err != nil {
+	if err := db.UpdateDeviceDisplayNameByUUID(consts.DB, req.DeviceUUID, req.Name); err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
