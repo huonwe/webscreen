@@ -28,7 +28,7 @@ func main() {
 	var PORT int
 	flag.StringVar(&DATA_DIR, "D", "./data", "directory to store data")
 	flag.StringVar(&DATA_DIR, "data", "./data", "directory to store data")
-	flag.BoolVar(&TLS, "tls", true, "enable TLS")
+	flag.BoolVar(&TLS, "tls", false, "enable TLS")
 	flag.StringVar(&TLS_DOMAIN, "tls_domain", "", "TLS domain name for the server")
 	flag.StringVar(&IP, "ip", "", "IP address to bind the server to")
 	flag.IntVar(&PORT, "port", 0, "server port")

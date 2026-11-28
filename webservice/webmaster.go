@@ -149,9 +149,9 @@ func (wm *WebMaster) Serve(ip string, port int, tls_on bool, tls_hostname string
 	android.GetManager().Start()
 	wm.setRouter()
 	if tls_on {
-		cert, err := GenerateSelfSignedCert(tls_hostname)
+		cert, err := loadOrGenerateCert(tls_hostname)
 		if err != nil {
-			log.Fatalf("生成证书失败: %v", err)
+			log.Fatalf("Failed to generate or load TLS certificate: %v", err)
 		}
 		srv := &http.Server{
 			Addr:    net.JoinHostPort(ip, fmt.Sprintf("%d", port)),
