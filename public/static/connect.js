@@ -197,7 +197,7 @@ async function start() {
         if (event.data instanceof ArrayBuffer) {
             if (usesWebSocket) {
                 const view = new Uint8Array(event.data);
-                // console.log("first byte of WebSocket message:", view[0])
+                //  console.log("first byte of WebSocket message:", view[0])
                 switch (view[0]) {
                     case 0x17: {
                         const text = decoder.decode(view.slice(1));
@@ -257,7 +257,7 @@ async function start() {
             console.warn('Ignoring unknown WebSocket message:', error);
             return;
         }
-        console.log("Received message:", message);
+        // showToast(i18n.t('received_message', { msg: JSON.stringify(message) }), 2000);
         if (message.status === 'error') {
             console.error("Error from server:", message);
             showToast(i18n.t('error_from_server', { msg: message.message }), 2000);
@@ -310,10 +310,9 @@ async function start() {
             }
             return;
         }
-
-        if (message.status !== 'ok' || message.stage !== 'connection_view_session') {
-            return;
-            //TODO: WebSocket Msg Handle (Currently, only msg from webrtc channel is handled)
+        console.log("Received message from Nexus:", message);
+        if (message.status == 'closing') {
+            showToast(i18n.t('connection_closing'), 2000);
         }
 
         if (pc) {

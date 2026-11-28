@@ -47,6 +47,8 @@ type ViewSession struct {
 	cacheAudioCh chan sdriver.AVBox // 例如 cap = 32
 	cacheMsgCh   chan sdriver.Event // 例如 cap = 64
 
+	shouldClose bool
+
 	done      chan struct{}
 	closeOnce sync.Once
 }
@@ -262,9 +264,10 @@ func (v *ViewSession) HandleMsg(event sdriver.Event) error {
 func (v *ViewSession) Close() {
 	v.closeOnce.Do(func() {
 		if v.WSConn != nil {
-			_ = v.WSConn.WriteJSON(map[string]string{"msg": "This view session is going to be closed"})
+			_ = v.WSConn.WriteJSON(map[string]string{"msg": "This view session is going to be closed", "status": "closing"})
 		}
 		close(v.done) // 通知发送协程和 PushAVM 安全退出，不关闭 data channel
+		v.shouldClose = true
 		switch v.ConnectionConfig.Protocol {
 		case consts.PROTOCOL_TYPE_WEBSOCKET:
 			if v.WSConn != nil {

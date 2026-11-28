@@ -169,8 +169,11 @@ func (n *Nexus) CloseViewSession(sessionID string) {
 		peer.Close()
 	}
 	if stopBinding != nil {
-		close(stopBinding.stopCh) // 立即停止 pump 协程
-		stopBinding.sdriver.Stop()
+		stopBinding.once.Do(func() {
+			close(stopBinding.stopCh)
+			stopBinding.sdriver.Stop()
+		})
+
 	}
 }
 
@@ -399,6 +402,9 @@ func (v *ViewSession) connectToNexus(n *Nexus, cfg ConnectionConfig) error {
 		go func() {
 			// time.Sleep(5 * time.Second) // 延迟 1 秒再发送，确保浏览器端的 onmessage 回调已注册
 			for {
+				if v.shouldClose {
+					return
+				}
 				// Handle WebSocket messages
 				mtype, message, err := v.WSConn.ReadMessage()
 				if err != nil {
@@ -417,6 +423,7 @@ func (v *ViewSession) connectToNexus(n *Nexus, cfg ConnectionConfig) error {
 					}
 				}
 			}
+
 		}()
 	default:
 		return errors.New("Unsupported protocol: " + cfg.Protocol)

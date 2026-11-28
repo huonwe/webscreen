@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"scrmux/sdriver"
+	"sync"
 	"sync/atomic"
 )
 
@@ -17,17 +18,22 @@ type remoteBinding struct {
 	viewers         map[string]*ViewSession
 	viewersSnap     atomic.Pointer[[]*ViewSession] // 无锁快照，供 pumpRemote 极速读取
 	stopCh          chan struct{}                  // 用于通知 bind pump 协程退出
+	once            sync.Once
 }
 
 func (b *remoteBinding) Close() {
-	_, _, msgChan, _ := b.sdriver.GetReceivers()
-	msgChan <- sdriver.TextMsgEvent{
-		Msg: "This remote is is going to be closed",
-	}
-	close(b.stopCh)
+	// _, _, msgChan, _ := b.sdriver.GetReceivers()
+	// msgChan <- sdriver.TextMsgEvent{
+	// 	Msg: "This remote is is going to be closed",
+	// }
+	// time.Sleep(time.Millisecond * 100) // 给 pumpRemote 协程一些时间退出
 	for _, viewer := range b.viewers {
 		viewer.Close()
 	}
+	b.once.Do(func() {
+		close(b.stopCh)
+		b.sdriver.Stop()
+	})
 }
 
 // 2. 媒体泵：从 SDriver 读取 AVBox，零拷贝广播给所有观众
