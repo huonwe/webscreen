@@ -77,7 +77,7 @@ func New(config map[string]string) (*ScrcpyDriver, error) {
 		AudioChan:   make(chan sdriver.AVBox, 10),
 		MsgChan:     make(chan sdriver.Event, 10),
 		ControlChan: make(chan sdriver.Event, 10),
-		videoBuffer: comm.NewLinearBuffer(0),
+		videoBuffer: comm.NewLinearBuffer(20 * 1024 * 1024),
 		audioBuffer: comm.NewLinearBuffer(4 * 1024 * 1024), // 4MB 音频缓冲区
 
 		// scid: GenerateSCID(),

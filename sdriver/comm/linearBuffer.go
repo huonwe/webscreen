@@ -8,9 +8,6 @@ type LinearBuffer struct {
 }
 
 func NewLinearBuffer(size int) *LinearBuffer {
-	if size == 0 {
-		size = 20 * 1024 * 1024 // 默认 20MB
-	}
 	return &LinearBuffer{
 		buf:  make([]byte, size),
 		size: size,
