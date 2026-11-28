@@ -15,7 +15,6 @@ import (
 	"scrmux/sdriver/comm"
 	"scrmux/utils"
 	"strconv"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -73,12 +72,12 @@ type ScrcpyDriver struct {
 func New(config map[string]string) (*ScrcpyDriver, error) {
 	var err error
 	da := &ScrcpyDriver{
-		VideoChan:   make(chan sdriver.AVBox, 10),
-		AudioChan:   make(chan sdriver.AVBox, 10),
-		MsgChan:     make(chan sdriver.Event, 10),
-		ControlChan: make(chan sdriver.Event, 10),
-		videoBuffer: comm.NewLinearBuffer(20 * 1024 * 1024),
-		audioBuffer: comm.NewLinearBuffer(4 * 1024 * 1024), // 4MB 音频缓冲区
+		VideoChan:   make(chan sdriver.AVBox, 3),
+		AudioChan:   make(chan sdriver.AVBox, 3),
+		MsgChan:     make(chan sdriver.Event, 3),
+		ControlChan: make(chan sdriver.Event, 3),
+		videoBuffer: comm.NewLinearBuffer(20 * 1024 * 1024), // 20MB 视频缓冲区
+		audioBuffer: comm.NewLinearBuffer(4 * 1024 * 1024),  // 4MB 音频缓冲区
 
 		// scid: GenerateSCID(),
 		scid: "00000000",
@@ -228,17 +227,17 @@ func New(config map[string]string) (*ScrcpyDriver, error) {
 		config["video_bit_rate"] = "4M"
 	}
 
-	video_codec_options_user := config["video_codec_options"]
-	if video_codec_options_user != "" {
-		video_codec_options_webrtc = video_codec_options_user
-		log.Printf("Using user-provided video codec options: %s", video_codec_options_user)
-	}
+	// video_codec_options_user := config["video_codec_options"]
+	// if video_codec_options_user != "" {
+	// 	video_codec_options_webrtc = video_codec_options_user
+	// 	log.Printf("Using user-provided video codec options: %s", video_codec_options_user)
+	// }
 	if config["intra_refresh"] == "true" {
-		if strings.HasSuffix(video_codec_options_webrtc, ",") {
-			video_codec_options_webrtc += "intra-refresh-period=60,i-frame-interval=-1"
-		}
-		video_codec_options_webrtc += ",intra-refresh-period=60,i-frame-interval=-1"
-		video_codec_options_webrtc = strings.TrimPrefix(video_codec_options_webrtc, ",")
+		// if strings.HasSuffix(video_codec_options_webrtc, ",") {
+		// 	video_codec_options_webrtc += "intra-refresh-period=120,i-frame-interval=-1"
+		// }
+		video_codec_options_webrtc += "intra-refresh-period=120,i-frame-interval=-1"
+		// video_codec_options_webrtc = strings.TrimPrefix(video_codec_options_webrtc, ",")
 		log.Printf("Enabling intra refresh for the video stream: %s", video_codec_options_webrtc)
 	}
 
@@ -266,10 +265,10 @@ func New(config map[string]string) (*ScrcpyDriver, error) {
 		options["video_encoder"] = config["video_encoder"]
 		log.Printf("Using user-specified video encoder: %s", config["video_encoder"])
 	}
-	if config["no_video_codec_options"] == "true" {
-		delete(options, "video_codec_options")
-		log.Println("User requested to disable video codec options, ignoring all codec options.")
-	}
+	// if config["no_video_codec_options"] == "true" {
+	// 	delete(options, "video_codec_options")
+	// 	log.Println("User requested to disable video codec options, ignoring all codec options.")
+	// }
 	if config["new_display"] == "true" {
 		options["new_display"] = config["resolution"]
 		// if config["start_app"] != "" {

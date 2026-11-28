@@ -131,12 +131,12 @@ func ConfigDescription(opt string) []sdriver.ConfigParamDescription {
 		// 	Options:     appList,
 		// 	Description: "package name of the app to start",
 		// },
-		{
-			Name:        "no_video_codec_options",
-			Type:        "boolean",
-			Required:    false,
-			Default:     false,
-			Description: "If you face issues with video streaming, you can try to enable this to remove video_codec_options options",
-		},
+		// {
+		// 	Name:        "no_video_codec_options",
+		// 	Type:        "boolean",
+		// 	Required:    false,
+		// 	Default:     false,
+		// 	Description: "If you face issues with video streaming, you can try to enable this to remove video_codec_options options",
+		// },
 	}
 }
