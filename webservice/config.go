@@ -18,9 +18,9 @@ type WebMasterConfig struct {
 	PIN        string   `yaml:"pin"`
 	MTU        uint16   `yaml:"mtu"`
 
-	WEBRTC_UDP_RANGE_START uint16   `yaml:"webrtc_udp_range_start"`
-	WEBRTC_UDP_RANGE_END   uint16   `yaml:"webrtc_udp_range_end"`
-	ICE_SERVERS            []string `yaml:"ice_servers"`
+	UDP_RANGE_START uint16   `yaml:"udp_range_start"`
+	UDP_RANGE_END   uint16   `yaml:"udp_range_end"`
+	ICE_SERVERS     []string `yaml:"ice_servers"`
 }
 
 func LoadConfig(path string) (WebMasterConfig, error) {
@@ -33,9 +33,9 @@ func LoadConfig(path string) (WebMasterConfig, error) {
 		PIN:                   "000000",
 		MTU:                   1400,
 
-		WEBRTC_UDP_RANGE_START: 51200,
-		WEBRTC_UDP_RANGE_END:   51210,
-		ICE_SERVERS:            []string{"stun:stun.l.google.com:19302"},
+		UDP_RANGE_START: 51200,
+		UDP_RANGE_END:   51210,
+		ICE_SERVERS:     []string{"stun:stun.l.google.com:19302"},
 	}
 
 	data, err := os.ReadFile(path)
@@ -56,9 +56,9 @@ func LoadConfig(path string) (WebMasterConfig, error) {
 		return defaultConfig, err
 	}
 
-	consts.WEBRTC_UDP_RANGE_START = userConfig.WEBRTC_UDP_RANGE_START
-	consts.WEBRTC_UDP_RANGE_END = userConfig.WEBRTC_UDP_RANGE_END
-	consts.WEBRTC_ICE_SERVERS = userConfig.ICE_SERVERS
+	consts.UDP_RANGE_START = userConfig.UDP_RANGE_START
+	consts.UDP_RANGE_END = userConfig.UDP_RANGE_END
+	consts.ICE_SERVERS = userConfig.ICE_SERVERS
 	log.Println("Loaded user config: ", userConfig)
 	return userConfig, nil
 }

@@ -2,9 +2,9 @@ package consts
 
 var DATA_DIR string
 
-var WEBRTC_UDP_RANGE_START uint16
-var WEBRTC_UDP_RANGE_END uint16
-var WEBRTC_ICE_SERVERS []string
+var UDP_RANGE_START uint16
+var UDP_RANGE_END uint16
+var ICE_SERVERS []string
 
 func GET_DATA_DIR() string {
 	return DATA_DIR

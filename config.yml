@@ -11,3 +11,8 @@ trusted_ips:
 # Must be 6 digits
 pin: "000000"
 mtu: 1400
+
+udp_range_start: 51200
+udp_range_end: 51210
+ice_servers:
+- stun:stun.l.google.com:19302
